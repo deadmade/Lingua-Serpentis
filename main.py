@@ -1,7 +1,9 @@
-﻿import sys
-import os
+﻿import os
+import sys
+
 import Lexer
 import Parser
+
 
 def main():
     if len(sys.argv) != 2:
@@ -46,6 +48,7 @@ def main():
         print("conversion, and execution not yet implemented.")
     except Exception as e:
         print(f"Error processing code: {e}")
+
 
 if __name__ == "__main__":
     main()
