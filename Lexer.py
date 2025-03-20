@@ -11,5 +11,3 @@ def lexer(code):
         if kind != "SKIP":
             tokens.append((kind, value))
     return tokens
-
-print(lexer("x = 5 + 3"))
