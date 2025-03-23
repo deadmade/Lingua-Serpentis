@@ -1,6 +1,6 @@
 ﻿import re
 
-import language_definition
+import LanguageDefinition
 
 TOKEN_REGEX = "|".join(f"(?P<{name}>{regex})" for name, regex in LanguageDefinition.TOKEN_SPECS)
 
