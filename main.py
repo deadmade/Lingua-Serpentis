@@ -3,6 +3,7 @@ import sys
 
 import Lexer
 import Parser
+import ExecuteC
 
 
 def main():
@@ -41,8 +42,9 @@ def main():
         print("Parsing completed:")
         print(result)
 
-        # TODO: Implement conversion to Python
-        # TODO: Execute the generated Python code
+        ExecuteC.execute_c(result)
+
+
 
         # Placeholder for future implementation
         print("conversion, and execution not yet implemented.")
