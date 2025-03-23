@@ -1,9 +1,9 @@
 ﻿import os
 import sys
 
-import Lexer
-import Parser
-import ExecuteC
+import lexer
+import parser
+import execute_c
 
 
 def main():
