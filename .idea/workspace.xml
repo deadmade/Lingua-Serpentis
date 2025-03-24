@@ -4,37 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="30223d2e-115e-4cfa-94b7-dc6b0f75dd81" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/Parser/GenerateC.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/HelperFunctions.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/MainParser.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseDeclaration.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseExpression.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseFunctions.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseIf.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseLoops.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParsePrint.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/ParseStatements.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Parser/__init__.py" afterDir="false" />
+    <list default="true" id="30223d2e-115e-4cfa-94b7-dc6b0f75dd81" name="Changes" comment="Added fractions">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Examples/test.liss" beforeDir="false" afterPath="$PROJECT_DIR$/Examples/test.liss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/LanguageDefinition.py" beforeDir="false" afterPath="$PROJECT_DIR$/LanguageDefinition.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/Parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/RomanNumeralConverter.py" beforeDir="false" afterPath="$PROJECT_DIR$/RomanNumeralConverter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
-  </component>
-  <component name="FileTemplateManagerImpl">
-    <option name="RECENT_TEMPLATES">
-      <list>
-        <option value="Python Script" />
-      </list>
-    </option>
   </component>
   <component name="Git.Settings">
     <favorite-branches>
@@ -56,7 +32,21 @@
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="HARD" />
+    <option name="UPDATE_TYPE" value="REBASE" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "ernter4"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/deadmade/Lingua-Serpentis.git",
+    "accountId": "19429b91-34b1-4e85-aab0-128259f10794"
+  }
+}]]></component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
@@ -74,189 +64,26 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_ADD_EXTERNAL_FILES": "true",
-    "Python tests.Python tests for Test.TestLanguage.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_addition_operation.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_arithmetic_operations.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_declare_multiple_variables.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_declare_variable.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_definition_function_call.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_division_operation.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_function_call.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_function_calls_with_params.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_multiplication_operation.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_subtraction_operation.executor": "Run",
-    "Python tests.Python tests for Test.TestLanguage.test_while_loop.executor": "Run",
     "Python.RomanNumeralConverter.executor": "Run",
-    "Python.main.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "basic-implementation",
-    "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "/Users/aleynacikrik/Documents/Uni/3. Semster/Compilerbau/Lingua-Serpentis",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Python.main">
-    <configuration name="UnitTests" type="PythonConfigurationType" factoryName="Python">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.12" />
-      <option name="WORKING_DIRECTORY" value="C:\Users\manue\Documents\GitHub\Lingua-Serpentis" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Test.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.12" />
-      <option name="WORKING_DIRECTORY" value="C:\Users\manue\Documents\GitHub\Lingua-Serpentis" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
-      <option name="PARAMETERS" value="Examples/test.liss" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for Test.TestLanguage.test_arithmetic_operations" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;Test.TestLanguage.test_arithmetic_operations&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for Test.TestLanguage.test_definition_function_call" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;Test.TestLanguage.test_definition_function_call&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for Test.TestLanguage.test_function_call" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;Test.TestLanguage.test_function_call&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for Test.TestLanguage.test_function_calls_with_params" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;Test.TestLanguage.test_function_calls_with_params&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for Test.TestLanguage.test_while_loop" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="Lingua-Serpentis" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;Test.TestLanguage.test_while_loop&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <list>
-      <item itemvalue="Python.main" />
-      <item itemvalue="Python.UnitTests" />
-      <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_definition_function_call" />
-      <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_function_calls_with_params" />
-      <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_while_loop" />
-      <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_arithmetic_operations" />
-      <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_function_call" />
-    </list>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_while_loop" />
-        <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_function_calls_with_params" />
-        <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_function_call" />
-        <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_definition_function_call" />
-        <item itemvalue="Python tests.Python tests for Test.TestLanguage.test_arithmetic_operations" />
-      </list>
-    </recent_temporary>
-  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-PY-243.26053.29" />
-        <option value="bundled-python-sdk-b1dbf8ef85a6-4df51de95216-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.26053.29" />
+        <option value="bundled-js-predefined-d6986cc7102b-e768b9ed790e-JavaScript-PY-243.21565.199" />
+        <option value="bundled-python-sdk-cab1f2013843-4ae2d6a61b08-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.21565.199" />
       </set>
     </attachedChunks>
   </component>
@@ -269,61 +96,40 @@
       <option name="presentableId" value="Default" />
       <updated>1742630975326</updated>
       <workItem from="1742630976241" duration="168000" />
-      <workItem from="1742800781755" duration="17023000" />
-      <workItem from="1742818777798" duration="349000" />
-      <workItem from="1742819139597" duration="1314000" />
-      <workItem from="1742820480904" duration="5949000" />
+      <workItem from="1742828941051" duration="154000" />
     </task>
+    <task id="LOCAL-00001" summary="Added fractions">
+      <option name="closed" value="true" />
+      <created>1742829093275</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1742829093275</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
     <MESSAGE value="added language Definition" />
-    <option name="LAST_COMMIT_MESSAGE" value="added language Definition" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Parser/MainParser.py</url>
-          <line>7</line>
-          <option name="timeStamp" value="94" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Parser/ParseExpression.py</url>
-          <line>3</line>
-          <option name="timeStamp" value="95" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Parser/ParseDeclaration.py</url>
-          <line>40</line>
-          <option name="timeStamp" value="98" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Test.py</url>
-          <line>51</line>
-          <option name="timeStamp" value="100" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/Test.py</url>
-          <line>50</line>
-          <option name="timeStamp" value="102" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
-    <watches-manager>
-      <configuration name="tests">
-        <watch expression="statement" />
-      </configuration>
-    </watches-manager>
+    <MESSAGE value="Added fractions" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added fractions" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Lingua_Serpentis$main.coverage" NAME="main Coverage Results" MODIFIED="1742826022243" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="C:\Users\manue\Documents\GitHub\Lingua-Serpentis" />
-    <SUITE FILE_PATH="coverage/Lingua_Serpentis$.coverage" NAME=" Coverage Results" MODIFIED="1742824774119" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Lingua_Serpentis$UnitTests.coverage" NAME="UnitTests Coverage Results" MODIFIED="1742801819008" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="C:\Users\manue\Documents\GitHub\Lingua-Serpentis" />
-    <SUITE FILE_PATH="coverage/Lingua_Serpentis$RomanNumeralConverter.coverage" NAME="RomanNumeralConverter Coverage Results" MODIFIED="1742813612229" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Lingua_Serpentis$RomanNumeralConverter.coverage" NAME="RomanNumeralConverter Coverage Results" MODIFIED="1742828659091" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
