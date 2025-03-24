@@ -115,6 +115,8 @@ class Parser:
         elif token_type == "IDENTIFIER":
             if self.peek_next_token()[0] == "LPAREN":
                 return self.parse_function_call()
+            elif self.peek_next_token()[0] == "RPAREN":
+                return {"type": "identifier", "value": self.current_token[1]}
             else:
                 value = self.current_token[1]
                 self.advance_token()
@@ -174,6 +176,7 @@ class Parser:
         self.advance_token()  # Move past LPAREN
 
         expression = self.parse_expression()
+        self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
             self.statements.append({"type": "error", "value": "Expected ')' to close print statement"})
@@ -255,6 +258,7 @@ class Parser:
 
         self.advance_token()  # Move past LPAREN
         condition = self.parse_expression()
+        self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
             self.statements.append({"type": "error", "value": "Expected ')' to close while condition"})

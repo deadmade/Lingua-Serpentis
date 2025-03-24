@@ -2,6 +2,6 @@ ni i = °I;
 
 indem (i minor_est °V) {
     scribe(i);
-    i = i + °I;#
+    i = i + °I;
     continua;
 }
