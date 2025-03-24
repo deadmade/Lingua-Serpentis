@@ -7,13 +7,14 @@ from Parser.ParsePrint import parse_print
 
 
 class Parser:
-    def __init__(self, tokens):
+    def __init__(self, tokens, is_test=False):
         self.tokens = tokens
         self.current_token_index = 0
         self.current_token = None
         self.c_code = []
         self.functions = {}
         self.statements = []
+        self.is_test = is_test
 
         # Initialize with the first token if available
         if tokens:

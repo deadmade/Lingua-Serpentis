@@ -3,13 +3,15 @@ def generate_c_code(self):
 
     clean_statements = [item for item in self.statements if item]
 
-    # self.c_code.append("#include <stdio.h>")
-    # self.c_code.append("int main() {")
+    if not self.is_test:
+        self.c_code.append("#include <stdio.h>")
+        self.c_code.append("int main() {")
     for statement in clean_statements:
         generate_single_statement(self, statement)
-    # self.c_code.append("    return 0;")
-    # self.c_code.append("}")
 
+    if not self.is_test:
+        self.c_code.append("    return 0;")
+        self.c_code.append("}")
 
 def generate_if_statement(self, if_statement):
     """Generate C code for if statements"""
