@@ -3,7 +3,7 @@ import sys
 
 import ExecuteC
 import Lexer
-import Parser
+from Parser.MainParser import Parser
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
         # for token in tokens:
         # print(token)
 
-        parser = Parser.Parser(tokens)
+        parser = Parser(tokens)
         result = parser.parse()
         print("Parsing completed:")
 

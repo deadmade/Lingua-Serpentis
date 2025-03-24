@@ -1,6 +1,4 @@
-﻿# Example for Puuuuuul
-
-TOKEN_SPECS = [
+﻿TOKEN_SPECS = [
     ("COMMENT", r"//.*"),  # Kommentare
     ("ASSIGN", r"="),
     ("PLUS", r"\+"),
