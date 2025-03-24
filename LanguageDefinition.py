@@ -41,5 +41,6 @@
 ]
 
 Wrong_Token_SPECS = [
-    ("NUMBER", r"°(?!((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus\b).+")
+    r"°(?!((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus\b).+",
+    "!=|>|<"
 ]

@@ -106,6 +106,7 @@ class TestLanguage(unittest.TestCase):
         parser = Parser(tokens)
         result = parser.parse()
         self.assertEqual(result, "while (10 < 1000) { int x = x + 10; continue; }")
+
     # def test_complex_expressions(self):
     #     code = "ni x = (°A + °B) * °C;"
     #     tokens = Lexer.lexer(code)
@@ -120,13 +121,13 @@ class TestLanguage(unittest.TestCase):
     #     result = parser.parse()
     #     self.assertEqual(result, "str s = \"hello\";")
     #
-    # def test_conditional_statement(self):
-    #     code = "fi (°A < °B) { ni x = °C; }"
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     self.assertEqual(result, "if (1 < 2) { int x = 3; }")
-    #
+    def test_conditional_statement(self):
+        code = "si (°X maior_est °A) { ni x = °I; }"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, "if (10 > 1000) {\nint x = 1;\n}")
+
     # def test_loop_statement(self):
     #     code = "hliw (°A < °B) { ni x = °C; }"
     #     tokens = Lexer.lexer(code)

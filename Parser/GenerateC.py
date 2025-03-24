@@ -6,56 +6,21 @@ def generate_c_code(self):
     # self.c_code.append("#include <stdio.h>")
     # self.c_code.append("int main() {")
     for statement in clean_statements:
-        if statement["type"] == "comment":
-            self.c_code.append(f"// {statement['value']}")
-        elif statement["type"] == "declaration":
-            self.c_code.append(f"{statement['data_type']} {statement['identifier']};")
-        elif statement["type"] == "declaration_function_call":
-            expr = format_expression(self, statement)
-            self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {expr};")
-        elif statement["type"] == "declaration_assignment":
-            value = format_expression(self, statement["value"])
-            self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
-        elif statement["type"] == "declaration_operation":
-            value = format_expression(self, statement["value"])
-            self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
-        elif statement["type"] == "assignment":
-            value = format_expression(self, statement["value"])
-            self.c_code.append(f"{statement['identifier']} = {value};")
-        elif statement["type"] == "expression_statement":
-            expr = format_expression(self, statement["expression"])
-            self.c_code.append(f"{expr};")
-        elif statement["type"] == "function_call":
-            value = format_expression(self, statement)
-            self.c_code.append(f"{value};")
-        elif statement["type"] == "print":
-            value = self.format_expression(statement["expression"])
-            format_specifier = get_format_specifier(statement["expression"]["type"])
-            self.c_code.append(f"printf(\"{format_specifier}\", {value});")
-        elif statement["type"] == "if_statement":
-            generate_if_statement(self, statement)
-        elif statement["type"] == "while_loop":
-            generate_while_loop(self, statement)
-        elif statement["type"] == "break":
-            self.c_code.append("break;")
-        elif statement["type"] == "continue":
-            self.c_code.append("continue;")
-        elif statement["type"] == "error":
-            print(f"// ERROR: {statement['value']}")
+        generate_single_statement(self, statement)
     # self.c_code.append("    return 0;")
     # self.c_code.append("}")
 
 
 def generate_if_statement(self, if_statement):
     """Generate C code for if statements"""
-    condition = self.format_condition(if_statement["condition"])
+    condition = format_condition(self, if_statement["condition"])
 
     # Add the if statement with condition
     self.c_code.append(f"if ({condition}) {{")
 
     # Add the body with indentation
     for stmt in if_statement["if_body"]:
-        code = self.generate_single_statement(stmt)
+        code = generate_single_statement(self,stmt)
         if code:
             self.c_code.append(f"    {code}")
 
@@ -115,28 +80,41 @@ def generate_while_loop(self, while_statement):
 def generate_single_statement(self, statement):
     """Generate C code for a single statement"""
     if statement["type"] == "comment":
-        return f"// {statement['value']}"
+        self.c_code.append(f"// {statement['value']}")
     elif statement["type"] == "declaration":
-        return f"{statement['data_type']} {statement['identifier']};"
+        self.c_code.append(f"{statement['data_type']} {statement['identifier']};")
+    elif statement["type"] == "declaration_function_call":
+        expr = format_expression(self, statement)
+        self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {expr};")
     elif statement["type"] == "declaration_assignment":
-        value = self.format_expression(statement["value"])
-        return f"{statement['data_type']} {statement['identifier']} = {value};"
+        value = format_expression(self, statement["value"])
+        self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
+    elif statement["type"] == "declaration_operation":
+        value = format_expression(self, statement["value"])
+        self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
     elif statement["type"] == "assignment":
-        value = self.format_expression(statement["value"])
-        return f"{statement['identifier']} = {value};"
+        value = format_expression(self, statement["value"])
+        self.c_code.append(f"{statement['identifier']} = {value};")
     elif statement["type"] == "expression_statement":
-        expr = self.format_expression(statement["expression"])
-        return f"{expr};"
+        expr = format_expression(self, statement["expression"])
+        self.c_code.append(f"{expr};")
+    elif statement["type"] == "function_call":
+        value = format_expression(self, statement)
+        self.c_code.append(f"{value};")
     elif statement["type"] == "print":
         value = self.format_expression(statement["expression"])
-        format_specifier = self.get_format_specifier(statement["expression"]["type"])
-        return f"printf(\"{format_specifier}\", {value});"
+        format_specifier = get_format_specifier(statement["expression"]["type"])
+        self.c_code.append(f"printf(\"{format_specifier}\", {value});")
+    elif statement["type"] == "if_statement":
+        generate_if_statement(self, statement)
+    elif statement["type"] == "while_loop":
+        generate_while_loop(self, statement)
     elif statement["type"] == "break":
-        return "break;"
+        self.c_code.append("break;")
     elif statement["type"] == "continue":
-        return "continue;"
+        self.c_code.append("continue;")
     elif statement["type"] == "error":
-        return f"// ERROR: {statement['value']}"
+        print(f"// ERROR: {statement['value']}")
 
     return ""
 
@@ -146,11 +124,13 @@ def format_condition(self, condition):
     if not condition:
         return ""
 
-    if condition["type"] == "identifier" and "condition" in condition:
+    first_condition = condition[0]
+
+    if "condition" in first_condition:
         # Handle comparison conditions
-        left = condition["value"]
-        operator = condition["condition"]
-        right = condition.get("value2", "")
+        left = first_condition["value"]
+        operator = first_condition["condition"]
+        right = first_condition.get("value2", "")
         return f"{left} {operator} {right}"
     else:
         # Handle other expressions

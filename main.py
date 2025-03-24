@@ -34,6 +34,8 @@ def main():
     try:
         # Step 1: Lexical analysis
         tokens = Lexer.lexer(code)
+        if not tokens:
+            return
         print("Lexical analysis completed:\nLEXED TOKENS:")
         # for token in tokens:
         # print(token)

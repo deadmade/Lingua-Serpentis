@@ -15,7 +15,8 @@ def parse_expression(self, statements):
         advance_token(self)
 
         # Check if this is part of an operation
-        if self.current_token and self.current_token[0] in ["PLUS", "MINUS", "MULT", "DIV"]:
+        if self.current_token and self.current_token[0] in ["PLUS", "MINUS", "MULT", "DIV", "ISNOTEQUAL", "ISGREATER",
+                                                            "ISLESS"]:
             condition = conditions_mapping(self.current_token[0])
             advance_token(self)
 
@@ -56,12 +57,12 @@ def parse_expression(self, statements):
         if self.current_token and self.current_token[0] in ["PLUS", "MINUS", "MULT", "DIV", "ISNOTEQUAL",
                                                             "ISGREATER",
                                                             "ISLESS"]:
-            condition = self.conditions_mapping(self.current_token[0])
+            condition = conditions_mapping(self.current_token[0])
             advance_token(self)
 
             # Parse the right side of the operation
             if self.current_token and self.current_token[0] == "NUMBER":
-                value2 = self.handle_numbers()
+                value2 = handle_numbers(self)
                 advance_token(self)
             elif self.current_token and self.current_token[0] == "IDENTIFIER":
                 value2 = self.current_token[1]
