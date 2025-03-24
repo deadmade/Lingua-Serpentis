@@ -87,25 +87,25 @@ class TestLanguage(unittest.TestCase):
         self.assertEqual(result, "int x = 10 / 10;")
 
     def test_while_loop(self):
-        code = "indem (°X < °M) { ni x = x + °X; }"
+        code = "indem (°X maior_est °M) { ni x = x + °X; }"
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "while (10 < 1000) { int x = x + 10; }")
+        self.assertEqual(result, "while (10 > 1000) {\nint x = x + 10;\n}")
 
     def test_while_loop_with_break(self):
-        code = "indem (°X < °M) { ni x = x + °X; kaerb; }"
+        code = "indem (°X maior_est °M) { ni x = x + °X; abrumpe; }"
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
         self.assertEqual(result, "while (10 < 1000) { int x = x + 10; break; }")
 
     def test_while_loop_with_continue(self):
-        code = "indem (°X < °M) { ni x = x + °X; eunitnoc; }"
+        code = "indem (°X maior_est °M) { ni x = x + °X; continua; }"
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "while (10 < 1000) { int x = x + 10; continue; }")
+        self.assertEqual(result, "while (10 > 1000) { int x = x + 10; continue; }")
 
     # def test_complex_expressions(self):
     #     code = "ni x = (°A + °B) * °C;"

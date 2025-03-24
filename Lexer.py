@@ -19,6 +19,6 @@ def lexer(code):
         value = match.group()
         line_number = code[:match.start()].count('\n') + 1
         print(f"Error: Irregular token '{value}' found on line {line_number}")
-        return None
+        #return None
 
     return tokens

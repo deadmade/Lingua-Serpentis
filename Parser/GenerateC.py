@@ -69,11 +69,11 @@ def generate_if_statement(self, if_statement):
 
 def generate_while_loop(self, while_statement):
     """Generate C code for while loops"""
-    condition, _ = while_statement["condition"]  # Unpack the tuple
-    formatted_condition = self.format_condition(condition)
+    condition = while_statement["condition"]  # Unpack the tuple
+    formatted_condition = format_condition(self, condition)
     self.c_code.append(f"while ({formatted_condition}) {{")
     for stmt in while_statement["body"]:
-        code = self.generate_single_statement(stmt)
+        code = generate_single_statement(self, stmt)
         if code:
             self.c_code.append(f"    {code}")
     self.c_code.append("}")

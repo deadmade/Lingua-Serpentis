@@ -71,33 +71,27 @@ class Parser:
         new_statements = []
 
         if not self.current_token or self.current_token[0] != "LPAREN":
-            new_statements.append({"type": "error", "value": "Expected '(' after while keyword"})
-            return new_statements
+            return {"type": "error", "value": "Expected '(' after while keyword"}
 
         advance_token(self)  # Move past LPAREN
         condition = parse_expression(self, new_statements)
-        advance_token(self)
 
         if not self.current_token or self.current_token[0] != "RPAREN":
-            new_statements.append({"type": "error", "value": "Expected ')' to close while condition"})
-            return new_statements
+            return {"type": "error", "value": "Expected ')' to close while condition"}
 
         advance_token(self)  # Move past RPAREN
 
         if not self.current_token or self.current_token[0] != "LBRACE":
-            new_statements.append({"type": "error", "value": "Expected '{' after while condition"})
-            return new_statements
+            return {"type": "error", "value": "Expected '{' after while condition"}
 
         advance_token(self)  # Move past LBRACE
         body_statements = self.parse_block(statements)
 
-        statements.append({
+        return {
             "type": "while_loop",
             "condition": condition,
             "body": body_statements
-        })
-
-        return statements
+        }
 
     # TODO: Das hier ist noch nicht fertig
     def parse_loop_statement(self, statements):
