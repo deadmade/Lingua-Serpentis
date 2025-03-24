@@ -15,7 +15,7 @@
     # Römische Zahlen  ich  kann  halt kei regex bei fragen erklär ichs
 
     ("IF", r"si"),
-    ("ELSEIF", r"aut si"),
+    #("ELSEIF", r"aut si"),
     ("ELSE", r"aut"),
     ("WHILE", r"indem"),
     ("FOR", r"dum"),

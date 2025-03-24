@@ -128,6 +128,20 @@ class TestLanguage(unittest.TestCase):
         result = parser.parse()
         self.assertEqual(result, "if (10 > 1000) {\nint x = 1;\n}")
 
+    def test_if_else_statement(self):
+        code = "si (°X maior_est °I) { ni x = °I; } aut { ni x = °X; }"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, "if (10 > 1) {\nint x = 1;\n} else {\nint x = 10;\n}")
+
+    def test_if_else_if_statement(self):
+        code = "si (°X maior_est °I) { ni x = °I; } aut si (°X minor_est °I) { ni x = °X; }"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, "if (10 > 1) {\nint x = 1;\n} else if (10 < 1) {\nint x = 10;\n}")
+
     # def test_loop_statement(self):
     #     code = "hliw (°A < °B) { ni x = °C; }"
     #     tokens = Lexer.lexer(code)

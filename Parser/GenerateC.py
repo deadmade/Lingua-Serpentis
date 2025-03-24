@@ -30,12 +30,12 @@ def generate_if_statement(self, if_statement):
         if len(if_statement["else_body"]) == 1 and if_statement["else_body"][0].get("type") == "if_statement":
             # Generate else-if
             else_if = if_statement["else_body"][0]
-            condition = self.format_condition(else_if["condition"])
+            condition = format_condition(self, else_if["condition"])
             self.c_code.append(f"}} else if ({condition}) {{")
 
             # Add the else-if body with indentation
             for stmt in else_if["if_body"]:
-                code = self.generate_single_statement(stmt)
+                code = generate_single_statement(self, stmt)
                 if code:
                     self.c_code.append(f"    {code}")
 
@@ -50,14 +50,14 @@ def generate_if_statement(self, if_statement):
                     # Regular else block
                     self.c_code.append("} else {")
                     for stmt in else_if["else_body"]:
-                        code = self.generate_single_statement(stmt)
+                        code = generate_single_statement(self, stmt)
                         if code:
                             self.c_code.append(f"    {code}")
         else:
             # Regular else block
             self.c_code.append("} else {")
             for stmt in if_statement["else_body"]:
-                code = self.generate_single_statement(stmt)
+                code = generate_single_statement(self, stmt)
                 if code:
                     self.c_code.append(f"    {code}")
 
