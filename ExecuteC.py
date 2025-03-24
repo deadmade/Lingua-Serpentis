@@ -1,21 +1,25 @@
-from cffi import FFI
+import subprocess
 
-def execute_c(result):
-    ffi = FFI()
+def execute_c(c_code):
+    # 1. Schreibe den C-Code in eine Datei
+    with open("output.c", "w") as f:
+        f.write(c_code)
 
-    c_code = """
-    #include <stdio.h>
-    
-    void hello() {
-        printf("Hello from C!\\n");
-    }
-"""
+    # 2. Kompiliere die Datei mit gcc
+    compile_result = subprocess.run(["gcc", "output.c", "-o", "out"], capture_output=True, text=True)
 
-    ffi.cdef("void hello();")  # Declare the function signature
+    if compile_result.returncode != 0:
+        print("❌ Fehler beim Kompilieren:")
+        print(compile_result.stderr)
+        return
 
-    lib = ffi.dlopen(None)  # Load the compiled module
-    ffi.set_source("_my_c_module", c_code)  # Compile in-memory
+    print("✅ Kompilierung erfolgreich. Starte das Programm:\n")
 
-    ffi.compile(verbose=True)  # Compile and link dynamically
+    # 3. Führe das kompilierte Programm aus
+    run_result = subprocess.run(["./out"], capture_output=True, text=True)
 
-
+    if run_result.returncode != 0:
+        print("❌ Fehler beim Ausführen:")
+        print(run_result.stderr)
+    else:
+        print(run_result.stdout)

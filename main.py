@@ -34,17 +34,19 @@ def main():
     try:
         # Step 1: Lexical analysis
         tokens = Lexer.lexer(code)
-        print("Lexical analysis completed:")
-        print(tokens)
+        print("Lexical analysis completed:\nLEXED TOKENS:")
+        for token in tokens:
+            print(token)
 
         parser = Parser.Parser(tokens)
         result = parser.parse()
         print("Parsing completed:")
+        
+        print("\nGenerierter C-Code:\n")
         print(result)
 
+        print("\nStarte Kompilierung & Ausführung...\n")
         ExecuteC.execute_c(result)
-
-
 
         # Placeholder for future implementation
         print("conversion, and execution not yet implemented.")

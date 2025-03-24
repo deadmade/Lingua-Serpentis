@@ -47,6 +47,12 @@ class Parser:
             self.parse_print()
         elif token_type == "IF":
             self.parse_if_statement()
+        elif token_type == "WHILE":
+            self.parse_while_loop()
+        elif token_type == "BREAK":
+            self.statements.append({"type": "break"})
+        elif token_type == "CONTINUE":
+            self.statements.append({"type": "continue"})
         elif token_type == "IDENTIFIER":
             self.parse_assignment_or_function_call()
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
@@ -239,6 +245,37 @@ class Parser:
 
         self.statements.append(if_statement)
 
+    def parse_while_loop(self):
+        """Parse a while loop with condition and body"""
+        self.advance_token()  # Move past WHILE
+
+        if not self.current_token or self.current_token[0] != "LPAREN":
+            self.statements.append({"type": "error", "value": "Expected '(' after while keyword"})
+            return
+
+        self.advance_token()  # Move past LPAREN
+        condition = self.parse_expression()
+
+        if not self.current_token or self.current_token[0] != "RPAREN":
+            self.statements.append({"type": "error", "value": "Expected ')' to close while condition"})
+            return
+
+        self.advance_token()  # Move past RPAREN
+
+        if not self.current_token or self.current_token[0] != "LBRACE":
+            self.statements.append({"type": "error", "value": "Expected '{' after while condition"})
+            return
+
+        self.advance_token()  # Move past LBRACE
+        body_statements = self.parse_block()
+
+        self.statements.append({
+            "type": "while_loop",
+            "condition": condition,
+            "body": body_statements
+        })
+
+
     def parse_block(self):
         """Parse a block of statements enclosed in braces"""
         block_statements = []
@@ -326,12 +363,21 @@ class Parser:
         mapping = {
             "ISNOTEQUAL": "!=",
             "ISGREATER": "<",
-            "ISLESS": ">"
+            "ISLESS": ">",
+            "PLUS": "+",
+             "MINUS": "-",
+            "MUL": "*",
+            "DIV": "/",
+            "minor_est": "<",
+            "maior_est": ">",
+            "par_est": "==" 
         }
         return mapping.get(condition, "void")
 
     def generate_c_code(self):
         """Convert parsed statements to C code"""
+        self.c_code.append("#include <stdio.h>")
+        self.c_code.append("int main() {")
         for statement in self.statements:
             if statement["type"] == "comment":
                 self.c_code.append(f"// {statement['value']}")
@@ -352,8 +398,16 @@ class Parser:
                 self.c_code.append(f"printf(\"{format_specifier}\", {value});")
             elif statement["type"] == "if_statement":
                 self.generate_if_statement(statement)
+            elif statement["type"] == "while_loop":
+                self.generate_while_loop(statement)
+            elif statement["type"] == "break":
+                self.c_code.append("break;")
+            elif statement["type"] == "continue":
+                self.c_code.append("continue;")
             elif statement["type"] == "error":
-                self.c_code.append(f"// ERROR: {statement['value']}")
+                print(f"// ERROR: {statement['value']}")
+        self.c_code.append("    return 0;")
+        self.c_code.append("}")
 
     def generate_if_statement(self, if_statement):
         """Generate C code for if statements"""
@@ -408,6 +462,16 @@ class Parser:
         # Close the if statement
         self.c_code.append("}")
 
+    def generate_while_loop(self, while_statement):
+        """Generate C code for while loops"""
+        condition = self.format_condition(while_statement["condition"])
+        self.c_code.append(f"while ({condition}) {{")
+        for stmt in while_statement["body"]:
+            code = self.generate_single_statement(stmt)
+            if code:
+                self.c_code.append(f"    {code}")
+        self.c_code.append("}")
+
     def generate_single_statement(self, statement):
         """Generate C code for a single statement"""
         if statement["type"] == "comment":
@@ -427,6 +491,10 @@ class Parser:
             value = self.format_expression(statement["expression"])
             format_specifier = self.get_format_specifier(statement["expression"]["type"])
             return f"printf(\"{format_specifier}\", {value});"
+        elif statement["type"] == "break":
+            return "break;"
+        elif statement["type"] == "continue":
+            return "continue;"
         elif statement["type"] == "error":
             return f"// ERROR: {statement['value']}"
 
