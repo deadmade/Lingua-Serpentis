@@ -1,5 +1,6 @@
 import subprocess
 
+
 def execute_c(c_code):
     # 1. Schreibe den C-Code in eine Datei
     with open("output.c", "w") as f:

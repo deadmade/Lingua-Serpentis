@@ -1,9 +1,9 @@
 ﻿import os
 import sys
 
+import ExecuteC
 import Lexer
 import Parser
-import ExecuteC
 
 
 def main():
@@ -35,13 +35,13 @@ def main():
         # Step 1: Lexical analysis
         tokens = Lexer.lexer(code)
         print("Lexical analysis completed:\nLEXED TOKENS:")
-        for token in tokens:
-            print(token)
+        # for token in tokens:
+        # print(token)
 
         parser = Parser.Parser(tokens)
         result = parser.parse()
         print("Parsing completed:")
-        
+
         print("\nGenerierter C-Code:\n")
         print(result)
 

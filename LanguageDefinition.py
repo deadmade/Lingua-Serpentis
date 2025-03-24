@@ -13,7 +13,8 @@ TOKEN_SPECS = [
     ("RBRACE", r"\}"),
     ("NEWLINE", r";"),
     ("SKIP", r"[ \t]+"),  # Ignoriere Leerzeichen
-    ("NUMBER", r"°((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus"), # Römische Zahlen  ich  kann  halt kei regex bei fragen erklär ichs
+    ("NUMBER", r"°((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus"),
+    # Römische Zahlen  ich  kann  halt kei regex bei fragen erklär ichs
 
     ("IF", r"si"),
     ("ELSEIF", r"aut si"),
@@ -24,20 +25,19 @@ TOKEN_SPECS = [
     ("RETURN", r"redde"),
     ("TRUE", r"verus"),
     ("FALSE", r"falsus"),
-    ("BREAK",r"abrumpe"),
-    ("CONTINUE",r"continua"),
+    ("BREAK", r"abrumpe"),
+    ("CONTINUE", r"continua"),
     ("PRINT", r"scribe"),
     ("ISEQUAL", r"par_est"),
     ("ISNOTEQUAL", r"par_non_est"),
     ("ISGREATER", r"maior_est"),
-    ("ISLESS",r"minor_est"),
+    ("ISLESS", r"minor_est"),
 
     # Data types
     ("INT", r"ni"),
     ("STRING", r"\".*?\""),  # Strings as type
-    ("CHAR","lit"),#littera,
-    ("String","voc"), #vocabulum ??
-
+    ("CHAR", "lit"),  # littera,
+    ("String", "voc"),  # vocabulum ??
 
     ("IDENTIFIER", r"[a-zA-Z_]\w*"),
 ]

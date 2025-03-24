@@ -1,5 +1,6 @@
 import RomanNumeralConverter
 
+
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
@@ -16,11 +17,12 @@ class Parser:
     def parse(self):
         """Parse all tokens and return the generated C code"""
         while self.current_token_index < len(self.tokens):
-            self.parse_statement()
+            self.statements = self.parse_statement(self.statements)
             self.advance_token()
 
-        # Convert statements to C code
         print(self.statements)
+
+        # Convert statements to C code
         self.generate_c_code()
         return "\n".join(self.c_code)
 
@@ -32,7 +34,7 @@ class Parser:
         else:
             self.current_token = None
 
-    def parse_statement(self):
+    def parse_statement(self, statements):
         """Parse a single statement based on token type"""
         if not self.current_token:
             return
@@ -40,35 +42,37 @@ class Parser:
         token_type = self.current_token[0]
 
         if token_type == "COMMENT":
-            self.statements.append({"type": "comment", "value": self.current_token[1]})
+            statements.append({"type": "comment", "value": self.current_token[1]})
         elif token_type in ["INT", "STRING", "CHAR"]:
-            self.parse_declaration()
+            statements.append(self.parse_declaration(statements))
         elif token_type == "PRINT":
-            self.parse_print()
+            statements.append(self.parse_print(statements))
         elif token_type == "IF":
-            self.parse_if_statement()
+            statements.append(self.parse_if_statement(statements))
         elif token_type == "WHILE":
-            self.parse_while_loop()
+           statements.append(self.parse_while_loop(statements))
         elif token_type == "BREAK":
-            self.statements.append({"type": "break"})
+            statements.append({"type": "break"})
         elif token_type == "CONTINUE":
-            self.statements.append({"type": "continue"})
+            statements.append({"type": "continue"})
         elif token_type == "IDENTIFIER":
-            self.parse_assignment_or_function_call()
+            statements.append(self.parse_assignment_or_function_call(statements))
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
         else:
             # Unknown token type
-            self.statements.append({"type": "error", "value": f"Unknown token type: {token_type}"})
+            statements.append({"type": "error", "value": f"Unknown token type: {token_type}"})
 
-    def parse_declaration(self):
+        return statements
+
+    def parse_declaration(self, statements):
         """Parse variable declaration and assignment"""
         data_type = self.datatype_mapping(self.current_token[0])
         self.advance_token()
 
         if not self.current_token or self.current_token[0] != "IDENTIFIER":
-            self.statements.append({"type": "error", "value": "Expected identifier after type declaration"})
+            statements.append({"type": "error", "value": "Expected identifier after type declaration"})
             return
 
         identifier = self.current_token[1]
@@ -76,7 +80,7 @@ class Parser:
 
         # Simple declaration without assignment
         if not self.current_token or self.current_token[0] in ["NEWLINE", "SEMICOLON"]:
-            self.statements.append({
+            statements.append({
                 "type": "declaration",
                 "data_type": data_type,
                 "identifier": identifier
@@ -86,66 +90,110 @@ class Parser:
         # Declaration with assignment
         if self.current_token[0] == "ASSIGN":
             self.advance_token()
-            value = self.parse_expression()
+            value, type_operation, statements_added = self.parse_expression(statements)
 
-            self.statements.append({
-                "type": "declaration_assignment",
+            if statements_added is not None:
+                statements.append(statements_added)
+
+            statements.append({
+                "type": type_operation,
                 "data_type": data_type,
                 "identifier": identifier,
                 "value": value
             })
+        return statements
 
-    def parse_expression(self):
+    def parse_expression(self, statements):
         """Parse an expression (number, identifier, function call)"""
         if not self.current_token:
-            return None
+            return None, None, None
 
         token_type = self.current_token[0]
+        next_token = self.peek_next_token()
 
+        # Handle number literal
         if token_type == "NUMBER":
             value = self.handle_numbers()
             self.advance_token()
-            return {"type": "number", "value": value}
 
+            # Check if this is part of an operation
+            if self.current_token and self.current_token[0] in ["PLUS", "MINUS", "MULT", "DIV"]:
+                condition = self.conditions_mapping(self.current_token[0])
+                self.advance_token()
+
+                # Parse the right side of the operation
+                if self.current_token and self.current_token[0] == "NUMBER":
+                    value2 = self.handle_numbers()
+                    self.advance_token()
+                elif self.current_token and self.current_token[0] == "IDENTIFIER":
+                    value2 = self.current_token[1]
+                    self.advance_token()
+                else:
+                    value2 = None
+
+                return {"type": "operation", "value": value, "condition": condition,
+                        "value2": value2}, "declaration_operation", None
+
+            return {"type": "number", "value": value}, "declaration_assignment", None
+
+        # Handle string literals
         elif token_type == "STRING_LITERAL":
             value = self.current_token[1]
             self.advance_token()
-            return {"type": "string", "value": value}
+            return {"type": "string", "value": value}, "declaration_assignment", None
 
+        # Handle identifiers
         elif token_type == "IDENTIFIER":
-            if self.peek_next_token()[0] == "LPAREN":
-                return self.parse_function_call()
-            elif self.peek_next_token()[0] == "RPAREN":
-                return {"type": "identifier", "value": self.current_token[1]}
-            else:
-                value = self.current_token[1]
-                self.advance_token()
+            identifier = self.current_token[1]
+            self.advance_token()
+
+            # Check if this is a function call
+            if self.current_token and self.current_token[0] == "LPAREN":
+                self.current_token_index -= 1  # Go back to parse the function call properly
+                self.current_token = self.tokens[self.current_token_index]
+                function_call, statements_added = self.parse_function_call(statements)
+                return function_call, "declaration_function_call" , statements_added
+
+            # Check if this is part of an operation
+            if self.current_token and self.current_token[0] in ["PLUS", "MINUS", "MULT", "DIV", "ISNOTEQUAL",
+                                                                "ISGREATER",
+                                                                "ISLESS"]:
                 condition = self.conditions_mapping(self.current_token[0])
                 self.advance_token()
-                if self.current_token[0] == "NUMBER":
-                    value2 = RomanNumeralConverter.convert_roman_to_decimal( self.current_token[1])
-                else:
+
+                # Parse the right side of the operation
+                if self.current_token and self.current_token[0] == "NUMBER":
+                    value2 = self.handle_numbers()
+                    self.advance_token()
+                elif self.current_token and self.current_token[0] == "IDENTIFIER":
                     value2 = self.current_token[1]
-                return {"type": "identifier", "value": value, "condition": condition, "value2": value2}
+                    self.advance_token()
+                else:
+                    value2 = None
 
-        return None
+                return {"type": "operation", "value": identifier, "condition": condition,
+                        "value2": value2}, "declaration_operation", None
+
+            return {"type": "identifier", "value": identifier}, "declaration_assignment", None
+
+        return None, None, None
 
 
-    def parse_function_call(self):
+    def parse_function_call(self, statements):
         """Parse a function call with arguments"""
         function_name = self.current_token[1]
         self.advance_token()  # Move to LPAREN
 
         if not self.current_token or self.current_token[0] != "LPAREN":
-            self.statements.append({"type": "error", "value": f"Expected '(' after function name {function_name}"})
-            return None
+            statements.append({"type": "error", "value": f"Expected '(' after function name {function_name}"})
+            return None, statements
 
         self.advance_token()  # Move past LPAREN
 
         arguments = []
         # Parse arguments until we find the closing parenthesis
         while self.current_token and self.current_token[0] != "RPAREN":
-            arg = self.parse_expression()
+            arg, _, statements = self.parse_expression(statements)
             if arg:
                 arguments.append(arg)
 
@@ -154,49 +202,53 @@ class Parser:
                 self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
-            self.statements.append({"type": "error", "value": f"Expected ')' to close function call to {function_name}"})
-            return None
+            statements.append(
+            {"type": "error", "value": f"Expected ')' to close function call to {function_name}"})
+            return None, statements
 
         self.advance_token()  # Move past RPAREN
 
         return {
-            "type": "function_call",
-            "name": function_name,
-            "arguments": arguments
-        }
+        "type": "function_call",
+        "name": function_name,
+        "arguments": arguments
+        }, statements
 
-    def parse_print(self):
+
+    def parse_print(self, statements):
         """Parse a print statement"""
         self.advance_token()  # Move past PRINT
 
         if not self.current_token or self.current_token[0] != "LPAREN":
-            self.statements.append({"type": "error", "value": "Expected '(' after print"})
-            return
+            statements.append({"type": "error", "value": "Expected '(' after print"})
+            return statements
 
         self.advance_token()  # Move past LPAREN
 
         expression = self.parse_expression()
-        self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
-            self.statements.append({"type": "error", "value": "Expected ')' to close print statement"})
-            return
+            statements.append({"type": "error", "value": "Expected ')' to close print statement"})
+            return statements
 
         self.advance_token()  # Move past RPAREN
 
-        self.statements.append({
+        statements.append({
             "type": "print",
             "expression": expression
         })
 
-    def parse_if_statement(self):
+        return statements
+
+
+    def parse_if_statement(self, statements):
         """Parse an if statement with condition and body"""
         self.advance_token()  # Move past IF
 
         # Parse condition
         if not self.current_token or self.current_token[0] != "LPAREN":
-            self.statements.append({"type": "error", "value": "Expected '(' after if keyword"})
-            return
+            statements.append({"type": "error", "value": "Expected '(' after if keyword"})
+            return statements
 
         self.advance_token()  # Move past LPAREN
 
@@ -205,15 +257,15 @@ class Parser:
         self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
-            self.statements.append({"type": "error", "value": "Expected ')' to close if condition"})
-            return
+            statements.append({"type": "error", "value": "Expected ')' to close if condition"})
+            return statements
 
         self.advance_token()  # Move past RPAREN
 
         # Parse body (statements between { and })
         if not self.current_token or self.current_token[0] != "LBRACE":
-            self.statements.append({"type": "error", "value": "Expected '{' after if condition"})
-            return
+            statements.append({"type": "error", "value": "Expected '{' after if condition"})
+            return statements
 
         self.advance_token()  # Move past LBRACE
 
@@ -232,8 +284,8 @@ class Parser:
             else:
                 # For regular else, parse the block
                 if not self.current_token or self.current_token[0] != "LBRACE":
-                    self.statements.append({"type": "error", "value": "Expected '{' after else keyword"})
-                    return
+                    statements.append({"type": "error", "value": "Expected '{' after else keyword"})
+                    return statements
 
                 self.advance_token()  # Move past LBRACE
                 else_body = self.parse_block()
@@ -246,55 +298,59 @@ class Parser:
             "else_body": else_body
         }
 
-        self.statements.append(if_statement)
+        statements.append(if_statement)
+        return statements
 
-    def parse_while_loop(self):
+
+    def parse_while_loop(self, statements):
         """Parse a while loop with condition and body"""
         self.advance_token()  # Move past WHILE
 
         if not self.current_token or self.current_token[0] != "LPAREN":
-            self.statements.append({"type": "error", "value": "Expected '(' after while keyword"})
-            return
+            statements.append({"type": "error", "value": "Expected '(' after while keyword"})
+            return statements
 
         self.advance_token()  # Move past LPAREN
         condition = self.parse_expression()
-        self.advance_token()
 
         if not self.current_token or self.current_token[0] != "RPAREN":
-            self.statements.append({"type": "error", "value": "Expected ')' to close while condition"})
-            return
+            statements.append({"type": "error", "value": "Expected ')' to close while condition"})
+            return statements
 
         self.advance_token()  # Move past RPAREN
 
         if not self.current_token or self.current_token[0] != "LBRACE":
-            self.statements.append({"type": "error", "value": "Expected '{' after while condition"})
-            return
+            statements.append({"type": "error", "value": "Expected '{' after while condition"})
+            return statements
 
         self.advance_token()  # Move past LBRACE
         body_statements = self.parse_block()
 
-        self.statements.append({
+        statements.append({
             "type": "while_loop",
             "condition": condition,
             "body": body_statements
         })
 
+        return statements
 
-    def parse_block(self):
+
+    def parse_block(self, statements):
         """Parse a block of statements enclosed in braces"""
         block_statements = []
 
         # Parse statements until we find the closing brace
         while self.current_token and self.current_token[0] != "RBRACE":
             start_index = self.current_token_index
-            self.parse_statement()
+            current_statement = self.statements
+            statements = self.parse_statement(statements)
 
             # If we didn't advance, manually advance to avoid infinite loop
             if self.current_token_index == start_index:
                 self.advance_token()
 
             # Get the last parsed statement if available
-            if self.statements:
+            if statements and self.statements != current_statement:
                 block_statements.append(self.statements.pop())
 
         if not self.current_token or self.current_token[0] != "RBRACE":
@@ -304,7 +360,8 @@ class Parser:
         self.advance_token()  # Move past RBRACE
         return block_statements
 
-    def parse_assignment_or_function_call(self):
+
+    def parse_assignment_or_function_call(self, statements):
         """Parse either an assignment or a function call"""
         identifier = self.current_token[1]
         self.advance_token()
@@ -316,28 +373,31 @@ class Parser:
             self.current_token = self.tokens[self.current_token_index]
 
             # Parse function call and add to statements
-            func_call = self.parse_function_call()
-            self.statements.append({
+            func_call = self.parse_function_call(statements)
+            statements.append({
                 "type": "expression_statement",
                 "expression": func_call
             })
-            return
+            return statements
 
         # Otherwise, it's an assignment
         if not self.current_token or self.current_token[0] != "ASSIGN":
-            self.statements.append({"type": "error", "value": f"Expected '=' after identifier {identifier}"})
-            return
+            statements.append({"type": "error", "value": f"Expected '=' after identifier {identifier}"})
+            return statements
 
         self.advance_token()  # Move past ASSIGN
 
         # Parse the right-hand side of the assignment
-        value = self.parse_expression()
+        value = self.parse_expression(statements)
 
-        self.statements.append({
+        statements.append({
             "type": "assignment",
             "identifier": identifier,
             "value": value
         })
+
+        return statements
+
 
     def handle_numbers(self):
         """Convert Roman numerals to decimal"""
@@ -345,12 +405,14 @@ class Parser:
             return RomanNumeralConverter.convert_roman_to_decimal(self.current_token[1])
         return 0
 
+
     def peek_next_token(self):
         """Look at the next token without advancing"""
         next_index = self.current_token_index + 1
         if next_index < len(self.tokens):
             return self.tokens[next_index]
         return None
+
 
     def datatype_mapping(self, datatype):
         """Map LISS datatypes to C datatypes"""
@@ -366,36 +428,48 @@ class Parser:
         """Map LISS Conditions to C datatypes"""
         mapping = {
             "ISNOTEQUAL": "!=",
-            "ISGREATER": "<",
-            "ISLESS": ">",
+            "ISGREATER": ">",
+            "ISLESS": "<",
             "PLUS": "+",
-             "MINUS": "-",
-            "MUL": "*",
+            "MINUS": "-",
+            "MULT": "*",
             "DIV": "/",
             "minor_est": "<",
             "maior_est": ">",
-            "par_est": "==" 
+            "par_est": "=="
         }
         return mapping.get(condition, "void")
 
+
     def generate_c_code(self):
         """Convert parsed statements to C code"""
-        self.c_code.append("#include <stdio.h>")
-        self.c_code.append("int main() {")
+        #self.c_code.append("#include <stdio.h>")
+        #self.c_code.append("int main() {")
         for statement in self.statements:
             if statement["type"] == "comment":
                 self.c_code.append(f"// {statement['value']}")
             elif statement["type"] == "declaration":
                 self.c_code.append(f"{statement['data_type']} {statement['identifier']};")
+            elif statement["type"] == "declaration_function_call":
+                expr = self.format_expression(statement)
+                self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {expr};")
             elif statement["type"] == "declaration_assignment":
+                value = self.format_expression(statement["value"])
+                self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
+            elif statement["type"] == "declaration_operation":
                 value = self.format_expression(statement["value"])
                 self.c_code.append(f"{statement['data_type']} {statement['identifier']} = {value};")
             elif statement["type"] == "assignment":
                 value = self.format_expression(statement["value"])
                 self.c_code.append(f"{statement['identifier']} = {value};")
             elif statement["type"] == "expression_statement":
-                expr = self.format_expression(statement["expression"])
-                self.c_code.append(f"{expr};")
+                expression = statement["expression"][0]
+                if expression["type"] == "function_call":
+                    expr = self.format_expression(expression)
+                    self.c_code.append(f"{expr};")
+                else:
+                    expr = self.format_expression(statement["expression"])
+                    self.c_code.append(f"{expr};")
             elif statement["type"] == "print":
                 value = self.format_expression(statement["expression"])
                 format_specifier = self.get_format_specifier(statement["expression"]["type"])
@@ -410,8 +484,9 @@ class Parser:
                 self.c_code.append("continue;")
             elif statement["type"] == "error":
                 print(f"// ERROR: {statement['value']}")
-        self.c_code.append("    return 0;")
-        self.c_code.append("}")
+        #self.c_code.append("    return 0;")
+        #self.c_code.append("}")
+
 
     def generate_if_statement(self, if_statement):
         """Generate C code for if statements"""
@@ -466,43 +541,47 @@ class Parser:
         # Close the if statement
         self.c_code.append("}")
 
+
     def generate_while_loop(self, while_statement):
         """Generate C code for while loops"""
-        condition = self.format_condition(while_statement["condition"])
-        self.c_code.append(f"while ({condition}) {{")
+        condition, _ = while_statement["condition"]  # Unpack the tuple
+        formatted_condition = self.format_condition(condition)
+        self.c_code.append(f"while ({formatted_condition}) {{")
         for stmt in while_statement["body"]:
             code = self.generate_single_statement(stmt)
             if code:
                 self.c_code.append(f"    {code}")
         self.c_code.append("}")
 
+
     def generate_single_statement(self, statement):
         """Generate C code for a single statement"""
         if statement["type"] == "comment":
             return f"// {statement['value']}"
         elif statement["type"] == "declaration":
-            return f"{statement['data_type']} {statement['identifier']};"
+             return f"{statement['data_type']} {statement['identifier']};"
         elif statement["type"] == "declaration_assignment":
-            value = self.format_expression(statement["value"])
-            return f"{statement['data_type']} {statement['identifier']} = {value};"
+             value = self.format_expression(statement["value"])
+             return f"{statement['data_type']} {statement['identifier']} = {value};"
         elif statement["type"] == "assignment":
-            value = self.format_expression(statement["value"])
-            return f"{statement['identifier']} = {value};"
+             value = self.format_expression(statement["value"])
+             return f"{statement['identifier']} = {value};"
         elif statement["type"] == "expression_statement":
-            expr = self.format_expression(statement["expression"])
-            return f"{expr};"
+             expr = self.format_expression(statement["expression"])
+             return f"{expr};"
         elif statement["type"] == "print":
-            value = self.format_expression(statement["expression"])
-            format_specifier = self.get_format_specifier(statement["expression"]["type"])
-            return f"printf(\"{format_specifier}\", {value});"
+             value = self.format_expression(statement["expression"])
+             format_specifier = self.get_format_specifier(statement["expression"]["type"])
+             return f"printf(\"{format_specifier}\", {value});"
         elif statement["type"] == "break":
-            return "break;"
+             return "break;"
         elif statement["type"] == "continue":
-            return "continue;"
+             return "continue;"
         elif statement["type"] == "error":
             return f"// ERROR: {statement['value']}"
 
         return ""
+
 
     def format_condition(self, condition):
         """Format a condition expression for C code generation"""
@@ -520,23 +599,35 @@ class Parser:
             return self.format_expression(condition)
 
     def format_expression(self, expr):
-        """Format an expression for C code generation"""
-        if not expr:
-            return ""
+      """Format an expression for C code generation"""
+      if not expr:
+          return ""
 
-        if expr["type"] == "number":
-            return str(expr["value"])
-        elif expr["type"] == "string":
-            return f"\"{expr['value']}\""
-        elif expr["type"] == "identifier":
-            if "condition" in expr and "value2" in expr:
-                # Handle condition expressions
-                return f"{expr['value']} {expr['condition']} {expr['value2']}"
-            return expr["value"]
-        elif expr["type"] == "function_call":
-            args = ", ".join([self.format_expression(arg) for arg in expr["arguments"]])
-            return f"{expr['name']}({args})"
-        return ""
+      if expr["type"] == "number":
+          return str(expr["value"])
+      elif expr["type"] == "operation":
+          value = expr["value"]
+          value2 = expr["value2"]
+          condition = expr["condition"]
+          return f"{value} {condition} {value2}"
+      elif expr["type"] == "string":
+          return f"\"{expr['value']}\""
+      elif expr["type"] == "identifier":
+          if "condition" in expr and "value2" in expr:
+              # Handle condition expressions
+              return f"{expr['value']} {expr['condition']} {expr['value2']}"
+          return expr["value"]
+      elif expr["type"] == "declaration_function_call":
+        value = expr["value"]
+        args = [self.format_expression(arg) for arg in value["arguments"]]
+        return f"{value['name']}({', '.join(args)})"
+      elif expr["type"] == "function_call":
+          args = [self.format_expression(arg) for arg in expr["arguments"]]
+          return f"{expr['name']}({', '.join(args)})"
+
+
+
+
 
     def get_format_specifier(self, expr_type):
         """Get printf format specifier based on expression type"""

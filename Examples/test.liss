@@ -1,7 +1,6 @@
-ni i = °I;
+ni i = °I * °X;
 
 indem (i minor_est °V) {
-    scribe(i);
-    i = i + °I;
+
     continua;
 }

@@ -1,9 +1,10 @@
+import sys
 import unittest
 from io import StringIO
-import sys
 
 import Lexer
 import Parser
+
 
 class TestLanguage(unittest.TestCase):
 
@@ -35,6 +36,19 @@ class TestLanguage(unittest.TestCase):
         parser = Parser.Parser(tokens)
         result = parser.parse()
         self.assertEqual(result, "int x = 10 + 10;")
+
+    def test_definition_function_call(self):
+        code = "ni result = add(°X, °X);"
+        tokens = Lexer.lexer(code)
+        parser = Parser.Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, "int result = add(10, 10);")
+    def test_function_call(self):
+        code = "add();"
+        tokens = Lexer.lexer(code)
+        parser = Parser.Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, "add(10, 10);")
 
     # def test_complex_expressions(self):
     #     code = "ni x = (°A + °B) * °C;"
