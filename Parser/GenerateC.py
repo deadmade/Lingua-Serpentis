@@ -13,6 +13,7 @@ def generate_c_code(self):
         self.c_code.append("    return 0;")
         self.c_code.append("}")
 
+
 def generate_if_statement(self, if_statement):
     """Generate C code for if statements"""
     condition = format_condition(self, if_statement["condition"])
@@ -22,7 +23,7 @@ def generate_if_statement(self, if_statement):
 
     # Add the body with indentation
     for stmt in if_statement["if_body"]:
-        code = generate_single_statement(self,stmt)
+        code = generate_single_statement(self, stmt)
         if code:
             self.c_code.append(f"    {code}")
 
@@ -79,6 +80,28 @@ def generate_while_loop(self, while_statement):
     self.c_code.append("}")
 
 
+def generate_for_loop(self, for_statement):
+    """Generate C code for for loops"""
+
+    init_value = for_statement["init"][0]
+
+    value = format_expression(self, init_value["value"])
+    init = f"{init_value['data_type']} {init_value['identifier']} = {value};"
+
+    condition = format_condition(self, for_statement["condition"])
+
+    increment_value = for_statement["increment"][0]
+    value = format_expression(self, increment_value["value"])
+    increment = f"{increment_value['identifier']} = {value}"
+
+    self.c_code.append(f"for ({init} {condition}; {increment}) {{")
+    for stmt in for_statement["body"]:
+        code = generate_single_statement(self, stmt)
+        if code:
+            self.c_code.append(f"    {code}")
+    self.c_code.append("}")
+
+
 def generate_single_statement(self, statement):
     """Generate C code for a single statement"""
     if statement["type"] == "comment":
@@ -111,6 +134,8 @@ def generate_single_statement(self, statement):
         generate_if_statement(self, statement)
     elif statement["type"] == "while_loop":
         generate_while_loop(self, statement)
+    elif statement["type"] == "for_loop":
+        generate_for_loop(self, statement)
     elif statement["type"] == "break":
         self.c_code.append("break;")
     elif statement["type"] == "continue":
@@ -144,27 +169,67 @@ def format_expression(self, expr):
     if not expr:
         return ""
 
-    if expr["type"] == "number":
-        return str(expr["value"])
-    elif expr["type"] == "operation":
-        value = expr["value"]
-        value2 = expr["value2"]
-        condition = expr["condition"]
-        return f"{value} {condition} {value2}"
-    elif expr["type"] == "string":
-        return f"\"{expr['value']}\""
-    elif expr["type"] == "identifier":
-        if "condition" in expr and "value2" in expr:
-            # Handle condition expressions
-            return f"{expr['value']} {expr['condition']} {expr['value2']}"
-        return expr["value"]
-    elif expr["type"] == "declaration_function_call":
-        value = expr["value"]
-        args = [format_expression(self, arg) for arg in value["arguments"]]
-        return f"{value['name']}({', '.join(args)})"
-    elif expr["type"] == "function_call":
-        args = [format_expression(self, arg) for arg in expr["arguments"]]
-        return f"{expr['name']}({', '.join(args)})"
+    # Handle tuple format that sometimes comes from the parser
+    if isinstance(expr, tuple) and len(expr) > 0:
+        expr = expr[0]  # Extract the expression from the tuple
+
+    # Handle the value field that might contain operation data
+    if isinstance(expr, dict) and "value" in expr and isinstance(expr["value"], tuple) and len(expr["value"]) > 0:
+        expr["value"] = expr["value"][0]  # Extract the operation from the tuple
+
+    if isinstance(expr, dict):
+        if expr["type"] == "number":
+            return str(expr["value"])
+        elif expr["type"] == "string":
+            return f"\"{expr['value']}\""
+        elif expr["type"] == "identifier":
+            if "condition" in expr and "value2" in expr:
+                return f"{expr['value']} {expr['condition']} {expr['value2']}"
+            return expr["value"]
+        elif expr["type"] == "operation":
+            # Format left operand
+            left = expr["value"]
+            left_formatted = ""
+            if isinstance(left, dict):
+                left_formatted = format_expression(self, left)
+            else:
+                left_formatted = str(left)
+
+            # Format right operand
+            right = expr["value2"]
+            right_formatted = ""
+            if isinstance(right, dict):
+                right_formatted = format_expression(self, right)
+            else:
+                right_formatted = str(right)
+
+            return f"{left_formatted} {expr['condition']} {right_formatted}"
+        elif expr["type"] == "function_call":
+            args = []
+            for arg in expr["arguments"]:
+                formatted_arg = format_expression(self, arg)
+                args.append(formatted_arg)
+            return f"{expr['name']}({', '.join(args)})"
+        elif expr["type"] == "declaration_function_call":
+            # Check if value is a simple dictionary or an operation
+            if isinstance(expr["value"], dict):
+                if expr["value"].get("type") == "operation":
+                    # Handle operation in declaration
+                    return format_expression(self, expr["value"])
+                elif expr["value"].get("type") == "function_call":
+                    # Handle regular function call
+                    value = expr["value"]
+                    args = []
+                    for arg in value["arguments"]:
+                        formatted_arg = format_expression(self, arg)
+                        args.append(formatted_arg)
+                    return f"{value['name']}({', '.join(args)})"
+
+            # Fallback for unexpected structures
+            return str(expr["value"])
+
+    # If not a dict or unknown type
+    return str(expr)
 
 
 def get_format_specifier(expr_type):

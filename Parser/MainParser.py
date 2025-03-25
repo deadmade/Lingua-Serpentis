@@ -1,6 +1,6 @@
 from Parser.GenerateC import generate_c_code
-from Parser.HelperFunctions import advance_token
-from Parser.ParseDeclaration import parse_declaration
+from Parser.HelperFunctions import advance_token, peek_next_token
+from Parser.ParseDeclaration import parse_declaration, parse_assignment
 from Parser.ParseExpression import parse_expression
 from Parser.ParseExpression import parse_function_call
 from Parser.ParsePrint import parse_print
@@ -43,18 +43,20 @@ class Parser:
         if token_type == "COMMENT":
             new_statements.append({"type": "comment", "value": self.current_token[1]})
         elif token_type in ["INT", "STRING", "CHAR"]:
-            new_statements.append(parse_declaration(self, statements))
+            new_statements.extend(parse_declaration(self, statements))
         elif token_type == "PRINT":
             new_statements.append(parse_print(self, statements))
         elif token_type == "IF":
             new_statements.append(self.parse_if_statement(statements))
         elif token_type == "WHILE":
             new_statements.append(self.parse_while_loop(statements))
+        elif token_type == "FOR":
+            new_statements.append(self.parse_for_loop(statements))
         elif token_type == "IDENTIFIER":
-            function_call, new_statements = parse_function_call(self, statements)
-            new_statements.append(function_call)
-            if new_statements:
-                new_statements.extend(new_statements)
+            if peek_next_token(self)[0] == "LPAREN":
+                new_statements.append(parse_function_call(self, statements))
+            elif peek_next_token(self)[0] == "ASSIGN":
+                new_statements.extend(parse_assignment(self, statements))
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
@@ -186,3 +188,100 @@ class Parser:
         }
 
         return if_statement
+
+    def parse_for_loop(self, statements):
+        """Parse a for loop with initialization, condition, increment, and body"""
+        advance_token(self)  # Move past FOR
+
+        if not self.current_token or self.current_token[0] != "LPAREN":
+            return {"type": "error", "value": "Expected '(' after for keyword"}
+
+        advance_token(self)  # Move past LPAREN
+
+        # Parse initialization
+        init = parse_declaration(self, statements)
+        if not self.current_token or self.current_token[0] != "NEWLINE":
+            return {"type": "error", "value": "Expected ';' after for initialization"}
+
+        advance_token(self)  # Move past SEMICOLON
+
+        # Parse condition
+        condition = parse_expression(self, statements)
+        if not self.current_token or self.current_token[0] != "NEWLINE":
+            return {"type": "error", "value": "Expected ';' after for condition"}
+
+        advance_token(self)  # Move past SEMICOLON
+
+        # Parse increment
+        increment = parse_assignment(self, statements)
+        if not self.current_token or self.current_token[0] != "RPAREN":
+            return {"type": "error", "value": "Expected ')' after for increment"}
+
+        advance_token(self)  # Move past RPAREN
+
+        if not self.current_token or self.current_token[0] != "LBRACE":
+            return {"type": "error", "value": "Expected '{' after for condition"}
+
+        advance_token(self)  # Move past LBRACE
+        body_statements = self.parse_block(statements)
+
+        for_loop = {
+            "type": "for_loop",
+            "init": init,
+            "condition": condition,
+            "increment": increment,
+            "body": body_statements
+        }
+
+        return for_loop
+
+    def parse_function_declaration(self, statements):
+        """Parse a function declaration with return type, name, parameters, and body"""
+        advance_token(self)  # Move past the return type
+
+        if not self.current_token or self.current_token[0] != "IDENTIFIER":
+            return {"type": "error", "value": "Expected function name after return type"}
+
+        function_name = self.current_token[1]
+        advance_token(self)  # Move past the function name
+
+        if not self.current_token or self.current_token[0] != "LPAREN":
+            return {"type": "error", "value": "Expected '(' after function name"}
+
+        advance_token(self)  # Move past LPAREN
+
+        # Parse parameters
+        parameters = []
+        while self.current_token and self.current_token[0] != "RPAREN":
+            param_type = self.current_token[0]
+            advance_token(self)  # Move past parameter type
+
+            if not self.current_token or self.current_token[0] != "IDENTIFIER":
+                return {"type": "error", "value": "Expected parameter name"}
+
+            param_name = self.current_token[1]
+            parameters.append({"type": param_type, "name": param_name})
+            advance_token(self)  # Move past parameter name
+
+            if self.current_token and self.current_token[0] == "COMMA":
+                advance_token(self)  # Move past COMMA
+
+        if not self.current_token or self.current_token[0] != "RPAREN":
+            return {"type": "error", "value": "Expected ')' to close parameter list"}
+
+        advance_token(self)  # Move past RPAREN
+
+        if not self.current_token or self.current_token[0] != "LBRACE":
+            return {"type": "error", "value": "Expected '{' after parameter list"}
+
+        advance_token(self)  # Move past LBRACE
+
+        # Parse function body
+        body_statements = self.parse_block(statements)
+
+        return {
+            "type": "function_declaration",
+            "name": function_name,
+            "parameters": parameters,
+            "body": body_statements
+        }

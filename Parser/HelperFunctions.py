@@ -50,3 +50,14 @@ def conditions_mapping(condition):
         "par_est": "=="
     }
     return mapping.get(condition, "void")
+
+
+def get_operator_precedence(operator):
+    """Return the precedence of an operator. Higher value means higher precedence."""
+    if operator in ["MULT", "DIV"]:
+        return 2
+    elif operator in ["PLUS", "MINUS"]:
+        return 1
+    elif operator in ["ISNOTEQUAL", "ISGREATER", "ISLESS"]:
+        return 0
+    return -1

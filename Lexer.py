@@ -1,8 +1,10 @@
 ﻿import re
+
 import LanguageDefinition
 
 TOKEN_REGEX = "|".join(f"(?P<{name}>{regex})" for name, regex in LanguageDefinition.TOKEN_SPECS)
 WRONG_TOKEN_REGEX = "|".join(LanguageDefinition.Wrong_Token_SPECS)
+
 
 def lexer(code):
     tokens = []
@@ -19,6 +21,6 @@ def lexer(code):
         value = match.group()
         line_number = code[:match.start()].count('\n') + 1
         print(f"Error: Irregular token '{value}' found on line {line_number}")
-        #return None
+        # return None
 
     return tokens

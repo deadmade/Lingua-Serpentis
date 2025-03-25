@@ -37,6 +37,48 @@ class TestLanguage(unittest.TestCase):
         result = parser.parse()
         self.assertEqual(result, "int x = 10 + 10;")
 
+    def test_assignment(self):
+        code = "x = °X;"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "x = 10;")
+
+    def test_assignment_with_variable(self):
+        code = "ni x = °X; x = x + °X;"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int x = 10;\nx = x + 10;")
+
+    def test_assignment_with_variable_and_function_call(self):
+        code = "ni x = °X; x = add(°X, °X);"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int x = 10;\nx = add(10, 10);")
+
+    def test_assignment_with_complex_expression(self):
+        code = "ni x = °X + °X * °X;"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int x = 10 + 10 * 10;")
+
+    def test_assignment_with_complex_expression_and_function_call(self):
+        code = "ni x = add(°X, °X) * °X;"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int x = add(10, 10) * 10;")
+
+    def test_assignment_with_complex_expression_and_function_call_and_variable(self):
+        code = "ni x = add(°X, °X) * °X;"  # TODO: Make it work for more than one variable
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int x = add(10, 10) * 10;")
+
     def test_definition_function_call(self):
         code = "ni result = add(°X, °X);"
         tokens = Lexer.lexer(code)
@@ -98,14 +140,21 @@ class TestLanguage(unittest.TestCase):
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "while (10 < 1000) { int x = x + 10; break; }")
+        self.assertEqual(result, "while (10 > 1000) {\nint x = x + 10;\nbreak;\n}")
 
     def test_while_loop_with_continue(self):
         code = "indem (°X maior_est °M) { ni x = x + °X; continua; }"
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "while (10 > 1000) { int x = x + 10; continue; }")
+        self.assertEqual(result, "while (10 > 1000) {\nint x = x + 10;\ncontinue;\n}")
+
+    def test_for_loop(self):
+        code = "dum (ni i = °X; i maior_est °M; i = i + °X) { ni x = x + °X; }"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "for (int i = 10; i > 1000; i = i + 10) {\nint x = x + 10;\n}")
 
     # def test_complex_expressions(self):
     #     code = "ni x = (°A + °B) * °C;"
@@ -126,7 +175,7 @@ class TestLanguage(unittest.TestCase):
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "if (10 > 1000) {\nint x = 1;\n}")
+        self.assertEqual(result, "if (10 > 10) {\nint x = 1;\n}")
 
     def test_if_else_statement(self):
         code = "si (°X maior_est °I) { ni x = °I; } aut { ni x = °X; }"

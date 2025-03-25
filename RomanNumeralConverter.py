@@ -38,7 +38,7 @@ def convert_single(roman_str):
     if roman_str != 'nullus':
         for str_index, value in enumerate(roman_str):
             if str_index != len(roman_str) - 1 and value == 'I' and roman_str[str_index + 1] in (
-            'V', 'X'):  # Check for IV or IX
+                    'V', 'X'):  # Check for IV or IX
                 decimal -= 1
             else:
                 decimal += roman_dict[value]
