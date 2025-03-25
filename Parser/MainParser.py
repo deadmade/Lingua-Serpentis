@@ -57,6 +57,8 @@ class Parser:
                 new_statements.append(parse_function_call(self, statements))
             elif peek_next_token(self)[0] == "ASSIGN":
                 new_statements.extend(parse_assignment(self, statements))
+        elif token_type == "FUNCTION":
+            new_statements.append(self.parse_function_declaration(statements))
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
@@ -65,6 +67,37 @@ class Parser:
             new_statements.append({"type": "error", "value": f"Unknown token type: {token_type}"})
 
         return new_statements
+    def parse_loop_statement(self, statements):
+        """Parse a single statement based on token type"""
+        if not self.current_token:
+            return
+
+        token_type = self.current_token[0]
+
+        if token_type == "BREAK":
+            statements.append({"type": "break"})
+        elif token_type == "CONTINUE":
+            statements.append({"type": "continue"})
+        else:
+            # Delegate to parse_statement for other types
+            statements.extend(self.parse_statement(statements))
+
+        return statements
+
+    def parse_function_statement(self, statements):
+        """Parse a single statement based on token type"""
+        if not self.current_token:
+            return
+
+        token_type = self.current_token[0]
+
+        if token_type == "RETURN":
+            advance_token(self)
+        else:
+            # Delegate to parse_statement for other types
+            statements.extend(self.parse_statement(statements))
+
+        return statements
 
     def parse_while_loop(self, statements):
         """Parse a while loop with condition and body"""
@@ -87,7 +120,7 @@ class Parser:
             return {"type": "error", "value": "Expected '{' after while condition"}
 
         advance_token(self)  # Move past LBRACE
-        body_statements = self.parse_block(statements)
+        body_statements = self.parse_block(statements, "loop")
 
         return {
             "type": "while_loop",
@@ -95,25 +128,7 @@ class Parser:
             "body": body_statements
         }
 
-    # TODO: Das hier ist noch nicht fertig
-    def parse_loop_statement(self, statements):
-        """Parse a single statement based on token type"""
-        if not self.current_token:
-            return
-
-        token_type = self.current_token[0]
-
-        if token_type == "BREAK":
-            statements.append({"type": "break"})
-        elif token_type == "CONTINUE":
-            statements.append({"type": "continue"})
-        else:
-            # Delegate to parse_statement for other types
-            statements.extend(self.parse_statement(statements))
-
-        return statements
-
-    def parse_block(self, statements):
+    def parse_block(self, statements, block_type):
         """Parse a block of statements enclosed in braces"""
         block_statements = []
 
@@ -121,7 +136,12 @@ class Parser:
         while self.current_token and self.current_token[0] != "RBRACE":
             start_index = self.current_token_index
             current_statement = []
-            new_statements = self.parse_loop_statement(current_statement)
+            if block_type == "function":
+                new_statements = self.parse_function_statement(current_statement)
+            elif block_type == "loop":
+                new_statements = self.parse_loop_statement(current_statement)
+            else:
+                new_statements = self.parse_statement(current_statement)
             block_statements.extend([item for item in new_statements if item is not None])
 
             # If we didn't advance, manually advance to avoid infinite loop
@@ -160,7 +180,7 @@ class Parser:
         advance_token(self)  # Move past LBRACE
 
         # Parse if body statements
-        if_body = self.parse_block(statements)
+        if_body = self.parse_block(statements, "if")
 
         # Check for else statement
         else_body = None
@@ -177,7 +197,7 @@ class Parser:
                     return {"type": "error", "value": "Expected '{' after else keyword"}
 
                 advance_token(self)  # Move past LBRACE
-                else_body = self.parse_block(statements)
+                else_body = self.parse_block(statements, "if")
 
         # Create and add the if statement to our statements list
         if_statement = {
@@ -223,7 +243,7 @@ class Parser:
             return {"type": "error", "value": "Expected '{' after for condition"}
 
         advance_token(self)  # Move past LBRACE
-        body_statements = self.parse_block(statements)
+        body_statements = self.parse_block(statements , "loop")
 
         for_loop = {
             "type": "for_loop",
@@ -237,7 +257,10 @@ class Parser:
 
     def parse_function_declaration(self, statements):
         """Parse a function declaration with return type, name, parameters, and body"""
-        advance_token(self)  # Move past the return type
+        # Store the return type before advancing
+        advance_token(self)
+        return_type = self.current_token[1]
+        advance_token(self)  # Move past return type token
 
         if not self.current_token or self.current_token[0] != "IDENTIFIER":
             return {"type": "error", "value": "Expected function name after return type"}
@@ -253,7 +276,11 @@ class Parser:
         # Parse parameters
         parameters = []
         while self.current_token and self.current_token[0] != "RPAREN":
-            param_type = self.current_token[0]
+            # Check for valid parameter type tokens
+            if self.current_token[0] not in ["INT", "STRING", "CHAR"]:
+                return {"type": "error", "value": f"Invalid parameter type: {self.current_token[0]}"}
+
+            param_type = self.current_token[1]  # Get the actual type name
             advance_token(self)  # Move past parameter type
 
             if not self.current_token or self.current_token[0] != "IDENTIFIER":
@@ -277,10 +304,17 @@ class Parser:
         advance_token(self)  # Move past LBRACE
 
         # Parse function body
-        body_statements = self.parse_block(statements)
+        body_statements = self.parse_block(statements , "function")
+
+        # Register this function in the parser's functions dictionary
+        self.functions[function_name] = {
+            "return_type": return_type,
+            "parameters": parameters
+        }
 
         return {
             "type": "function_declaration",
+            "return_type": return_type,
             "name": function_name,
             "parameters": parameters,
             "body": body_statements

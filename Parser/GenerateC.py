@@ -101,6 +101,31 @@ def generate_for_loop(self, for_statement):
             self.c_code.append(f"    {code}")
     self.c_code.append("}")
 
+def generate_function_declaration(self, function_declaration):
+    """Generate C code for function declarations"""
+    # Get the function return type, name and parameters
+    return_type = function_declaration["return_type"]
+    function_name = function_declaration["name"]
+    parameters = function_declaration["parameters"]
+
+    # Format parameters for C function signature
+    param_strings = []
+    for param in parameters:
+        param_strings.append(f"{param['type']} {param['name']}")
+
+    # Create the function signature
+    self.c_code.append(f"{return_type} {function_name}({', '.join(param_strings)}) {{")
+
+    # Add the function body with indentation
+    for stmt in function_declaration["body"]:
+        code = generate_single_statement(self, stmt)
+        if code:
+            self.c_code.append(f"    {code}")
+
+    # Close the function
+    self.c_code.append("}")
+
+
 
 def generate_single_statement(self, statement):
     """Generate C code for a single statement"""
@@ -126,6 +151,8 @@ def generate_single_statement(self, statement):
     elif statement["type"] == "function_call":
         value = format_expression(self, statement)
         self.c_code.append(f"{value};")
+    elif statement["type"] == "function_declaration":
+        generate_function_declaration(self, statement)
     elif statement["type"] == "print":
         value = self.format_expression(statement["expression"])
         format_specifier = get_format_specifier(statement["expression"]["type"])

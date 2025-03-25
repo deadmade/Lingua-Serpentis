@@ -191,59 +191,9 @@ class TestLanguage(unittest.TestCase):
         result = parser.parse()
         self.assertEqual(result, "if (10 > 1) {\nint x = 1;\n} else if (10 < 1) {\nint x = 10;\n}")
 
-    # def test_loop_statement(self):
-    #     code = "hliw (°A < °B) { ni x = °C; }"
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     self.assertEqual(result, "while (1 < 2) { int x = 3; }")
-    #
-    # def test_function_declaration(self):
-    #     code = "diov main() { ni x = °A; }"
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     self.assertEqual(result, "void main() { int x = 1; }")
-    #
-    # def test_function_call(self):
-    #     code = "ni result = add(°A, °B);"
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     self.assertEqual(result, "int result = add(1, 2);")
-    #
-    # def test_variable_assignment(self):
-    #     code = "ni x = °A; x = °B;"
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     self.assertEqual(result, "int x = 1; x = 2;")
-    #
-    # def test_complex_program(self):
-    #     code = """
-    #     ni max = °X;
-    #     ni sum = °A;
-    #
-    #     rof (ni i = °A; i < max; i = i + °A) {
-    #         sum = sum + i;
-    #     }
-    #     """
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     result = parser.parse()
-    #     expected = """
-    #     int max = 10;
-    #     int sum = 1;
-    #
-    #     for (int i = 1; i < max; i = i + 1) {
-    #         sum = sum + i;
-    #     }
-    #     """
-    #     self.assertEqual(result.strip(), expected.strip())
-    #
-    # def test_error_handling(self):
-    #     code = "ni x = ;"  # Missing value
-    #     tokens = Lexer.lexer(code)
-    #     parser = Parser.Parser(tokens)
-    #     with self.assertRaises(Exception):
-    #         parser.parse()
+    def test_function_declaration(self):
+        code = "munus ni add(ni x, ni y) { redde x + y; }"
+        tokens = Lexer.lexer(code)
+        parser = Parser(tokens, is_test=True)
+        result = parser.parse()
+        self.assertEqual(result, "int add(int x, int y) {\nreturn x + y;\n}")
