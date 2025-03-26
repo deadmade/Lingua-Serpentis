@@ -146,9 +146,20 @@ def generate_single_statement(self, statement):
     elif statement["type"] == "function_declaration":
         generate_function_declaration(self, statement)
     elif statement["type"] == "print":
-        value = self.format_expression(statement["expression"])
-        format_specifier = get_format_specifier(statement["expression"]["type"])
-        self.c_code.append(f"printf(\"{format_specifier}\", {value});")
+        expr = statement["expression"][0]
+        if expr is None:
+            self.c_code.append(f"printf(\"\");")
+        else:
+            format_specifier = get_format_specifier(expr["type"])
+
+            if expr["type"] == "string":
+                # For string literals, don't pass the value through printf's formatting
+                # Instead, print the string directly
+                self.c_code.append(f"printf({format_expression(self, expr)});")
+            else:
+                # For other types, use format specifiers as before
+                value = format_expression(self, expr)
+                self.c_code.append(f"printf(\"{format_specifier}\", {value});")
     elif statement["type"] == "if_statement":
         generate_if_statement(self, statement)
     elif statement["type"] == "while_loop":
