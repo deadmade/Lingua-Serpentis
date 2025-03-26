@@ -23,9 +23,15 @@ class Parser:
     def parse(self):
         """Parse all tokens and return the generated C code"""
         while self.current_token_index < len(self.tokens):
-            self.statements.extend(self.parse_statement(self.statements))
-            advance_token(self)
-
+            start_index = self.current_token_index
+            parsed = self.parse_statement(self.statements)
+            if isinstance(parsed, list):
+                self.statements.extend(parsed)
+            elif parsed is not None:
+                self.statements.append(parsed)
+            #Wenn kein Fortschritt gemacht wurde, dann manuell weiterrücken
+            if self.current_token_index == start_index:
+                advance_token(self)
         print(self.statements)
 
         # Convert statements to C code
@@ -42,8 +48,10 @@ class Parser:
 
         if token_type == "COMMENT":
             new_statements.append({"type": "comment", "value": self.current_token[1]})
+        elif token_type == "FUNCTION":
+            new_statements.append(self.parse_function_declaration(statements))
         elif token_type in ["INT", "STRING", "CHAR"]:
-            new_statements.extend(parse_declaration(self, statements))
+            new_statements.append(parse_declaration(self, statements))
         elif token_type == "PRINT":
             new_statements.append(parse_print(self, statements))
         elif token_type == "IF":
@@ -56,9 +64,7 @@ class Parser:
             if peek_next_token(self)[0] == "LPAREN":
                 new_statements.append(parse_function_call(self, statements))
             elif peek_next_token(self)[0] == "ASSIGN":
-                new_statements.extend(parse_assignment(self, statements))
-        elif token_type == "FUNCTION":
-            new_statements.append(self.parse_function_declaration(statements))
+                new_statements.append(parse_declaration(self, statements))
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
@@ -93,11 +99,12 @@ class Parser:
 
         if token_type == "RETURN":
             advance_token(self)
+            expr = parse_expression(self, statements)
+            return [{"type": "return", "value": expr}]
         else:
             # Delegate to parse_statement for other types
-            statements.extend(self.parse_statement(statements))
-
-        return statements
+            result = self.parse_statement(statements)
+            return result if result else []
 
     def parse_while_loop(self, statements):
         """Parse a while loop with condition and body"""
@@ -257,65 +264,60 @@ class Parser:
 
     def parse_function_declaration(self, statements):
         """Parse a function declaration with return type, name, parameters, and body"""
-        # Store the return type before advancing
-        advance_token(self)
-        return_type = self.current_token[1]
-        advance_token(self)  # Move past return type token
+        advance_token(self)  # Move past FUNCTION
 
-        if not self.current_token or self.current_token[0] != "IDENTIFIER":
+        # Expect return type
+        if self.current_token[0] not in ["INT", "STRING", "CHAR", "STRINGTYPE"]:
             return {"type": "error", "value": "Expected function name after return type"}
+        return_type = self.current_token[1]
+        advance_token(self)
 
-        function_name = self.current_token[1]
-        advance_token(self)  # Move past the function name
+        # Expect function name
+        if self.current_token[0] != "IDENTIFIER":
+            return {"type": "error", "value": "Expected function name after 'munus'"}
+        func_name = self.current_token[1]
+        advance_token(self)
 
-        if not self.current_token or self.current_token[0] != "LPAREN":
+        if self.current_token[0] != "LPAREN":
             return {"type": "error", "value": "Expected '(' after function name"}
-
-        advance_token(self)  # Move past LPAREN
+        advance_token(self)
 
         # Parse parameters
-        parameters = []
+        params = []
         while self.current_token and self.current_token[0] != "RPAREN":
             # Check for valid parameter type tokens
             if self.current_token[0] not in ["INT", "STRING", "CHAR"]:
-                return {"type": "error", "value": f"Invalid parameter type: {self.current_token[0]}"}
+                return {"type": "error", "value": f"Invalid parameter type: {self.current_token[1]}"}
+            param_type = self.current_token[1]
+            advance_token(self)
 
-            param_type = self.current_token[1]  # Get the actual type name
-            advance_token(self)  # Move past parameter type
-
-            if not self.current_token or self.current_token[0] != "IDENTIFIER":
-                return {"type": "error", "value": "Expected parameter name"}
-
+            if self.current_token[0] != "IDENTIFIER":
+                return {"type": "error", "value": f"Expected parameter name after type '{param_type}'"}
             param_name = self.current_token[1]
-            parameters.append({"type": param_type, "name": param_name})
-            advance_token(self)  # Move past parameter name
+            params.append((param_type, param_name))  # <-- HIER ist der wichtige Fix
+            advance_token(self)
 
             if self.current_token and self.current_token[0] == "COMMA":
-                advance_token(self)  # Move past COMMA
+                advance_token(self)  # Skip comma
 
-        if not self.current_token or self.current_token[0] != "RPAREN":
-            return {"type": "error", "value": "Expected ')' to close parameter list"}
+        if self.current_token[0] != "RPAREN":
+            return {"type": "error", "value": "Expected ')' after parameter list"}
+        advance_token(self)
 
-        advance_token(self)  # Move past RPAREN
+        if self.current_token[0] != "LBRACE":
+            return {"type": "error", "value": "Expected '{' to start function body"}
+        advance_token(self)
 
-        if not self.current_token or self.current_token[0] != "LBRACE":
-            return {"type": "error", "value": "Expected '{' after parameter list"}
+        body_statements = self.parse_block(statements, "function")
 
-        advance_token(self)  # Move past LBRACE
-
-        # Parse function body
-        body_statements = self.parse_block(statements , "function")
-
-        # Register this function in the parser's functions dictionary
-        self.functions[function_name] = {
-            "return_type": return_type,
-            "parameters": parameters
-        }
-
-        return {
+        func_data = {
             "type": "function_declaration",
-            "return_type": return_type,
-            "name": function_name,
-            "parameters": parameters,
-            "body": body_statements
+            "name": func_name,
+            "params": params,
+            "body": body_statements,
+            "return_type": return_type
         }
+
+        self.functions[func_name] = func_data
+        return func_data
+

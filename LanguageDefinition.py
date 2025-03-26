@@ -9,7 +9,8 @@
     ("RPAREN", r"\)"),
     ("LBRACE", r"\{"),
     ("RBRACE", r"\}"),
-    ("NEWLINE", r";"),
+    ("SEMICOLON", r";"),
+    ("NEWLINE", r"\n"),
     ("SKIP", r"[ \t]+"),  # Ignoriere Leerzeichen
     ("NUMBER", r"°((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus"),
     # Römische Zahlen  ich  kann  halt kei regex bei fragen erklär ichs
