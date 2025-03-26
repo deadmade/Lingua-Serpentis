@@ -23,15 +23,13 @@ class Parser:
     def parse(self):
         """Parse all tokens and return the generated C code"""
         while self.current_token_index < len(self.tokens):
-            start_index = self.current_token_index
             parsed = self.parse_statement(self.statements)
             if isinstance(parsed, list):
                 self.statements.extend(parsed)
             elif parsed is not None:
                 self.statements.append(parsed)
-            #Wenn kein Fortschritt gemacht wurde, dann manuell weiterrücken
-            if self.current_token_index == start_index:
-                advance_token(self)
+
+            advance_token(self)
         print(self.statements)
 
         # Convert statements to C code
@@ -51,7 +49,7 @@ class Parser:
         elif token_type == "FUNCTION":
             new_statements.append(self.parse_function_declaration(statements))
         elif token_type in ["INT", "STRING", "CHAR"]:
-            new_statements.append(parse_declaration(self, statements))
+            new_statements.extend(parse_declaration(self, statements))
         elif token_type == "PRINT":
             new_statements.append(parse_print(self, statements))
         elif token_type == "IF":
@@ -64,7 +62,7 @@ class Parser:
             if peek_next_token(self)[0] == "LPAREN":
                 new_statements.append(parse_function_call(self, statements))
             elif peek_next_token(self)[0] == "ASSIGN":
-                new_statements.append(parse_declaration(self, statements))
+                new_statements.extend(parse_assignment(self, statements))
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
@@ -227,14 +225,14 @@ class Parser:
 
         # Parse initialization
         init = parse_declaration(self, statements)
-        if not self.current_token or self.current_token[0] != "NEWLINE":
+        if not self.current_token or self.current_token[0] != "SEMICOLON":
             return {"type": "error", "value": "Expected ';' after for initialization"}
 
         advance_token(self)  # Move past SEMICOLON
 
         # Parse condition
         condition = parse_expression(self, statements)
-        if not self.current_token or self.current_token[0] != "NEWLINE":
+        if not self.current_token or self.current_token[0] != "SEMICOLON":
             return {"type": "error", "value": "Expected ';' after for condition"}
 
         advance_token(self)  # Move past SEMICOLON

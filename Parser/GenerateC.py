@@ -166,7 +166,7 @@ def generate_single_statement(self, statement):
         if isinstance(expr, tuple):
             expr = expr[0]
         expr_str = format_expression(self, expr)
-        self.c_code.append(f"    return {expr_str};")
+        self.c_code.append(f"return {expr_str};")
 
     return ""
 
