@@ -1,3 +1,9 @@
+TYPE_MAPPING = {
+    "ni": "int",
+    "voc": "char*",
+    "lit": "char"
+}
+
 def generate_c_code(self):
     """Convert parsed statements to C code"""
 
@@ -101,31 +107,17 @@ def generate_for_loop(self, for_statement):
             self.c_code.append(f"    {code}")
     self.c_code.append("}")
 
-def generate_function_declaration(self, function_declaration):
+def generate_function_declaration(self, statement):
     """Generate C code for function declarations"""
     # Get the function return type, name and parameters
-    return_type = function_declaration["return_type"]
-    function_name = function_declaration["name"]
-    parameters = function_declaration["parameters"]
-
-    # Format parameters for C function signature
-    param_strings = []
-    for param in parameters:
-        param_strings.append(f"{param['type']} {param['name']}")
-
-    # Create the function signature
-    self.c_code.append(f"{return_type} {function_name}({', '.join(param_strings)}) {{")
-
-    # Add the function body with indentation
-    for stmt in function_declaration["body"]:
+    param_list = ", ".join(f"{TYPE_MAPPING.get(ptype, ptype)} {pname}" for ptype, pname in statement["params"])
+    return_type = TYPE_MAPPING.get(statement.get("return_type", "int"), "int")
+    self.c_code.append(f"{return_type} {statement['name']}({param_list}) {{")
+    for stmt in statement["body"]:
         code = generate_single_statement(self, stmt)
         if code:
             self.c_code.append(f"    {code}")
-
-    # Close the function
     self.c_code.append("}")
-
-
 
 def generate_single_statement(self, statement):
     """Generate C code for a single statement"""
@@ -169,6 +161,12 @@ def generate_single_statement(self, statement):
         self.c_code.append("continue;")
     elif statement["type"] == "error":
         print(f"// ERROR: {statement['value']}")
+    elif statement["type"] == "return":
+        expr = statement["value"]
+        if isinstance(expr, tuple):
+            expr = expr[0]
+        expr_str = format_expression(self, expr)
+        self.c_code.append(f"return {expr_str};")
 
     return ""
 
@@ -198,11 +196,11 @@ def format_expression(self, expr):
 
     # Handle tuple format that sometimes comes from the parser
     if isinstance(expr, tuple) and len(expr) > 0:
-        expr = expr[0]  # Extract the expression from the tuple
+        expr = expr[0]
 
     # Handle the value field that might contain operation data
     if isinstance(expr, dict) and "value" in expr and isinstance(expr["value"], tuple) and len(expr["value"]) > 0:
-        expr["value"] = expr["value"][0]  # Extract the operation from the tuple
+        expr["value"] = expr["value"][0]
 
     if isinstance(expr, dict):
         if expr["type"] == "number":
@@ -268,3 +266,9 @@ def get_format_specifier(expr_type):
     elif expr_type == "char":
         return "%c"
     return "%s"
+
+def generate(statements):
+    c_code = []
+    for statement in statements:
+        if statement["type"] == "function_declaration":
+            param_list = ", ".join(f"{TYPE_MAPPING.get(ptype, ptype)} {pname}" for ptype, pname in statement["params"])
