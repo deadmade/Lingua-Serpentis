@@ -85,7 +85,11 @@ class Parser:
             statements.append({"type": "continue"})
         else:
             # Delegate to parse_statement for other types
-            statements.extend(self.parse_statement(statements))
+            parsed = self.parse_statement(statements)
+            if isinstance(parsed, list):
+                statements.extend(parsed)
+            elif parsed is not None:
+                statements.append(parsed)
 
         return statements
 
