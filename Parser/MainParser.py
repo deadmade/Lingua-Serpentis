@@ -24,10 +24,7 @@ class Parser:
         """Parse all tokens and return the generated C code"""
         while self.current_token_index < len(self.tokens):
             parsed = self.parse_statement(self.statements)
-            if isinstance(parsed, list):
-                self.statements.extend(parsed)
-            elif parsed is not None:
-                self.statements.append(parsed)
+            self.add_statement(parsed)
 
             advance_token(self)
         print(self.statements)
@@ -35,6 +32,12 @@ class Parser:
         # Convert statements to C code
         generate_c_code(self)
         return "\n".join(self.c_code)
+
+    def add_statement(self, parsed):
+        if isinstance(parsed, list):
+            self.statements.extend(parsed)
+        elif parsed is not None:
+            self.statements.append(parsed)
 
     def parse_statement(self, statements):
         """Parse a single statement based on token type"""
@@ -145,7 +148,9 @@ class Parser:
                 new_statements = self.parse_loop_statement(current_statement)
             else:
                 new_statements = self.parse_statement(current_statement)
-            block_statements.extend([item for item in new_statements if item is not None])
+
+            if new_statements is not None:
+                block_statements.extend([item for item in new_statements if item is not None])
 
             # If we didn't advance, manually advance to avoid infinite loop
             if self.current_token_index == start_index:
@@ -184,6 +189,7 @@ class Parser:
 
         # Parse if body statements
         if_body = self.parse_block(statements, "if")
+
 
         # Check for else statement
         else_body = None
