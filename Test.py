@@ -1,7 +1,7 @@
 import sys
 import unittest
 from io import StringIO
-
+from main import main
 import Lexer
 from Parser.MainParser import Parser
 
@@ -101,11 +101,11 @@ class TestLanguage(unittest.TestCase):
         self.assertEqual(result, "add(10, 1000);")
 
     def test_addition_operation(self):
-        code = "ni x = °X + °X;"
+        code = "mnr x = °X:II/IV + °X;"
         tokens = Lexer.lexer(code)
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
-        self.assertEqual(result, "int x = 10 + 10;")
+        self.assertEqual(result, "float x = 10.5 + 10;")
 
     def test_subtraction_operation(self):
         code = "ni x = °X - °X;"
@@ -197,3 +197,4 @@ class TestLanguage(unittest.TestCase):
         parser = Parser(tokens, is_test=True)
         result = parser.parse()
         self.assertEqual(result, "int add(int x, int y) {\nreturn x + y;\n}")
+

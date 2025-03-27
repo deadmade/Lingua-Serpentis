@@ -12,7 +12,7 @@
     ("SEMICOLON", r";"),
     ("NEWLINE", r"\n"),
     ("SKIP", r"[ \t]+"),  # Ignoriere Leerzeichen
-    ("NUMBER", r"°((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus"),
+    ("NUMBER", r"°((X|C|M|V|I|L)+\.?)*(X|C|M|V|I|L)(:((X|C|M|V|I|L)+\.?)*(X|C|M|V|I|L)\/((X|C|M|V|I|L)+\.?)*(X|C|M|V|I|L))?\b| nullus"),
 
     ("IF", r"si"),
     ("ELSE", r"aut"),
@@ -32,6 +32,8 @@
 
     # Data types
     ("INT", r"ni"),
+    ("FLOAT",r"mnr"),
+    ("DOUBLE",r"nr"),
     ("STRING", r"\".*?\""),  # Strings as type
     ("CHAR", "lit"),  # littera,
     ("String", "voc"),  # vocabulum ??
@@ -40,6 +42,6 @@
 ]
 
 Wrong_Token_SPECS = [
-    r"°(?!((X|M|V|I|L)+\.?)*(X|M|V|I|L)\b|nullus\b).+",
+
     "!=|>|<"
 ]

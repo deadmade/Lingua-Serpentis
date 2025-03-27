@@ -30,7 +30,9 @@ def datatype_mapping(datatype):
     mapping = {
         "INT": "int",
         "STRING": "char*",
-        "CHAR": "char"
+        "CHAR": "char",
+        "DOUBLE": "double",
+        "FLOAT": "float",
     }
     return mapping.get(datatype, "void")
 
