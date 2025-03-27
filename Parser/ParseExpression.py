@@ -31,7 +31,7 @@ def parse_expression(self, statements):
         stored_operation_type = None
 
     # Handle string literals
-    elif token_type == "STRING_LITERAL":
+    elif token_type == "STRING":
         left_expr = {"type": "string", "value": self.current_token[1]}
         left_type = "string"
         advance_token(self)

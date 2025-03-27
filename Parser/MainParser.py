@@ -42,35 +42,33 @@ class Parser:
             return
 
         token_type = self.current_token[0]
-        new_statements = []
 
         if token_type == "COMMENT":
-            new_statements.append({"type": "comment", "value": self.current_token[1]})
+            return {"type": "comment", "value": self.current_token[1]}
         elif token_type == "FUNCTION":
-            new_statements.append(self.parse_function_declaration(statements))
-        elif token_type in ["INT", "STRING", "CHAR","DOUBLE","FLOAT"]:
-            new_statements.extend(parse_declaration(self, statements))
+            return self.parse_function_declaration(statements)
+        elif token_type in ["INT", "STRING", "CHAR"]:
+            return parse_declaration(self, statements)
         elif token_type == "PRINT":
-            new_statements.append(parse_print(self, statements))
+            return parse_print(self, statements)
         elif token_type == "IF":
-            new_statements.append(self.parse_if_statement(statements))
+            return self.parse_if_statement(statements)
         elif token_type == "WHILE":
-            new_statements.append(self.parse_while_loop(statements))
+            return self.parse_while_loop(statements)
         elif token_type == "FOR":
-            new_statements.append(self.parse_for_loop(statements))
+            return self.parse_for_loop(statements)
         elif token_type == "IDENTIFIER":
             if peek_next_token(self)[0] == "LPAREN":
-                new_statements.append(parse_function_call(self, statements))
+                return parse_function_call(self, statements)
             elif peek_next_token(self)[0] == "ASSIGN":
-                new_statements.extend(parse_assignment(self, statements))
+                return parse_assignment(self, statements)
         elif token_type == "NEWLINE" or token_type == "SEMICOLON":
             # Skip newlines and semicolons
             pass
         else:
             # Unknown token type
-            new_statements.append({"type": "error", "value": f"Unknown token type: {token_type}"})
+            return {"type": "error", "value": f"Unknown token type: {token_type}"}
 
-        return new_statements
     def parse_loop_statement(self, statements):
         """Parse a single statement based on token type"""
         if not self.current_token:

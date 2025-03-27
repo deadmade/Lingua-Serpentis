@@ -1,24 +1,25 @@
+from Parser.HelperFunctions import advance_token, peek_next_token
+from Parser.ParseExpression import parse_expression
+
+
 def parse_print(self, statements):
     """Parse a print statement"""
-    self.advance_token()  # Move past PRINT
+    advance_token(self)  # Move past PRINT
 
     if not self.current_token or self.current_token[0] != "LPAREN":
-        statements.append({"type": "error", "value": "Expected '(' after print"})
-        return statements
+        return {"type": "error", "value": "Expected '(' after print"}
 
-    self.advance_token()  # Move past LPAREN
+    advance_token(self)  # Move past LPAREN
 
-    expression = self.parse_expression()
+    expression = parse_expression(self, statements)
 
     if not self.current_token or self.current_token[0] != "RPAREN":
-        statements.append({"type": "error", "value": "Expected ')' to close print statement"})
-        return statements
+        return {"type": "error", "value": "Expected ')' to close print statement"}
 
-    self.advance_token()  # Move past RPAREN
+    advance_token(self)  # Move past RPAREN
 
-    statements.append({
+    return {
         "type": "print",
         "expression": expression
-    })
+    }
 
-    return statements
