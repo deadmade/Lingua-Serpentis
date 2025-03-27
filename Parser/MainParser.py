@@ -47,7 +47,7 @@ class Parser:
             return {"type": "comment", "value": self.current_token[1]}
         elif token_type == "FUNCTION":
             return self.parse_function_declaration(statements)
-        elif token_type in ["INT", "STRING", "CHAR"]:
+        elif token_type in ["INT", "STRING", "CHAR", "DOUBLE", "FLOAT"]:
             return parse_declaration(self, statements)
         elif token_type == "PRINT":
             return parse_print(self, statements)
