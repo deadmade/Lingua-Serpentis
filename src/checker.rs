@@ -5,11 +5,12 @@ use std::collections::HashMap;
 struct Checker {
     scopes: Vec<HashMap<String, Type>>,
     funcs: HashMap<String, (Vec<Type>, Type)>, // name -> (param types, return type)
+    current_ret: Option<Type>, // Some(_) while checking a function body
 }
 
 impl Checker {
     fn new() -> Self {
-        Checker { scopes: vec![HashMap::new()], funcs: HashMap::new() }
+        Checker { scopes: vec![HashMap::new()], funcs: HashMap::new(), current_ret: None }
     }
 
     fn lookup(&self, name: &str) -> Option<Type> {
@@ -132,13 +133,90 @@ impl Checker {
                 self.check_expr(e, s.line)?;
                 Ok(())
             }
-            _ => Err(LinguaError { message: "sententia nondum tractata".into(), line: s.line }),
+            StmtKind::If { cond, then, else_ } => {
+                self.expect_bool(cond, s.line)?;
+                self.check_block(then)?;
+                if let Some(eb) = else_ { self.check_block(eb)?; }
+                Ok(())
+            }
+            StmtKind::While { cond, body } => {
+                self.expect_bool(cond, s.line)?;
+                self.check_block(body)
+            }
+            StmtKind::For { init, cond, step, body } => {
+                self.scopes.push(HashMap::new());
+                let r = (|| {
+                    self.check_stmt(init)?;
+                    self.expect_bool(cond, s.line)?;
+                    self.check_stmt(step)?;
+                    self.check_block(body)
+                })();
+                self.scopes.pop();
+                r
+            }
+            StmtKind::Func(f) => {
+                self.scopes.push(HashMap::new());
+                for (t, n) in &f.params { self.declare(n.clone(), *t); }
+                let saved = self.current_ret;
+                self.current_ret = Some(f.ret);
+                let r = self.check_block_inner(&f.body);
+                self.current_ret = saved;
+                self.scopes.pop();
+                r
+            }
+            StmtKind::Return(e) => {
+                let want = self.current_ret
+                    .ok_or_else(|| LinguaError { message: "'redde' extra functionem".into(), line: s.line })?;
+                let got = self.check_expr(e, s.line)?;
+                if got != want {
+                    return Err(LinguaError {
+                        message: format!("reditus typum '{}' expectat, sed '{}' datum est",
+                            Self::type_name(want), Self::type_name(got)),
+                        line: s.line,
+                    });
+                }
+                Ok(())
+            }
+            StmtKind::Break | StmtKind::Continue => Ok(()),
+        }
+    }
+
+    fn check_block(&mut self, body: &[Stmt]) -> LResult<()> {
+        self.scopes.push(HashMap::new());
+        for s in body {
+            if let Err(e) = self.check_stmt(s) {
+                self.scopes.pop();
+                return Err(e);
+            }
+        }
+        self.scopes.pop();
+        Ok(())
+    }
+
+    fn check_block_inner(&mut self, body: &[Stmt]) -> LResult<()> {
+        for s in body {
+            self.check_stmt(s)?;
+        }
+        Ok(())
+    }
+
+    fn expect_bool(&self, cond: &Expr, line: usize) -> LResult<()> {
+        if self.check_expr(cond, line)? == Type::Bool {
+            Ok(())
+        } else {
+            Err(LinguaError { message: "condicio 'veritas' esse debet".into(), line })
         }
     }
 }
 
 pub fn check(program: &[Stmt]) -> LResult<()> {
     let mut c = Checker::new();
+    for s in program {
+        if let StmtKind::Func(f) = &s.kind {
+            let ptypes = f.params.iter().map(|(t, _)| *t).collect();
+            c.funcs.insert(f.name.clone(), (ptypes, f.ret));
+        }
+    }
     for s in program {
         c.check_stmt(s)?;
     }
@@ -180,5 +258,26 @@ mod tests {
     #[test]
     fn using_undeclared_variable_fails() {
         assert!(check_src("scribe(y);").is_err());
+    }
+
+    #[test]
+    fn non_bool_condition_fails() {
+        let err = check_src("si (°V) { scribe(°I); }").unwrap_err();
+        assert!(err.message.contains("veritas") || err.message.contains("condicio"));
+    }
+
+    #[test]
+    fn function_return_type_checked() {
+        assert!(check_src("munus ni adde(ni a, ni b) { redde a + b; } scribe(adde(°I, °II));").is_ok());
+    }
+
+    #[test]
+    fn returning_wrong_type_fails() {
+        assert!(check_src("munus ni f() { redde \"salve\"; }").is_err());
+    }
+
+    #[test]
+    fn calling_with_wrong_arg_type_fails() {
+        assert!(check_src("munus ni f(ni a) { redde a; } scribe(f(\"x\"));").is_err());
     }
 }
