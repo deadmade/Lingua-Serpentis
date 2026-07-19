@@ -184,6 +184,13 @@ impl Checker {
     fn check_block(&mut self, body: &[Stmt]) -> LResult<()> {
         self.scopes.push(HashMap::new());
         for s in body {
+            if let StmtKind::Func(f) = &s.kind {
+                self.scopes.pop();
+                return Err(LinguaError {
+                    message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
+                    line: s.line,
+                });
+            }
             if let Err(e) = self.check_stmt(s) {
                 self.scopes.pop();
                 return Err(e);
@@ -195,6 +202,12 @@ impl Checker {
 
     fn check_block_inner(&mut self, body: &[Stmt]) -> LResult<()> {
         for s in body {
+            if let StmtKind::Func(f) = &s.kind {
+                return Err(LinguaError {
+                    message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
+                    line: s.line,
+                });
+            }
             self.check_stmt(s)?;
         }
         Ok(())
@@ -279,5 +292,11 @@ mod tests {
     #[test]
     fn calling_with_wrong_arg_type_fails() {
         assert!(check_src("munus ni f(ni a) { redde a; } scribe(f(\"x\"));").is_err());
+    }
+
+    #[test]
+    fn nested_function_rejected() {
+        let err = check_src("munus ni outer() { munus ni inner() { redde °I; } redde °I; }").unwrap_err();
+        assert!(err.message.contains("nidificat"));
     }
 }
