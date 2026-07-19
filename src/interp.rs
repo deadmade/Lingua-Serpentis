@@ -81,17 +81,17 @@ impl Interp {
         for ((_, pname), v) in f.params.iter().zip(args) {
             frame.insert(pname.clone(), v);
         }
-        // Swap in an isolated scope stack for the call, restore afterwards.
+        // Swap in an isolated scope stack for the call, restore afterwards
+        // (unconditionally, even if the body raises an error via `?`).
         let saved = std::mem::replace(&mut self.scopes, vec![frame]);
-        let mut result = Value::Int(0);
-        for s in &f.body {
-            if let Flow::Return(v) = self.exec(s)? {
-                result = v;
-                break;
+        let result = (|| -> LResult<Value> {
+            for s in &f.body {
+                if let Flow::Return(v) = self.exec(s)? { return Ok(v); }
             }
-        }
+            Ok(Value::Int(0))
+        })();
         self.scopes = saved;
-        Ok(result)
+        result
     }
 
     fn exec(&mut self, s: &Stmt) -> LResult<Flow> {
@@ -141,31 +141,37 @@ impl Interp {
             }
             StmtKind::For { init, cond, step, body } => {
                 self.scopes.push(HashMap::new()); // loop scope holds the init var
-                self.exec(init)?;
-                while self.truthy(cond, s.line)? {
-                    match self.run_block(body)? {
-                        Flow::Break => break,
-                        Flow::Return(v) => { self.scopes.pop(); return Ok(Flow::Return(v)); }
-                        _ => {}
+                let result = (|| {
+                    self.exec(init)?;
+                    while self.truthy(cond, s.line)? {
+                        match self.run_block(body)? {
+                            Flow::Break => break,
+                            Flow::Return(v) => return Ok(Flow::Return(v)),
+                            _ => {}
+                        }
+                        self.exec(step)?;
                     }
-                    self.exec(step)?;
-                }
-                self.scopes.pop();
-                Ok(Flow::Normal)
+                    Ok(Flow::Normal)
+                })();
+                self.scopes.pop(); // pop unconditionally, even on error `?` exit
+                result
             }
         }
     }
 
     fn run_block(&mut self, body: &[Stmt]) -> LResult<Flow> {
         self.scopes.push(HashMap::new());
-        for s in body {
-            match self.exec(s)? {
-                Flow::Normal => {}
-                other => { self.scopes.pop(); return Ok(other); }
+        let result = (|| {
+            for s in body {
+                match self.exec(s)? {
+                    Flow::Normal => {}
+                    other => return Ok(other),
+                }
             }
-        }
-        self.scopes.pop();
-        Ok(Flow::Normal)
+            Ok(Flow::Normal)
+        })();
+        self.scopes.pop(); // pop unconditionally, even on error `?` exit
+        result
     }
 
     fn truthy(&mut self, cond: &Expr, line: usize) -> LResult<bool> {
@@ -298,5 +304,12 @@ mod tests {
     fn function_call_returns() {
         let src = "munus ni adde(ni a, ni b) { redde a + b; } scribe(adde(°IV, °VI));";
         assert_eq!(run(src), "10\n");
+    }
+
+    #[test]
+    fn continue_skips_iteration() {
+        // skip i==2: 0+1+3+4 = 8
+        let src = "ni s = nullus; dum (ni i = nullus; i minor_est °V; i = i + °I) { si (i par_est °II) { continua; } s = s + i; } scribe(s);";
+        assert_eq!(run(src), "8\n");
     }
 }
