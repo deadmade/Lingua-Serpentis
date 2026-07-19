@@ -253,20 +253,17 @@ impl<'a> Parser<'a> {
             Some(TokenKind::For) => return self.for_stmt(),
             Some(TokenKind::Func) => return self.func_stmt(),
             Some(TokenKind::Return) => {
-                let line = self.line();
                 self.advance();
                 let e = self.expr()?;
                 self.eat(&TokenKind::Semicolon)?;
                 return Ok(Stmt { kind: StmtKind::Return(e), line });
             }
             Some(TokenKind::Break) => {
-                let line = self.line();
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
                 return Ok(Stmt { kind: StmtKind::Break, line });
             }
             Some(TokenKind::Continue) => {
-                let line = self.line();
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
                 return Ok(Stmt { kind: StmtKind::Continue, line });
@@ -449,9 +446,9 @@ mod tests {
     #[test]
     fn while_for_break_continue() {
         let s = parse_all("indem (x) { abrumpe; }");
-        matches!(s[0].kind, StmtKind::While { .. });
+        assert!(matches!(s[0].kind, StmtKind::While { .. }));
         let f = parse_all("dum (ni i = °I; i minor_est °X; i = i + °I) { continua; }");
-        matches!(f[0].kind, StmtKind::For { .. });
+        assert!(matches!(f[0].kind, StmtKind::For { .. }));
     }
 
     #[test]
