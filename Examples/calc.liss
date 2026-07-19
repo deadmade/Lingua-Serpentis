@@ -1,0 +1,7 @@
+munus ni summare(ni a, ni b) {
+    ni c = a + b;
+    redde c;
+}
+ni summa = summare(°XXV, °XXX.M.V.C.VII);
+si (summa minor_est °C) { summa = summa + °C; }
+scribe(summa);
