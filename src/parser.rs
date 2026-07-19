@@ -1,0 +1,200 @@
+use crate::ast::*;
+use crate::error::{LinguaError, LResult};
+use crate::token::{Token, TokenKind};
+
+struct Parser<'a> {
+    toks: &'a [Token],
+    pos: usize,
+}
+
+impl<'a> Parser<'a> {
+    fn peek(&self) -> Option<&TokenKind> {
+        self.toks.get(self.pos).map(|t| &t.kind)
+    }
+    fn line(&self) -> usize {
+        self.toks.get(self.pos).or_else(|| self.toks.last())
+            .map(|t| t.line).unwrap_or(0)
+    }
+    fn advance(&mut self) -> &Token {
+        let t = &self.toks[self.pos];
+        self.pos += 1;
+        t
+    }
+    fn eat(&mut self, kind: &TokenKind) -> LResult<()> {
+        if self.peek() == Some(kind) {
+            self.pos += 1;
+            Ok(())
+        } else {
+            Err(self.err(&format!("expectatum: {:?}", kind)))
+        }
+    }
+    fn err(&self, msg: &str) -> LinguaError {
+        LinguaError { message: msg.to_string(), line: self.line() }
+    }
+
+    // --- expressions, lowest precedence first ---
+    fn expr(&mut self) -> LResult<Expr> { self.or_expr() }
+
+    fn or_expr(&mut self) -> LResult<Expr> {
+        let mut left = self.and_expr()?;
+        while self.peek() == Some(&TokenKind::Or) {
+            self.advance();
+            let right = self.and_expr()?;
+            left = Expr::Binary { op: BinOp::Or, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    fn and_expr(&mut self) -> LResult<Expr> {
+        let mut left = self.cmp_expr()?;
+        while self.peek() == Some(&TokenKind::And) {
+            self.advance();
+            let right = self.cmp_expr()?;
+            left = Expr::Binary { op: BinOp::And, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    fn cmp_expr(&mut self) -> LResult<Expr> {
+        let mut left = self.add_expr()?;
+        loop {
+            let op = match self.peek() {
+                Some(TokenKind::Eq) => BinOp::Eq,
+                Some(TokenKind::Ne) => BinOp::Ne,
+                Some(TokenKind::Gt) => BinOp::Gt,
+                Some(TokenKind::Lt) => BinOp::Lt,
+                _ => break,
+            };
+            self.advance();
+            let right = self.add_expr()?;
+            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    fn add_expr(&mut self) -> LResult<Expr> {
+        let mut left = self.mul_expr()?;
+        loop {
+            let op = match self.peek() {
+                Some(TokenKind::Plus) => BinOp::Add,
+                Some(TokenKind::Minus) => BinOp::Sub,
+                _ => break,
+            };
+            self.advance();
+            let right = self.mul_expr()?;
+            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    fn mul_expr(&mut self) -> LResult<Expr> {
+        let mut left = self.unary()?;
+        loop {
+            let op = match self.peek() {
+                Some(TokenKind::Star) => BinOp::Mul,
+                Some(TokenKind::Slash) => BinOp::Div,
+                Some(TokenKind::Percent) => BinOp::Mod,
+                _ => break,
+            };
+            self.advance();
+            let right = self.unary()?;
+            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    fn unary(&mut self) -> LResult<Expr> {
+        match self.peek() {
+            Some(TokenKind::Not) => { self.advance(); Ok(Expr::Unary { op: UnOp::Not, expr: Box::new(self.unary()?) }) }
+            Some(TokenKind::Minus) => { self.advance(); Ok(Expr::Unary { op: UnOp::Neg, expr: Box::new(self.unary()?) }) }
+            _ => self.primary(),
+        }
+    }
+    fn primary(&mut self) -> LResult<Expr> {
+        match self.peek().cloned() {
+            Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
+            Some(TokenKind::Float(f)) => { self.advance(); Ok(Expr::Float(f)) }
+            Some(TokenKind::Text(s)) => { self.advance(); Ok(Expr::Text(s)) }
+            Some(TokenKind::True) => { self.advance(); Ok(Expr::Bool(true)) }
+            Some(TokenKind::False) => { self.advance(); Ok(Expr::Bool(false)) }
+            Some(TokenKind::LParen) => {
+                self.advance();
+                let e = self.expr()?;
+                self.eat(&TokenKind::RParen)?;
+                Ok(e)
+            }
+            Some(TokenKind::Ident(name)) => {
+                self.advance();
+                if self.peek() == Some(&TokenKind::LParen) {
+                    self.advance();
+                    let mut args = Vec::new();
+                    if self.peek() != Some(&TokenKind::RParen) {
+                        args.push(self.expr()?);
+                        while self.peek() == Some(&TokenKind::Comma) {
+                            self.advance();
+                            args.push(self.expr()?);
+                        }
+                    }
+                    self.eat(&TokenKind::RParen)?;
+                    Ok(Expr::Call { name, args })
+                } else {
+                    Ok(Expr::Ident(name))
+                }
+            }
+            _ => Err(self.err("expressio expectata")),
+        }
+    }
+}
+
+pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
+    let mut p = Parser { toks: tokens, pos: 0 };
+    let mut stmts = Vec::new();
+    while p.pos < p.toks.len() {
+        // Temporary: treat "expr ;" as an ExprStmt. Replaced in Task 7.
+        let line = p.line();
+        let e = p.expr()?;
+        p.eat(&TokenKind::Semicolon)?;
+        stmts.push(Stmt { kind: StmtKind::ExprStmt(e), line });
+    }
+    Ok(stmts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::tokenize;
+
+    fn parse_first_expr(src: &str) -> Expr {
+        let toks = tokenize(src).unwrap();
+        let stmts = parse(&toks).unwrap();
+        match &stmts[0].kind {
+            StmtKind::ExprStmt(e) => e.clone(),
+            other => panic!("expected ExprStmt, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn arithmetic_precedence() {
+        // °II + °III * °IV  ==  Add(2, Mul(3, 4))
+        let e = parse_first_expr("°II + °III * °IV;");
+        assert_eq!(e, Expr::Binary {
+            op: BinOp::Add,
+            left: Box::new(Expr::Int(2)),
+            right: Box::new(Expr::Binary {
+                op: BinOp::Mul,
+                left: Box::new(Expr::Int(3)),
+                right: Box::new(Expr::Int(4)),
+            }),
+        });
+    }
+
+    #[test]
+    fn comparison_and_call() {
+        let e = parse_first_expr("summa maior_est adde(a, °I);");
+        match e {
+            Expr::Binary { op: BinOp::Gt, right, .. } => match *right {
+                Expr::Call { name, args } => {
+                    assert_eq!(name, "adde");
+                    assert_eq!(args.len(), 2);
+                }
+                other => panic!("expected call, got {:?}", other),
+            },
+            other => panic!("expected Gt, got {:?}", other),
+        }
+    }
+}
