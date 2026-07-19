@@ -3,6 +3,8 @@ use crate::error::{LinguaError, LResult};
 use crate::value::Value;
 use std::collections::HashMap;
 
+enum Flow { Normal, Break, Continue, Return(Value) }
+
 struct Interp {
     scopes: Vec<HashMap<String, Value>>,
     funcs: HashMap<String, FuncDecl>,
@@ -65,31 +67,111 @@ impl Interp {
         }
     }
 
-    // Placeholder until Task 10 fills in real function calls.
-    fn call(&mut self, name: &str, _args: Vec<Value>, line: usize) -> LResult<Value> {
-        Err(LinguaError { message: format!("functio nondum vocari potest: '{}'", name), line })
+    fn call(&mut self, name: &str, args: Vec<Value>, line: usize) -> LResult<Value> {
+        let f = self.funcs.get(name)
+            .cloned()
+            .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
+        if f.params.len() != args.len() {
+            return Err(LinguaError {
+                message: format!("functio '{}' numerum argumentorum falsum accepit", name),
+                line,
+            });
+        }
+        let mut frame = HashMap::new();
+        for ((_, pname), v) in f.params.iter().zip(args) {
+            frame.insert(pname.clone(), v);
+        }
+        // Swap in an isolated scope stack for the call, restore afterwards.
+        let saved = std::mem::replace(&mut self.scopes, vec![frame]);
+        let mut result = Value::Int(0);
+        for s in &f.body {
+            if let Flow::Return(v) = self.exec(s)? {
+                result = v;
+                break;
+            }
+        }
+        self.scopes = saved;
+        Ok(result)
     }
 
-    fn exec(&mut self, s: &Stmt) -> LResult<()> {
+    fn exec(&mut self, s: &Stmt) -> LResult<Flow> {
         match &s.kind {
             StmtKind::Let { name, value, .. } => {
                 let v = self.eval(value, s.line)?;
                 self.declare(name.clone(), v);
-                Ok(())
+                Ok(Flow::Normal)
             }
             StmtKind::Assign { name, value } => {
                 let v = self.eval(value, s.line)?;
-                self.assign(name, v, s.line)
+                self.assign(name, v, s.line)?;
+                Ok(Flow::Normal)
             }
             StmtKind::Print(e) => {
                 let v = self.eval(e, s.line)?;
                 self.out.push_str(&v.display());
                 self.out.push('\n');
-                Ok(())
+                Ok(Flow::Normal)
             }
-            StmtKind::ExprStmt(e) => { self.eval(e, s.line)?; Ok(()) }
-            StmtKind::Func(f) => { self.funcs.insert(f.name.clone(), f.clone()); Ok(()) }
-            _ => Err(LinguaError { message: "sententia nondum tractata".into(), line: s.line }),
+            StmtKind::ExprStmt(e) => { self.eval(e, s.line)?; Ok(Flow::Normal) }
+            StmtKind::Func(f) => { self.funcs.insert(f.name.clone(), f.clone()); Ok(Flow::Normal) }
+            StmtKind::Break => Ok(Flow::Break),
+            StmtKind::Continue => Ok(Flow::Continue),
+            StmtKind::Return(e) => {
+                let v = self.eval(e, s.line)?;
+                Ok(Flow::Return(v))
+            }
+            StmtKind::If { cond, then, else_ } => {
+                if self.truthy(cond, s.line)? {
+                    self.run_block(then)
+                } else if let Some(eb) = else_ {
+                    self.run_block(eb)
+                } else {
+                    Ok(Flow::Normal)
+                }
+            }
+            StmtKind::While { cond, body } => {
+                while self.truthy(cond, s.line)? {
+                    match self.run_block(body)? {
+                        Flow::Break => break,
+                        Flow::Return(v) => return Ok(Flow::Return(v)),
+                        _ => {}
+                    }
+                }
+                Ok(Flow::Normal)
+            }
+            StmtKind::For { init, cond, step, body } => {
+                self.scopes.push(HashMap::new()); // loop scope holds the init var
+                self.exec(init)?;
+                while self.truthy(cond, s.line)? {
+                    match self.run_block(body)? {
+                        Flow::Break => break,
+                        Flow::Return(v) => { self.scopes.pop(); return Ok(Flow::Return(v)); }
+                        _ => {}
+                    }
+                    self.exec(step)?;
+                }
+                self.scopes.pop();
+                Ok(Flow::Normal)
+            }
+        }
+    }
+
+    fn run_block(&mut self, body: &[Stmt]) -> LResult<Flow> {
+        self.scopes.push(HashMap::new());
+        for s in body {
+            match self.exec(s)? {
+                Flow::Normal => {}
+                other => { self.scopes.pop(); return Ok(other); }
+            }
+        }
+        self.scopes.pop();
+        Ok(Flow::Normal)
+    }
+
+    fn truthy(&mut self, cond: &Expr, line: usize) -> LResult<bool> {
+        match self.eval(cond, line)? {
+            Value::Bool(b) => Ok(b),
+            _ => Err(LinguaError { message: "condicio non est veritas".into(), line }),
         }
     }
 }
@@ -161,7 +243,7 @@ pub fn execute(program: &[Stmt]) -> LResult<String> {
     }
     for s in program {
         if !matches!(s.kind, StmtKind::Func(_)) {
-            it.exec(s)?;
+            it.exec(s)?; // top-level Flow is ignored
         }
     }
     Ok(it.out)
@@ -196,5 +278,25 @@ mod tests {
     #[test]
     fn string_concatenation() {
         assert_eq!(run("scribe(\"sal\" + \"ve\");"), "salve\n");
+    }
+
+    #[test]
+    fn while_loop_counts() {
+        // NOTE: brief used "°nullus"; actual lexer/roman zero-literal is bare "nullus"
+        // (see src/lexer.rs word_to_kind and src/roman.rs parse_roman) — adjusted spelling only.
+        let src = "ni i = nullus; ni s = nullus; indem (i minor_est °V) { s = s + i; i = i + °I; } scribe(s);";
+        assert_eq!(run(src), "10\n"); // 0+1+2+3+4
+    }
+
+    #[test]
+    fn for_loop_with_break() {
+        let src = "ni total = nullus; dum (ni i = nullus; i minor_est °X; i = i + °I) { si (i par_est °III) { abrumpe; } total = total + i; } scribe(total);";
+        assert_eq!(run(src), "3\n"); // 0+1+2 then break at 3
+    }
+
+    #[test]
+    fn function_call_returns() {
+        let src = "munus ni adde(ni a, ni b) { redde a + b; } scribe(adde(°IV, °VI));";
+        assert_eq!(run(src), "10\n");
     }
 }
