@@ -27,8 +27,46 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             '/' => { tokens.push(Token { kind: TokenKind::Slash, line }); i += 1; }
             '%' => { tokens.push(Token { kind: TokenKind::Percent, line }); i += 1; }
             '=' => { tokens.push(Token { kind: TokenKind::Assign, line }); i += 1; }
+            '°' => {
+                let start = i;
+                i += 1; // consume °
+                while i < chars.len() && is_roman_body(chars[i]) { i += 1; }
+                let lexeme: String = chars[start..i].iter().collect();
+                let value = crate::roman::parse_roman(&lexeme)
+                    .map_err(|m| LinguaError { message: m, line })?;
+                tokens.push(Token { kind: value.into(), line });
+            }
+            '"' => {
+                i += 1; // consume opening quote
+                let start = i;
+                while i < chars.len() && chars[i] != '"' { i += 1; }
+                if i >= chars.len() {
+                    return Err(LinguaError { message: "chorda non clausa".into(), line });
+                }
+                let text: String = chars[start..i].iter().collect();
+                i += 1; // consume closing quote
+                tokens.push(Token { kind: TokenKind::Text(text), line });
+            }
+            '\'' => {
+                i += 1; // consume opening quote
+                if i + 1 >= chars.len() || chars[i + 1] != '\'' {
+                    return Err(LinguaError { message: "littera invalida".into(), line });
+                }
+                let ch = chars[i];
+                i += 2; // char + closing quote
+                tokens.push(Token { kind: TokenKind::Char(ch), line });
+            }
+            c if c.is_alphabetic() || c == '_' => {
+                let start = i;
+                while i < chars.len()
+                    && (chars[i].is_alphanumeric() || chars[i] == '_')
+                {
+                    i += 1;
+                }
+                let word: String = chars[start..i].iter().collect();
+                tokens.push(Token { kind: word_to_kind(word), line });
+            }
             _ => {
-                // literals ('°', '"', '\'') and words handled in Task 5; for now, error.
                 return Err(LinguaError {
                     message: format!("signum ignotum: '{}'", c),
                     line,
@@ -37,6 +75,40 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
         }
     }
     Ok(tokens)
+}
+
+fn is_roman_body(c: char) -> bool {
+    matches!(c, 'I' | 'V' | 'X' | 'L' | 'C' | 'D' | 'M' | '.' | ':' | '/')
+}
+
+fn word_to_kind(word: String) -> TokenKind {
+    match word.as_str() {
+        "nullus" => TokenKind::Int(0),
+        "verus" => TokenKind::True,
+        "falsus" => TokenKind::False,
+        "si" => TokenKind::If,
+        "aut" => TokenKind::Else,
+        "indem" => TokenKind::While,
+        "dum" => TokenKind::For,
+        "munus" => TokenKind::Func,
+        "redde" => TokenKind::Return,
+        "abrumpe" => TokenKind::Break,
+        "continua" => TokenKind::Continue,
+        "scribe" => TokenKind::Print,
+        "ni" => TokenKind::TyInt,
+        "mnr" | "nr" => TokenKind::TyFloat, // both float in v1
+        "voc" => TokenKind::TyText,
+        "lit" => TokenKind::TyChar,
+        "veritas" => TokenKind::TyBool,
+        "et" => TokenKind::And,
+        "vel" => TokenKind::Or,
+        "non" => TokenKind::Not,
+        "par_est" => TokenKind::Eq,
+        "par_non_est" => TokenKind::Ne,
+        "maior_est" => TokenKind::Gt,
+        "minor_est" => TokenKind::Lt,
+        _ => TokenKind::Ident(word),
+    }
 }
 
 #[cfg(test)]
@@ -73,5 +145,35 @@ mod tests {
         // '<' is intentionally not a token (comparisons are Latin words)
         let err = tokenize("<").unwrap_err();
         assert_eq!(err.line, 1);
+    }
+
+    #[test]
+    fn roman_numbers_become_values() {
+        assert_eq!(kinds("°XXV"), vec![TokenKind::Int(25)]);
+        assert_eq!(kinds("°V:I/II"), vec![TokenKind::Float(5.5)]);
+        assert_eq!(kinds("nullus"), vec![TokenKind::Int(0)]);
+    }
+
+    #[test]
+    fn strings_and_chars() {
+        assert_eq!(kinds("\"salve\""), vec![TokenKind::Text("salve".into())]);
+        assert_eq!(kinds("'x'"), vec![TokenKind::Char('x')]);
+    }
+
+    #[test]
+    fn keywords_types_and_operators() {
+        assert_eq!(
+            kinds("ni si redde par_non_est veritas et"),
+            vec![
+                TokenKind::TyInt, TokenKind::If, TokenKind::Return,
+                TokenKind::Ne, TokenKind::TyBool, TokenKind::And,
+            ]
+        );
+    }
+
+    #[test]
+    fn keyword_prefix_does_not_split_identifier() {
+        // "nimis" starts with keyword "ni" but must stay a single identifier
+        assert_eq!(kinds("nimis"), vec![TokenKind::Ident("nimis".into())]);
     }
 }
