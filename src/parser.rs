@@ -197,4 +197,51 @@ mod tests {
             other => panic!("expected Gt, got {:?}", other),
         }
     }
+
+    #[test]
+    fn boolean_and_binds_tighter_than_or() {
+        // a et b vel c  ==  Or(And(a,b), c)
+        let e = parse_first_expr("a et b vel c;");
+        assert_eq!(e, Expr::Binary {
+            op: BinOp::Or,
+            left: Box::new(Expr::Binary {
+                op: BinOp::And,
+                left: Box::new(Expr::Ident("a".into())),
+                right: Box::new(Expr::Ident("b".into())),
+            }),
+            right: Box::new(Expr::Ident("c".into())),
+        });
+    }
+
+    #[test]
+    fn not_binds_tighter_than_and() {
+        // non a et b  ==  And(Not(a), b)
+        let e = parse_first_expr("non a et b;");
+        assert_eq!(e, Expr::Binary {
+            op: BinOp::And,
+            left: Box::new(Expr::Unary { op: UnOp::Not, expr: Box::new(Expr::Ident("a".into())) }),
+            right: Box::new(Expr::Ident("b".into())),
+        });
+    }
+
+    #[test]
+    fn subtraction_is_left_associative() {
+        // °X - °III - °I  ==  Sub(Sub(10,3),1)
+        let e = parse_first_expr("°X - °III - °I;");
+        assert_eq!(e, Expr::Binary {
+            op: BinOp::Sub,
+            left: Box::new(Expr::Binary {
+                op: BinOp::Sub,
+                left: Box::new(Expr::Int(10)),
+                right: Box::new(Expr::Int(3)),
+            }),
+            right: Box::new(Expr::Int(1)),
+        });
+    }
+
+    #[test]
+    fn zero_arg_call() {
+        let e = parse_first_expr("adde();");
+        assert_eq!(e, Expr::Call { name: "adde".into(), args: vec![] });
+    }
 }
