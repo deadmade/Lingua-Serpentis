@@ -35,6 +35,40 @@ pub(crate) fn convert_int_roman(s: &str) -> Result<i64, String> {
     Ok(total)
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum RomanNumber {
+    Int(i64),
+    Float(f64),
+}
+
+pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
+    if literal == "nullus" {
+        return Ok(RomanNumber::Int(0));
+    }
+    let body = literal
+        .strip_prefix('°')
+        .ok_or_else(|| format!("numerus sine '°': '{}'", literal))?;
+
+    let mut parts = body.splitn(2, ':');
+    let int_str = parts.next().unwrap();
+    let int_val = convert_int_roman(int_str)?;
+
+    match parts.next() {
+        None => Ok(RomanNumber::Int(int_val)),
+        Some(frac) => {
+            let mut fp = frac.splitn(2, '/');
+            let num_str = fp.next().ok_or("fractio sine numeratore")?;
+            let den_str = fp.next().ok_or("fractio sine denominatore")?;
+            let num = convert_int_roman(num_str)?;
+            let den = convert_int_roman(den_str)?;
+            if den == 0 {
+                return Err("denominator est nullus".into());
+            }
+            Ok(RomanNumber::Float(int_val as f64 + num as f64 / den as f64))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,5 +95,26 @@ mod tests {
         assert_eq!(convert_int_roman("VII.M").unwrap(), 7000);
         // single chunk, no dots
         assert_eq!(convert_int_roman("XXV").unwrap(), 25);
+    }
+
+    #[test]
+    fn parse_integer_literal() {
+        assert_eq!(parse_roman("°XXV").unwrap(), RomanNumber::Int(25));
+        assert_eq!(parse_roman("°XXX.M.V.C.VII").unwrap(), RomanNumber::Int(30507));
+    }
+
+    #[test]
+    fn parse_nullus_is_zero() {
+        assert_eq!(parse_roman("nullus").unwrap(), RomanNumber::Int(0));
+    }
+
+    #[test]
+    fn parse_fraction_literal() {
+        assert_eq!(parse_roman("°V:I/II").unwrap(), RomanNumber::Float(5.5));
+    }
+
+    #[test]
+    fn parse_rejects_missing_degree() {
+        assert!(parse_roman("XXV").is_err());
     }
 }
