@@ -160,8 +160,119 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn block(&mut self) -> LResult<Vec<Stmt>> {
+        self.eat(&TokenKind::LBrace)?;
+        let mut stmts = Vec::new();
+        while self.peek() != Some(&TokenKind::RBrace) {
+            if self.peek().is_none() {
+                return Err(self.err("'}' expectatum"));
+            }
+            stmts.push(self.statement()?);
+        }
+        self.eat(&TokenKind::RBrace)?;
+        Ok(stmts)
+    }
+
+    fn if_stmt(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        self.advance(); // si
+        self.eat(&TokenKind::LParen)?;
+        let cond = self.expr()?;
+        self.eat(&TokenKind::RParen)?;
+        let then = self.block()?;
+        let else_ = if self.peek() == Some(&TokenKind::Else) {
+            self.advance(); // aut
+            if self.peek() == Some(&TokenKind::If) {
+                Some(vec![self.if_stmt()?]) // "aut si" → nested if
+            } else {
+                Some(self.block()?)
+            }
+        } else {
+            None
+        };
+        Ok(Stmt { kind: StmtKind::If { cond, then, else_ }, line })
+    }
+
+    fn while_stmt(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        self.advance(); // indem
+        self.eat(&TokenKind::LParen)?;
+        let cond = self.expr()?;
+        self.eat(&TokenKind::RParen)?;
+        let body = self.block()?;
+        Ok(Stmt { kind: StmtKind::While { cond, body }, line })
+    }
+
+    fn for_stmt(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        self.advance(); // dum
+        self.eat(&TokenKind::LParen)?;
+        let init = Box::new(self.statement()?);      // consumes its own ';'
+        let cond = self.expr()?;
+        self.eat(&TokenKind::Semicolon)?;
+        let step = Box::new(self.assign_no_semi()?); // step has no trailing ';'
+        self.eat(&TokenKind::RParen)?;
+        let body = self.block()?;
+        Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, line })
+    }
+
+    // for-loop step: <ident> = <expr>  (no trailing semicolon)
+    fn assign_no_semi(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        let name = self.ident()?;
+        self.eat(&TokenKind::Assign)?;
+        let value = self.expr()?;
+        Ok(Stmt { kind: StmtKind::Assign { name, value }, line })
+    }
+
+    fn func_stmt(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        self.advance(); // munus
+        let ret = self.type_keyword().ok_or_else(|| self.err("typus reditus expectatus"))?;
+        let name = self.ident()?;
+        self.eat(&TokenKind::LParen)?;
+        let mut params = Vec::new();
+        if self.peek() != Some(&TokenKind::RParen) {
+            loop {
+                let pty = self.type_keyword().ok_or_else(|| self.err("typus parametri expectatus"))?;
+                let pname = self.ident()?;
+                params.push((pty, pname));
+                if self.peek() == Some(&TokenKind::Comma) { self.advance(); } else { break; }
+            }
+        }
+        self.eat(&TokenKind::RParen)?;
+        let body = self.block()?;
+        Ok(Stmt { kind: StmtKind::Func(FuncDecl { name, params, ret, body }), line })
+    }
+
     fn statement(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        match self.peek() {
+            Some(TokenKind::If) => return self.if_stmt(),
+            Some(TokenKind::While) => return self.while_stmt(),
+            Some(TokenKind::For) => return self.for_stmt(),
+            Some(TokenKind::Func) => return self.func_stmt(),
+            Some(TokenKind::Return) => {
+                let line = self.line();
+                self.advance();
+                let e = self.expr()?;
+                self.eat(&TokenKind::Semicolon)?;
+                return Ok(Stmt { kind: StmtKind::Return(e), line });
+            }
+            Some(TokenKind::Break) => {
+                let line = self.line();
+                self.advance();
+                self.eat(&TokenKind::Semicolon)?;
+                return Ok(Stmt { kind: StmtKind::Break, line });
+            }
+            Some(TokenKind::Continue) => {
+                let line = self.line();
+                self.advance();
+                self.eat(&TokenKind::Semicolon)?;
+                return Ok(Stmt { kind: StmtKind::Continue, line });
+            }
+            _ => {}
+        }
         // declaration: <type> <ident> = <expr> ;
         if let Some(ty) = self.type_keyword() {
             let name = self.ident()?;
@@ -316,5 +427,44 @@ mod tests {
     fn zero_arg_call() {
         let e = parse_first_expr("adde();");
         assert_eq!(e, Expr::Call { name: "adde".into(), args: vec![] });
+    }
+
+    #[test]
+    fn if_else_if_else() {
+        let s = parse_all("si (x) { scribe(°I); } aut si (y) { scribe(°II); } aut { scribe(°III); }");
+        match &s[0].kind {
+            StmtKind::If { then, else_, .. } => {
+                assert_eq!(then.len(), 1);
+                assert!(else_.is_some());
+                // else branch is a single nested If (the "aut si")
+                match &else_.as_ref().unwrap()[0].kind {
+                    StmtKind::If { else_: inner, .. } => assert!(inner.is_some()),
+                    other => panic!("expected nested if, got {:?}", other),
+                }
+            }
+            other => panic!("expected if, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn while_for_break_continue() {
+        let s = parse_all("indem (x) { abrumpe; }");
+        matches!(s[0].kind, StmtKind::While { .. });
+        let f = parse_all("dum (ni i = °I; i minor_est °X; i = i + °I) { continua; }");
+        matches!(f[0].kind, StmtKind::For { .. });
+    }
+
+    #[test]
+    fn function_declaration_and_return() {
+        let s = parse_all("munus ni adde(ni a, ni b) { redde a + b; }");
+        match &s[0].kind {
+            StmtKind::Func(f) => {
+                assert_eq!(f.name, "adde");
+                assert_eq!(f.ret, Type::Int);
+                assert_eq!(f.params, vec![(Type::Int, "a".into()), (Type::Int, "b".into())]);
+                assert!(matches!(f.body[0].kind, StmtKind::Return(_)));
+            }
+            other => panic!("expected func, got {:?}", other),
+        }
     }
 }
