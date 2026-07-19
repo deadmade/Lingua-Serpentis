@@ -139,17 +139,70 @@ impl<'a> Parser<'a> {
             _ => Err(self.err("expressio expectata")),
         }
     }
+
+    fn type_keyword(&mut self) -> Option<Type> {
+        let ty = match self.peek()? {
+            TokenKind::TyInt => Type::Int,
+            TokenKind::TyFloat => Type::Float,
+            TokenKind::TyText => Type::Text,
+            TokenKind::TyChar => Type::Char,
+            TokenKind::TyBool => Type::Bool,
+            _ => return None,
+        };
+        self.advance();
+        Some(ty)
+    }
+
+    fn ident(&mut self) -> LResult<String> {
+        match self.peek().cloned() {
+            Some(TokenKind::Ident(n)) => { self.advance(); Ok(n) }
+            _ => Err(self.err("nomen expectatum")),
+        }
+    }
+
+    fn statement(&mut self) -> LResult<Stmt> {
+        let line = self.line();
+        // declaration: <type> <ident> = <expr> ;
+        if let Some(ty) = self.type_keyword() {
+            let name = self.ident()?;
+            self.eat(&TokenKind::Assign)?;
+            let value = self.expr()?;
+            self.eat(&TokenKind::Semicolon)?;
+            return Ok(Stmt { kind: StmtKind::Let { ty, name, value }, line });
+        }
+        match self.peek() {
+            Some(TokenKind::Print) => {
+                self.advance();
+                self.eat(&TokenKind::LParen)?;
+                let e = self.expr()?;
+                self.eat(&TokenKind::RParen)?;
+                self.eat(&TokenKind::Semicolon)?;
+                Ok(Stmt { kind: StmtKind::Print(e), line })
+            }
+            // assignment: <ident> = <expr> ;   (lookahead distinguishes from a call)
+            Some(TokenKind::Ident(_))
+                if self.toks.get(self.pos + 1).map(|t| &t.kind) == Some(&TokenKind::Assign) =>
+            {
+                let name = self.ident()?;
+                self.eat(&TokenKind::Assign)?;
+                let value = self.expr()?;
+                self.eat(&TokenKind::Semicolon)?;
+                Ok(Stmt { kind: StmtKind::Assign { name, value }, line })
+            }
+            _ => {
+                let e = self.expr()?;
+                self.eat(&TokenKind::Semicolon)?;
+                Ok(Stmt { kind: StmtKind::ExprStmt(e), line })
+            }
+        }
+    }
 }
 
 pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
     let mut p = Parser { toks: tokens, pos: 0 };
     let mut stmts = Vec::new();
     while p.pos < p.toks.len() {
-        // Temporary: treat "expr ;" as an ExprStmt. Replaced in Task 7.
-        let line = p.line();
-        let e = p.expr()?;
-        p.eat(&TokenKind::Semicolon)?;
-        stmts.push(Stmt { kind: StmtKind::ExprStmt(e), line });
+        stmts.push(p.statement()?);
     }
     Ok(stmts)
 }
@@ -166,6 +219,26 @@ mod tests {
             StmtKind::ExprStmt(e) => e.clone(),
             other => panic!("expected ExprStmt, got {:?}", other),
         }
+    }
+
+    fn parse_all(src: &str) -> Vec<Stmt> {
+        parse(&tokenize(src).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn declaration_statement() {
+        let s = parse_all("ni x = °V;");
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].kind, StmtKind::Let {
+            ty: Type::Int, name: "x".into(), value: Expr::Int(5),
+        });
+    }
+
+    #[test]
+    fn assignment_and_print() {
+        let s = parse_all("x = °I; scribe(x);");
+        assert_eq!(s[0].kind, StmtKind::Assign { name: "x".into(), value: Expr::Int(1) });
+        assert_eq!(s[1].kind, StmtKind::Print(Expr::Ident("x".into())));
     }
 
     #[test]
