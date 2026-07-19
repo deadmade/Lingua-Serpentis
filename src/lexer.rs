@@ -176,4 +176,11 @@ mod tests {
         // "nimis" starts with keyword "ni" but must stay a single identifier
         assert_eq!(kinds("nimis"), vec![TokenKind::Ident("nimis".into())]);
     }
+
+    #[test]
+    fn literal_error_paths() {
+        assert!(tokenize("\"unterminated").is_err()); // chorda non clausa
+        assert!(tokenize("''").is_err());             // empty char literal
+        assert!(tokenize("'ab'").is_err());           // multi-char char literal
+    }
 }
