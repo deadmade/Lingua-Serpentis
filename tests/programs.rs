@@ -22,3 +22,9 @@ fn type_error_reports_latin_and_line() {
     assert_eq!(err.line, 1);
     assert!(err.to_string().starts_with("Error in linea 1:"));
 }
+
+#[test]
+fn char_and_text_comparison_end_to_end() {
+    assert_eq!(lingua_serpentis::run("lit c = 'z'; scribe(c);").unwrap(), "z\n");
+    assert_eq!(lingua_serpentis::run("scribe(\"apple\" minor_est \"banana\");").unwrap(), "verus\n");
+}

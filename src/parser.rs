@@ -110,6 +110,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
             Some(TokenKind::Float(f)) => { self.advance(); Ok(Expr::Float(f)) }
             Some(TokenKind::Text(s)) => { self.advance(); Ok(Expr::Text(s)) }
+            Some(TokenKind::Char(c)) => { self.advance(); Ok(Expr::Char(c)) }
             Some(TokenKind::True) => { self.advance(); Ok(Expr::Bool(true)) }
             Some(TokenKind::False) => { self.advance(); Ok(Expr::Bool(false)) }
             Some(TokenKind::LParen) => {

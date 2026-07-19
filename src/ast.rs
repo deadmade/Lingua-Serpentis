@@ -12,6 +12,7 @@ pub enum Expr {
     Int(i64),
     Float(f64),
     Text(String),
+    Char(char),
     Bool(bool),
     Ident(String),
     Unary { op: UnOp, expr: Box<Expr> },

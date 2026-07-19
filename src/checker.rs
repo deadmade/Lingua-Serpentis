@@ -32,6 +32,7 @@ impl Checker {
             Expr::Int(_) => Ok(Type::Int),
             Expr::Float(_) => Ok(Type::Float),
             Expr::Text(_) => Ok(Type::Text),
+            Expr::Char(_) => Ok(Type::Char),
             Expr::Bool(_) => Ok(Type::Bool),
             Expr::Ident(name) => self.lookup(name)
                 .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line }),

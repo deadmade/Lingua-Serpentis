@@ -42,6 +42,7 @@ impl Interp {
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Text(s) => Ok(Value::Text(s.clone())),
+            Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Ident(name) => self.get(name)
                 .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line }),
@@ -185,32 +186,33 @@ impl Interp {
 fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
     use Value::*;
     let bad = || LinguaError { message: "operatio binaria invalida".into(), line };
+    let overflow = || LinguaError { message: "numerus nimis magnus (excessus arithmeticus)".into(), line };
     match op {
         BinOp::Add => match (l, r) {
-            (Int(a), Int(b)) => Ok(Int(a + b)),
+            (Int(a), Int(b)) => a.checked_add(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a + b)),
             (Text(a), Text(b)) => Ok(Text(a + &b)),
             _ => Err(bad()),
         },
         BinOp::Sub => match (l, r) {
-            (Int(a), Int(b)) => Ok(Int(a - b)),
+            (Int(a), Int(b)) => a.checked_sub(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a - b)),
             _ => Err(bad()),
         },
         BinOp::Mul => match (l, r) {
-            (Int(a), Int(b)) => Ok(Int(a * b)),
+            (Int(a), Int(b)) => a.checked_mul(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a * b)),
             _ => Err(bad()),
         },
         BinOp::Div => match (l, r) {
             (Int(_), Int(0)) => Err(LinguaError { message: "divisio per nullum".into(), line }),
-            (Int(a), Int(b)) => Ok(Int(a / b)),
+            (Int(a), Int(b)) => a.checked_div(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a / b)),
             _ => Err(bad()),
         },
         BinOp::Mod => match (l, r) {
             (Int(_), Int(0)) => Err(LinguaError { message: "modulus per nullum".into(), line }),
-            (Int(a), Int(b)) => Ok(Int(a % b)),
+            (Int(a), Int(b)) => a.checked_rem(b).map(Int).ok_or_else(overflow),
             _ => Err(bad()),
         },
         BinOp::Eq => Ok(Bool(l == r)),
@@ -234,6 +236,9 @@ fn cmp(l: Value, r: Value, line: usize, keep: impl Fn(std::cmp::Ordering) -> boo
         (Int(a), Int(b)) => a.cmp(&b),
         (Float(a), Float(b)) => a.partial_cmp(&b)
             .ok_or_else(|| LinguaError { message: "comparatio NaN".into(), line })?,
+        (Text(a), Text(b)) => a.cmp(&b),
+        (Char(a), Char(b)) => a.cmp(&b),
+        (Bool(a), Bool(b)) => a.cmp(&b),
         _ => return Err(LinguaError { message: "comparatio invalida".into(), line }),
     };
     Ok(Value::Bool(keep(ord)))
@@ -311,5 +316,23 @@ mod tests {
         // skip i==2: 0+1+3+4 = 8
         let src = "ni s = nullus; dum (ni i = nullus; i minor_est °V; i = i + °I) { si (i par_est °II) { continua; } s = s + i; } scribe(s);";
         assert_eq!(run(src), "8\n");
+    }
+
+    #[test]
+    fn text_comparison() {
+        assert_eq!(run("scribe(\"apple\" minor_est \"banana\");"), "verus\n");
+    }
+
+    #[test]
+    fn char_literal_roundtrip() {
+        assert_eq!(run("lit c = 'x'; scribe(c);"), "x\n");
+    }
+
+    #[test]
+    fn arithmetic_overflow_errors() {
+        // 3999^6 overflows i64; must be a graceful Err, not a panic
+        let src = "ni x = °MMMCMXCIX; ni y = x * x * x * x * x * x; scribe(y);";
+        let program = parse(&tokenize(src).unwrap()).unwrap();
+        assert!(execute(&program).is_err());
     }
 }
