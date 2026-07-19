@@ -61,6 +61,7 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
             let den_str = fp.next().ok_or("fractio sine denominatore")?;
             let num = convert_int_roman(num_str)?;
             let den = convert_int_roman(den_str)?;
+            // defensive: guards a future where a denominator could evaluate to 0
             if den == 0 {
                 return Err("denominator est nullus".into());
             }
@@ -116,5 +117,11 @@ mod tests {
     #[test]
     fn parse_rejects_missing_degree() {
         assert!(parse_roman("XXV").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_malformed_or_zero_fraction() {
+        assert!(parse_roman("°V:I").is_err());        // missing '/denominator'
+        assert!(parse_roman("°V:I/nullus").is_err()); // zero/invalid denominator rejected
     }
 }
