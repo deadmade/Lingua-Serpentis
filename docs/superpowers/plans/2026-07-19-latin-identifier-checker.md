@@ -1001,6 +1001,13 @@ git commit -m "feat: add non-fatal Warning type"
 
 Only **declaration sites** are visited: function names, parameter names, and `let` variable names. Assignments and expression uses refer to names declared elsewhere, so visiting them would double-report. Parameters have no line of their own, so they are reported on their function's line.
 
+> **Function syntax note.** Function declarations use a Haskell-style signature
+> line followed by the definition: `munus adde :: ni -> ni -> ni` then
+> `adde(a, b) { … }` (zero-arg: `munus duo :: ni` then `duo() { … }`). Parameters
+> carry no inline types. The **AST is unaffected** — `FuncDecl` still exposes
+> `name`, `params: Vec<(Type, String)>`, `ret`, and `body` — so the lint code
+> below is unchanged by this; only test source strings use the new form.
+
 - [ ] **Step 1: Add the dependency**
 
 In `crates/lingua-serpentis/Cargo.toml`, add a `[dependencies]` section (or extend the existing one):
@@ -1050,7 +1057,7 @@ mod tests {
         // English here: `compute` and `value` would be poor choices, because
         // `computare` and `valere` are real Latin verbs whose stems are in the
         // dictionary.
-        let w = lint_src("munus ni foobar(ni widget) { redde widget; }");
+        let w = lint_src("munus foobar :: ni -> ni foobar(widget) { redde widget; }");
         let names: Vec<&str> = w.iter().map(|x| x.message.as_str()).collect();
         assert_eq!(w.len(), 2, "expected function + param warnings, got {names:?}");
         assert!(names.iter().any(|m| m.contains("foobar")));
@@ -1067,7 +1074,7 @@ mod tests {
 
     #[test]
     fn reaches_declarations_inside_function_bodies() {
-        let w = lint_src("munus ni summa() { ni result = °V; redde result; }");
+        let w = lint_src("munus summa :: ni summa() { ni result = °V; redde result; }");
         assert!(w.iter().any(|x| x.message.contains("result")));
     }
 
