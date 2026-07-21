@@ -339,6 +339,11 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let e = self.expr()?;
+                // A call followed by `{` is a function definition whose
+                // signature line is missing — the only way that shape arises.
+                if matches!(e, Expr::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
+                    return Err(self.err("signatura ante definitionem expectata"));
+                }
                 self.eat(&TokenKind::Semicolon)?;
                 Ok(Stmt { kind: StmtKind::ExprStmt(e), line })
             }
@@ -574,5 +579,11 @@ mod tests {
     fn old_inline_form_is_rejected() {
         let m = parse_err("munus ni adde(ni a, ni b) { redde a + b; }");
         assert!(m.contains("in signatura declarandus"), "got: {m}");
+    }
+
+    #[test]
+    fn definition_without_signature_gets_real_advice() {
+        let m = parse_err("adde(a, b) { redde a + b; }");
+        assert!(m.contains("signatura ante definitionem"), "got: {m}");
     }
 }
