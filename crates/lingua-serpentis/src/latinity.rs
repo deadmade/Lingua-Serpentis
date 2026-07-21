@@ -159,11 +159,15 @@ mod tests {
 
     #[test]
     fn warnings_are_sorted_by_line() {
-        let w = lint_src("ni alpha = °I;\nni result = °V;\nni beta = °II;");
+        // Every name here must genuinely be rejected. An earlier version used
+        // `alpha` and `beta`, which are real Latin (borrowed Greek letter
+        // names), so only ONE warning came back — and a 1-element vector is
+        // trivially sorted, making the ordering assertion unfailable.
+        let w = lint_src("ni result = °I;\nni foobar = °II;\nni widget = °III;");
+
         let lines: Vec<usize> = w.iter().map(|x| x.line).collect();
-        let mut sorted = lines.clone();
-        sorted.sort();
-        assert_eq!(lines, sorted);
+        assert_eq!(lines.len(), 3, "expected three warnings to order, got {w:?}");
+        assert_eq!(lines, vec![1, 2, 3]);
     }
 
     #[test]
