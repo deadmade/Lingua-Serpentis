@@ -3,6 +3,9 @@
 - **Date:** 2026-07-19
 - **Status:** Approved (design) — pending implementation plan
 - **Author:** Manuel (with Claude)
+- **Amended:** 2026-07-21 — the two code samples in §5.6 and §5.9 were updated
+  for the signature syntax introduced in
+  `2026-07-21-haskell-style-signatures-design.md`. Prose unchanged.
 
 ## 1. Vision
 
@@ -169,7 +172,8 @@ error.
 ### 5.6 Functions
 
 ```
-munus ni summare(ni a, ni b) {
+munus summare :: ni -> ni -> ni
+summare(a, b) {
     ni c = a + b;
     redde c;
 }
@@ -191,7 +195,8 @@ the runtime `Value`, so no manual `printf` format specifiers).
 ### 5.9 Example program
 
 ```
-munus ni summare(ni a, ni b) {
+munus summare :: ni -> ni -> ni
+summare(a, b) {
     ni c = a + b;
     redde c;
 }

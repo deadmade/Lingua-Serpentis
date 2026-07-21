@@ -275,7 +275,7 @@ impl<'a> Parser<'a> {
 
         if names.len() != types.len() {
             return Err(self.err(&format!(
-                "signatura {} parametros promittit, definitio {} habet",
+                "signatura {} parametra promittit, definitio {} habet",
                 types.len(), names.len()
             )));
         }
@@ -550,14 +550,14 @@ mod tests {
     #[test]
     fn too_few_parameters_rejected() {
         let m = parse_err("munus adde :: ni -> ni -> ni\nadde(a) { redde a; }");
-        assert!(m.contains("2 parametros promittit"), "got: {m}");
+        assert!(m.contains("2 parametra promittit"), "got: {m}");
         assert!(m.contains("1 habet"), "got: {m}");
     }
 
     #[test]
     fn too_many_parameters_rejected() {
         let m = parse_err("munus adde :: ni -> ni\nadde(a, b) { redde a; }");
-        assert!(m.contains("1 parametros promittit"), "got: {m}");
+        assert!(m.contains("1 parametra promittit"), "got: {m}");
         assert!(m.contains("2 habet"), "got: {m}");
     }
 

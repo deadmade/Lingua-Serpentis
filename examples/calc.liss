@@ -1,4 +1,5 @@
-munus ni summare(ni a, ni b) {
+munus summare :: ni -> ni -> ni
+summare(a, b) {
     ni c = a + b;
     redde c;
 }

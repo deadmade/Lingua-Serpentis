@@ -17,6 +17,12 @@ fn full_program_with_function_and_if() {
 }
 
 #[test]
+fn calc_example_still_runs() {
+    let src = include_str!("../../../examples/calc.liss");
+    assert_eq!(run(src).unwrap(), "30532\n");
+}
+
+#[test]
 fn type_error_reports_latin_and_line() {
     let src = "ni x = \"salve\";";
     let err = run(src).unwrap_err();
