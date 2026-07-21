@@ -211,6 +211,8 @@ mod tests {
         let dict = dict_line(&["a"], "N      9 8 M N          X X X C G year, abb. a.;");
         let t = build_tables(&dict, "", "");
         assert!(t.whole.contains("a"));
+        // Declension 9 is indeclinable, so nothing should land in `stems`.
+        assert!(!t.stems.contains_key("a"));
     }
 
     #[test]
@@ -239,8 +241,9 @@ mod tests {
 
         assert!(t.whole.contains("est"));
         assert!(t.whole.contains("agantur"));
-        // The indented codes line must never be mistaken for a word form.
-        assert!(!t.whole.contains("V"));
+        // The indented codes lines must never be mistaken for word forms:
+        // exactly the two flush-left forms should be present, nothing else.
+        assert_eq!(t.whole.len(), 2);
         assert!(analyze(&t, "est"));
     }
 
