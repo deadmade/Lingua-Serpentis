@@ -63,6 +63,27 @@ mod tests {
     }
 
     #[test]
+    fn accepts_comparatives_and_superlatives() {
+        // These endings live under the "ADJ 0 0" wildcard group in INFLECTS.
+        // Before that group was merged into the concrete declensions, every one
+        // of these warned — including the notorious `maximum` accepted but
+        // `minimum` rejected split.
+        for word in ["melior", "optimus", "altior", "altissimus", "longior",
+                     "fortissimus", "minimus", "minimum", "maximum"] {
+            assert!(is_latin(word), "expected {word} to be recognized as Latin");
+        }
+    }
+
+    #[test]
+    fn accepts_perfect_system_verb_forms() {
+        // The perfect-system personal endings live under the "V 0 0" wildcard
+        // group, which is conjugation-independent.
+        for word in ["amavi", "amavit", "vidi", "vidit", "monui", "monuit"] {
+            assert!(is_latin(word), "expected {word} to be recognized as Latin");
+        }
+    }
+
+    #[test]
     fn rejects_english_programmer_names() {
         for word in ["result", "getData", "myVar", "counter", "foobar"] {
             assert!(!is_latin(word), "expected {word} to be rejected");

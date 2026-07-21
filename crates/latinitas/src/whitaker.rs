@@ -1,5 +1,6 @@
 use crate::analyze::normalize;
 use crate::model::{Group, Pos, Tables};
+use std::collections::HashSet;
 
 /// Width of each of the four stem columns in DICTLINE.GEN.
 const STEM_WIDTH: usize = 19;
@@ -9,6 +10,9 @@ const STEMS_END: usize = STEM_WIDTH * 4;
 const NO_STEM: &str = "zzz";
 /// Whitaker's declension code for an indeclinable entry.
 const INDECLINABLE_DECL: u8 = 9;
+/// In INFLECTS.LAT, declension/conjugation `0` is a wildcard meaning "applies
+/// regardless of declension/conjugation" — see `merge_wildcard_endings`.
+const WILDCARD_DECL: u8 = 0;
 
 /// Map a Whitaker part-of-speech code onto the three inflecting classes we
 /// model. Everything else is indeclinable as far as this checker is concerned.
@@ -40,7 +44,50 @@ pub fn build_tables(dictline: &str, inflects: &str, uniques: &str) -> Tables {
     for line in uniques.lines() {
         parse_unique_line(line, &mut t);
     }
+    merge_wildcard_endings(&mut t);
     t
+}
+
+/// Distribute the wildcard (declension/conjugation `0`) endings onto every
+/// concrete group of the same part of speech.
+///
+/// INFLECTS.LAT uses `0` in the declension column to mean "applies regardless
+/// of declension/conjugation": the 31 `V 0 0` lines are the perfect-system
+/// personal endings (`-i`, `-isti`, `-it`, `-imus`, ...), which really are
+/// conjugation-independent, and the 52 `ADJ 0 0` lines are the comparative and
+/// superlative endings (`-ior`, `-issimus`, ...). Taken literally, our
+/// `Group { pos, decl }` join key files them under a group that essentially no
+/// dictionary stem ever references, so those two entire inflectional systems
+/// become unreachable and forms like `amavit`, `vidi`, `melior` and `minimum`
+/// are wrongly reported as non-Latin. Merging them in once, here at table-build
+/// time, restores both systems.
+fn merge_wildcard_endings(t: &mut Tables) {
+    let wildcards: Vec<(Pos, HashSet<String>)> = t
+        .endings
+        .iter()
+        .filter(|(g, _)| g.decl == WILDCARD_DECL)
+        .map(|(g, ends)| (g.pos, ends.clone()))
+        .collect();
+    if wildcards.is_empty() {
+        return;
+    }
+
+    // Every concrete group a lookup could ever join against: those that own
+    // endings, plus those merely referenced by a dictionary stem (which would
+    // otherwise have no endings entry to extend).
+    let mut concrete: HashSet<Group> =
+        t.endings.keys().copied().filter(|g| g.decl != WILDCARD_DECL).collect();
+    for groups in t.stems.values() {
+        concrete.extend(groups.iter().copied().filter(|g| g.decl != WILDCARD_DECL));
+    }
+
+    for g in concrete {
+        for (pos, ends) in &wildcards {
+            if *pos == g.pos {
+                t.endings.entry(g).or_default().extend(ends.iter().cloned());
+            }
+        }
+    }
 }
 
 /// One line of UNIQUES.LAT. Entries are two lines: the irregular word form
@@ -323,6 +370,55 @@ mod tests {
         assert_eq!(endings.len(), 1);
         assert!(endings.contains("is"));
         assert!(!endings.contains(""));
+    }
+
+    #[test]
+    fn wildcard_conjugation_endings_reach_every_verb_group() {
+        // The perfect-system personal endings are filed under "V 0 0" because
+        // they are conjugation-independent. A 2nd-conjugation stem must still
+        // be able to use them.
+        let dict = dict_line(
+            &["mon", "mon", "monu", "monit"],
+            "V      2 1 TRANS        X X X A O warn, advise;",
+        );
+        let infl = "V     2 1 PRES  ACTIVE  IND  1 S  1 2 eo        X A\n\
+                    V     0 0 PERF  ACTIVE  IND  1 S  3 1 i         X A\n\
+                    V     0 0 PERF  ACTIVE  IND  3 S  3 2 it        X A";
+        let t = build_tables(&dict, infl, "");
+
+        assert!(analyze(&t, "moneo"), "conjugation-specific ending still works");
+        assert!(analyze(&t, "monui"), "wildcard perfect ending must reach V 2");
+        assert!(analyze(&t, "monuit"), "wildcard perfect ending must reach V 2");
+    }
+
+    #[test]
+    fn wildcard_declension_endings_reach_every_adjective_group() {
+        // Comparative/superlative endings are filed under "ADJ 0 0".
+        let dict = dict_line(
+            &["bon", "bon", "melior", "optim"],
+            "ADJ    1 1 POS          X X X A O good;",
+        );
+        let infl = "ADJ   1 1 NOM S M  1 2 us        X A\n\
+                    ADJ   0 0 NOM S C COMP  3 2 or    X A\n\
+                    ADJ   0 0 NOM S M SUPER 4 2 us    X A";
+        let t = build_tables(&dict, infl, "");
+
+        assert!(analyze(&t, "bonus"), "declension-specific ending still works");
+        assert!(analyze(&t, "optimus"), "wildcard superlative ending must reach ADJ 1");
+    }
+
+    #[test]
+    fn wildcard_endings_do_not_cross_parts_of_speech() {
+        // "V 0 0" endings are conjugation-independent, not part-of-speech
+        // independent: they must not leak onto noun or adjective groups.
+        let dict = dict_line(&["numer", "numer"], "N      2 1 M T          X X X A O number;");
+        let infl = "N     2 1 NOM S M  1 2 us        X A\n\
+                    V     0 0 PERF  ACTIVE  IND  2 S  3 4 isti      X A";
+        let t = build_tables(&dict, infl, "");
+
+        let noun2 = Group { pos: Pos::Noun, decl: 2 };
+        assert!(!t.endings[&noun2].contains("isti"), "verb ending leaked onto a noun group");
+        assert!(!analyze(&t, "numeristi"));
     }
 
     #[test]
