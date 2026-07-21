@@ -189,16 +189,38 @@ required, since the parser is already past the `)`.
 
 ## 6. Migration
 
-The blast radius is small:
+Eleven call sites across six files. Note that most of them live in inline
+`#[cfg(test)]` modules under `src/`, which is easy to miss when grepping only
+`tests/` and `examples/`:
 
+Eleven `munus` occurrences across six files, of which **nine are old-syntax
+program text** that must change:
+
+- `src/checker.rs:285,290,295,300` — five occurrences (line 300 nests two).
+- `src/interp.rs:310` — one function.
+- `src/parser.rs:457` — the existing `function_declaration_and_return` test.
+- `crates/lingua-serpentis/tests/programs.rs:7` — one function.
 - `examples/calc.liss` — one function.
-- `crates/lingua-serpentis/tests/programs.rs` — one function.
 - `examples/salve.liss` — none.
+
+The remaining two occurrences are **not** call sites and stay as they are:
+`src/lexer.rs:93` (the keyword table entry — `munus` keeps its `TokenKind::Func`
+mapping) and `src/parser.rs:231` (a `// munus` comment).
+
+**The eight occurrences in Rust code must migrate in the same commit as the
+parser change.** The syntax switch is breaking, so any commit that lands the new
+`func_stmt` without them leaves the test suite red. `calc.liss` and the docs can
+follow separately.
+
+Documentation:
+
 - `docs/superpowers/specs/2026-07-19-lingua-serpentis-rust-interpreter-design.md`
-  and `2026-07-19-latin-identifier-checker-design.md` — contain examples in the
-  old form. **Amend the examples in place; do not rewrite the documents.** These
-  are historical design records for a shipped feature, and only their code
-  samples are now stale.
+  — two identical code samples, at lines 172-175 and 194-197. **Amend the samples
+  in place; do not rewrite the document.** It is a historical record of shipped
+  work; only its samples are stale.
+- `docs/superpowers/specs/2026-07-19-latin-identifier-checker-design.md` — **no
+  change needed.** It names `munus` only in prose, as an example of a Latin
+  keyword, which remains accurate.
 
 ## 7. Testing
 
