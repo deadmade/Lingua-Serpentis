@@ -10,3 +10,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "lingua-serpentis"
 path = "src/main.rs"
+
+[dependencies]
+latinitas = { path = "../latinitas" }

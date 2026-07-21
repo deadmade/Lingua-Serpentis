@@ -7,6 +7,7 @@ pub mod parser;
 pub mod checker;
 pub mod value;
 pub mod interp;
+pub mod latinity;
 
 use error::LResult;
 
