@@ -125,18 +125,25 @@ fn parse_inflect_line(line: &str, t: &mut Tables) {
 
     // Some lines carry a trailing scholarly citation comment introduced by a
     // `--` token (e.g. "-- G+L 130 1"), which sits AFTER the two flag columns.
-    // Strip everything from the first `--` onward before dropping the flags,
-    // otherwise the right-anchored extraction below misparses the ending.
-    let toks: &[&str] = match toks.iter().position(|&tok| tok == "--") {
+    // Some comment markers are glued directly onto the following word instead
+    // of standing alone (e.g. "--JFW,", "--PRON", "--quis,"), so match on a
+    // `--` prefix rather than exact equality. Strip everything from the first
+    // such token onward before dropping the flags, otherwise the
+    // right-anchored extraction below misparses the ending.
+    let core_toks: &[&str] = match toks.iter().position(|tok| tok.starts_with("--")) {
         Some(i) => &toks[..i],
         None => &toks[..],
     };
-    if toks.len() < 7 {
+    // Defensive re-check: in the current INFLECTS.LAT this never fires (every
+    // line long enough to reach here stays long enough after truncation), but
+    // a citation-comment truncation could in principle shrink `core_toks`
+    // below the minimum shape, so guard it explicitly rather than panic below.
+    if core_toks.len() < 7 {
         return;
     }
 
     // Drop the two trailing flag columns (age, frequency).
-    let core = &toks[..toks.len() - 2];
+    let core = &core_toks[..core_toks.len() - 2];
     // The ending is the last token when it is alphabetic; when the ending-length
     // column is 0 there is no ending token at all, so the last token is numeric.
     let ending = match core.last() {
@@ -276,8 +283,46 @@ mod tests {
         let t = build_tables("", infl, "");
 
         let g = Group { pos: Pos::Verb, decl: 1 };
-        assert!(t.endings[&g].contains("are"));
-        assert!(!t.endings[&g].contains(""), "bogus empty ending leaked in");
+        let endings = t.endings.get(&g).expect("group should have endings");
+        // Single-line fixture: pin the exact set, not just membership, so
+        // nothing extra (a bogus empty ending or a leaked comment word) has
+        // snuck in alongside the real one.
+        assert_eq!(endings.len(), 1);
+        assert!(endings.contains("are"));
+        assert!(!endings.contains(""), "bogus empty ending leaked in");
+    }
+
+    #[test]
+    fn ignores_leaked_comment_words_in_inflects() {
+        // The trailing citation comment can be several words long; none of
+        // them (e.g. "exception") may leak into the endings table and be
+        // mistaken for a real Latin suffix.
+        let infl = "N     1 1 GEN S F  2 2 ae        X A    --  exception to rule";
+        let t = build_tables("", infl, "");
+
+        let g = Group { pos: Pos::Noun, decl: 1 };
+        let endings = t.endings.get(&g).expect("group should have endings");
+        assert_eq!(endings.len(), 1);
+        assert!(endings.contains("ae"));
+        assert!(!endings.contains("exception"));
+    }
+
+    #[test]
+    fn strips_attached_comment_markers_not_just_bare_dashes() {
+        // Real INFLECTS.LAT line 409: the citation marker "--JFW," is glued
+        // directly onto the following word rather than standing alone as a
+        // bare "--" token. Matching only exact "--" misses this line
+        // entirely: the last token is then "--JFW," itself (non-alphabetic),
+        // which injects a bogus empty ending and discards the real ending
+        // "is".
+        let infl = "N     3 9 NOM S X  1 2 is        X A  --JFW, 1st stem";
+        let t = build_tables("", infl, "");
+
+        let g = Group { pos: Pos::Noun, decl: 3 };
+        let endings = t.endings.get(&g).expect("group should have endings");
+        assert_eq!(endings.len(), 1);
+        assert!(endings.contains("is"));
+        assert!(!endings.contains(""));
     }
 
     #[test]
