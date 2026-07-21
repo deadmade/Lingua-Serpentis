@@ -135,4 +135,35 @@ mod tests {
         sorted.sort();
         assert_eq!(lines, sorted);
     }
+
+    #[test]
+    fn reaches_declarations_inside_else_block() {
+        // `then` is empty, so `result` can only be found if the walk visits
+        // the `else_` arm. If a regression dropped `else_` handling from the
+        // `If` case, this warning would silently disappear.
+        let w = lint_src("si (falsus) { } aut { ni result = °V; }");
+        assert_eq!(w.len(), 1, "expected exactly one warning, got {w:?}");
+        assert!(w[0].message.contains("result"));
+    }
+
+    #[test]
+    fn reaches_declarations_in_for_init() {
+        // `foobar` is a deliberately non-Latin, multi-character init variable:
+        // a normal single-letter counter (`i`) would be exempt and wouldn't
+        // catch a regression that skipped the `init` field of `For`.
+        let src = "dum (ni foobar = °I; foobar minor_est °X; foobar = foobar + °I) { }";
+        let w = lint_src(src);
+        assert_eq!(w.len(), 1, "expected exactly one warning, got {w:?}");
+        assert!(w[0].message.contains("foobar"));
+    }
+
+    #[test]
+    fn reaches_declarations_in_for_body() {
+        // The counter `i` is single-letter and exempt; `widget` inside the
+        // loop body is the only name that should be flagged.
+        let src = "dum (ni i = °I; i minor_est °III; i = i + °I) { ni widget = °V; }";
+        let w = lint_src(src);
+        assert_eq!(w.len(), 1, "expected exactly one warning, got {w:?}");
+        assert!(w[0].message.contains("widget"));
+    }
 }
