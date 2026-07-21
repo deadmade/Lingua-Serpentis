@@ -1,0 +1,11 @@
+The files DICTLINE.GEN, INFLECTS.LAT and UNIQUES.LAT in this directory are data
+files from WORDS, a Latin dictionary and morphological analyser by William
+Whitaker (1936-2010).
+
+William Whitaker placed WORDS and its data files in the public domain.
+
+Obtained from the maintained mirror at:
+    https://github.com/mk270/whitakers-words
+
+They are vendored here unmodified so that `latinitas` builds offline and
+reproducibly. All morphological analysis code in this crate is original.
