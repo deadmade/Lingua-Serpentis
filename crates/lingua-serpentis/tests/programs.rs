@@ -4,7 +4,8 @@ use lingua_serpentis::run;
 #[test]
 fn full_program_with_function_and_if() {
     let src = r#"
-        munus ni summare(ni a, ni b) {
+        munus summare :: ni -> ni -> ni
+        summare(a, b) {
             ni c = a + b;
             redde c;
         }

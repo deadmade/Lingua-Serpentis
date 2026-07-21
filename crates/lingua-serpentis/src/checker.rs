@@ -282,22 +282,22 @@ mod tests {
 
     #[test]
     fn function_return_type_checked() {
-        assert!(check_src("munus ni adde(ni a, ni b) { redde a + b; } scribe(adde(°I, °II));").is_ok());
+        assert!(check_src("munus adde :: ni -> ni -> ni adde(a, b) { redde a + b; } scribe(adde(°I, °II));").is_ok());
     }
 
     #[test]
     fn returning_wrong_type_fails() {
-        assert!(check_src("munus ni f() { redde \"salve\"; }").is_err());
+        assert!(check_src("munus f :: ni f() { redde \"salve\"; }").is_err());
     }
 
     #[test]
     fn calling_with_wrong_arg_type_fails() {
-        assert!(check_src("munus ni f(ni a) { redde a; } scribe(f(\"x\"));").is_err());
+        assert!(check_src("munus f :: ni -> ni f(a) { redde a; } scribe(f(\"x\"));").is_err());
     }
 
     #[test]
     fn nested_function_rejected() {
-        let err = check_src("munus ni outer() { munus ni inner() { redde °I; } redde °I; }").unwrap_err();
+        let err = check_src("munus outer :: ni outer() { munus inner :: ni inner() { redde °I; } redde °I; }").unwrap_err();
         assert!(err.message.contains("nidificat"));
     }
 }

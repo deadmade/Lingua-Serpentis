@@ -229,21 +229,60 @@ impl<'a> Parser<'a> {
     fn func_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
         self.advance(); // munus
-        let ret = self.type_keyword().ok_or_else(|| self.err("typus reditus expectatus"))?;
-        let name = self.ident()?;
+
+        // Old inline form `munus ni nomen(...)`: a type keyword sits where the
+        // name belongs. Caught here so it gets real advice, not `nomen expectatum`.
+        if matches!(
+            self.peek(),
+            Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyText
+                 | TokenKind::TyChar | TokenKind::TyBool)
+        ) {
+            return Err(self.err("typus in signatura declarandus, non in definitione"));
+        }
+
+        let sig_name = self.ident()?;
+        self.eat(&TokenKind::ColonColon)?;
+
+        // At least one type; the last is the return type, the rest are parameters.
+        let mut types = vec![
+            self.type_keyword().ok_or_else(|| self.err("typus post '::' expectatus"))?
+        ];
+        while self.peek() == Some(&TokenKind::Arrow) {
+            self.advance();
+            types.push(
+                self.type_keyword().ok_or_else(|| self.err("typus post '->' expectatus"))?
+            );
+        }
+        let ret = types.pop().expect("vec built with at least one element above");
+
+        let def_name = self.ident()?;
+        if def_name != sig_name {
+            return Err(self.err(&format!(
+                "nomen definitionis '{}' non congruit cum signatura '{}'",
+                def_name, sig_name
+            )));
+        }
+
         self.eat(&TokenKind::LParen)?;
-        let mut params = Vec::new();
+        let mut names = Vec::new();
         if self.peek() != Some(&TokenKind::RParen) {
             loop {
-                let pty = self.type_keyword().ok_or_else(|| self.err("typus parametri expectatus"))?;
-                let pname = self.ident()?;
-                params.push((pty, pname));
+                names.push(self.ident()?);
                 if self.peek() == Some(&TokenKind::Comma) { self.advance(); } else { break; }
             }
         }
         self.eat(&TokenKind::RParen)?;
+
+        if names.len() != types.len() {
+            return Err(self.err(&format!(
+                "signatura {} parametros promittit, definitio {} habet",
+                types.len(), names.len()
+            )));
+        }
+
+        let params = types.into_iter().zip(names).collect();
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::Func(FuncDecl { name, params, ret, body }), line })
+        Ok(Stmt { kind: StmtKind::Func(FuncDecl { name: sig_name, params, ret, body }), line })
     }
 
     fn statement(&mut self) -> LResult<Stmt> {
@@ -454,13 +493,38 @@ mod tests {
 
     #[test]
     fn function_declaration_and_return() {
-        let s = parse_all("munus ni adde(ni a, ni b) { redde a + b; }");
+        let s = parse_all("munus adde :: ni -> ni -> ni\nadde(a, b) { redde a + b; }");
         match &s[0].kind {
             StmtKind::Func(f) => {
                 assert_eq!(f.name, "adde");
                 assert_eq!(f.ret, Type::Int);
                 assert_eq!(f.params, vec![(Type::Int, "a".into()), (Type::Int, "b".into())]);
                 assert!(matches!(f.body[0].kind, StmtKind::Return(_)));
+            }
+            other => panic!("expected func, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn zero_argument_function() {
+        let s = parse_all("munus duo :: ni\nduo() { redde °II; }");
+        match &s[0].kind {
+            StmtKind::Func(f) => {
+                assert_eq!(f.name, "duo");
+                assert_eq!(f.ret, Type::Int);
+                assert!(f.params.is_empty());
+            }
+            other => panic!("expected func, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn mixed_parameter_types() {
+        let s = parse_all("munus test :: voc -> ni -> veritas\ntest(v, n) { redde verus; }");
+        match &s[0].kind {
+            StmtKind::Func(f) => {
+                assert_eq!(f.ret, Type::Bool);
+                assert_eq!(f.params, vec![(Type::Text, "v".into()), (Type::Int, "n".into())]);
             }
             other => panic!("expected func, got {:?}", other),
         }

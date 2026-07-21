@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn function_call_returns() {
-        let src = "munus ni adde(ni a, ni b) { redde a + b; } scribe(adde(°IV, °VI));";
+        let src = "munus adde :: ni -> ni -> ni adde(a, b) { redde a + b; } scribe(adde(°IV, °VI));";
         assert_eq!(run(src), "10\n");
     }
 
