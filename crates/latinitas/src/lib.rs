@@ -1,6 +1,10 @@
-pub mod analyze;
-pub mod model;
-pub mod whitaker;
+// `is_latin` below is the entire public surface. The morphology engine —
+// normalization, the stem/ending split, the Whitaker table builder and its
+// `Tables`/`Group`/`Pos` types — is an implementation detail that is free to
+// change, so these modules stay private (design spec §6.1 and §6.5).
+mod analyze;
+mod model;
+mod whitaker;
 
 use model::Tables;
 use std::sync::OnceLock;
