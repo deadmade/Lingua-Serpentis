@@ -26,6 +26,11 @@ pub struct FuncDecl {
     pub params: Vec<(Type, String)>,
     pub ret: Type,
     pub body: Vec<Stmt>,
+    /// Line of the *definition* header (`nomen(params) {`). A declaration
+    /// spans two lines — a `::` signature line and a definition line — and the
+    /// enclosing `Stmt.line` is the signature line, so anything that needs to
+    /// point at a parameter must use this instead.
+    pub def_line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]

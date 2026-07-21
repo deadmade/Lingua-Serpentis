@@ -255,6 +255,9 @@ impl<'a> Parser<'a> {
         }
         let ret = types.pop().expect("vec built with at least one element above");
 
+        // The definition header may sit on a later line than the signature;
+        // parameters live here, so record it for anything that reports on them.
+        let def_line = self.line();
         let def_name = self.ident()?;
         if def_name != sig_name {
             return Err(self.err(&format!(
@@ -282,7 +285,10 @@ impl<'a> Parser<'a> {
 
         let params = types.into_iter().zip(names).collect();
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::Func(FuncDecl { name: sig_name, params, ret, body }), line })
+        Ok(Stmt {
+            kind: StmtKind::Func(FuncDecl { name: sig_name, params, ret, body, def_line }),
+            line,
+        })
     }
 
     fn statement(&mut self) -> LResult<Stmt> {

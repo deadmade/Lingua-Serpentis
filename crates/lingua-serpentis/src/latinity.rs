@@ -36,9 +36,10 @@ fn lint_stmt(s: &Stmt, out: &mut Vec<Warning>) {
         StmtKind::Func(f) => {
             check_name(&f.name, s.line, out);
             for (_, param) in &f.params {
-                // Parameters carry no line of their own; report them on the
-                // function's line.
-                check_name(param, s.line, out);
+                // A declaration spans a `::` signature line and a definition
+                // line. `s.line` is the signature line, but parameters are
+                // named on the definition line, so report them there.
+                check_name(param, f.def_line, out);
             }
             lint_block(&f.body, out);
         }
@@ -104,6 +105,35 @@ mod tests {
         assert_eq!(w.len(), 2, "expected function + param warnings, got {names:?}");
         assert!(names.iter().any(|m| m.contains("foobar")));
         assert!(names.iter().any(|m| m.contains("widget")));
+    }
+
+    #[test]
+    fn parameters_are_reported_on_the_definition_line() {
+        // A real multi-line declaration: the `::` signature is line 1 and the
+        // definition header — where the parameter is actually written — is
+        // line 2. Reporting the parameter at the enclosing `Stmt.line` would
+        // blame line 1. Every other lint test collapses the declaration onto a
+        // single line, where the two coincide and the bug is invisible.
+        let src = "munus foobar :: ni -> ni\n\
+                   foobar(widget) {\n\
+                   ni result = widget;\n\
+                   redde result;\n\
+                   }";
+        let w = lint_src(src);
+
+        let param = w.iter().find(|x| x.message.contains("widget"))
+            .expect("expected a warning for the parameter 'widget'");
+        assert_eq!(param.line, 2, "parameter must be reported on the definition line");
+
+        // The function name itself still belongs to the signature line, and
+        // the body declaration to its own line — so this really is pinning the
+        // parameter, not a blanket line shift.
+        let name = w.iter().find(|x| x.message.contains("foobar"))
+            .expect("expected a warning for the function name 'foobar'");
+        assert_eq!(name.line, 1);
+        let local = w.iter().find(|x| x.message.contains("result"))
+            .expect("expected a warning for the local 'result'");
+        assert_eq!(local.line, 3);
     }
 
     #[test]
