@@ -9,3 +9,7 @@ Obtained from the maintained mirror at:
 
 They are vendored here unmodified so that `latinitas` builds offline and
 reproducibly. All morphological analysis code in this crate is original.
+
+That original code is licensed MIT OR Apache-2.0 (see the `license` field in
+`Cargo.toml`). The public-domain status of the data files above is unaffected by
+it, and applies to those three files only.

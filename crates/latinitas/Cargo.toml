@@ -3,5 +3,8 @@ name = "latinitas"
 version = "0.1.0"
 edition = "2021"
 description = "Latin morphological word validation, backed by Whitaker's WORDS (public domain)"
+# Covers this crate's own source. The vendored Whitaker data files in `data/`
+# are separately in the public domain — see `data/NOTICE`.
+license = "MIT OR Apache-2.0"
 
 [dependencies]
