@@ -373,6 +373,12 @@ mod tests {
         parse(&tokenize(src).unwrap()).unwrap()
     }
 
+    fn parse_err(src: &str) -> String {
+        parse(&tokenize(src).unwrap())
+            .expect_err("expected a parse error")
+            .message
+    }
+
     #[test]
     fn declaration_statement() {
         let s = parse_all("ni x = °V;");
@@ -528,5 +534,45 @@ mod tests {
             }
             other => panic!("expected func, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn signature_name_must_match_definition() {
+        let m = parse_err("munus adde :: ni -> ni\nsubtrahe(a) { redde a; }");
+        assert!(m.contains("non congruit"), "got: {m}");
+    }
+
+    #[test]
+    fn too_few_parameters_rejected() {
+        let m = parse_err("munus adde :: ni -> ni -> ni\nadde(a) { redde a; }");
+        assert!(m.contains("2 parametros promittit"), "got: {m}");
+        assert!(m.contains("1 habet"), "got: {m}");
+    }
+
+    #[test]
+    fn too_many_parameters_rejected() {
+        let m = parse_err("munus adde :: ni -> ni\nadde(a, b) { redde a; }");
+        assert!(m.contains("1 parametros promittit"), "got: {m}");
+        assert!(m.contains("2 habet"), "got: {m}");
+    }
+
+    #[test]
+    fn dangling_arrow_rejected() {
+        let m = parse_err("munus adde :: ni ->\nadde(a) { redde a; }");
+        assert!(m.contains("post '->'"), "got: {m}");
+    }
+
+    #[test]
+    fn dangling_colon_colon_rejected() {
+        let m = parse_err("munus adde ::\nadde(a) { redde a; }");
+        assert!(m.contains("post '::'"), "got: {m}");
+    }
+
+    // Load-bearing: the old syntax was removed deliberately. Without this,
+    // a future change could quietly restore a dual-syntax parser.
+    #[test]
+    fn old_inline_form_is_rejected() {
+        let m = parse_err("munus ni adde(ni a, ni b) { redde a + b; }");
+        assert!(m.contains("in signatura declarandus"), "got: {m}");
     }
 }
