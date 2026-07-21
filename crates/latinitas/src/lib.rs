@@ -51,9 +51,9 @@ mod tests {
 
     #[test]
     fn accepts_irregular_forms_from_the_uniques_table() {
-        // Forms of `esse` are irregular and come from UNIQUES.LAT, not from
-        // any stem + ending rule.
-        assert!(is_latin("est"));
+        // "memento" (imperative of `meminisse`, "remember!") is a flush-left
+        // entry in UNIQUES.LAT.
+        assert!(is_latin("memento"));
     }
 
     #[test]

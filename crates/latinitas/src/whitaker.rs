@@ -12,6 +12,13 @@ const INDECLINABLE_DECL: u8 = 9;
 
 /// Map a Whitaker part-of-speech code onto the three inflecting classes we
 /// model. Everything else is indeclinable as far as this checker is concerned.
+///
+/// Known, accepted limitation: `PRON` and `NUM` are not mapped here, so only
+/// their truncated dictionary stems (e.g. `qu`, `h`, `ill`, `du`, `tr`) land in
+/// `whole` as bare words — inflected forms like `quae`, `quem`, `duo`, `tres`,
+/// `ille` are therefore reported as non-Latin. Routing these truncated 1-3
+/// character stems permissively would accept enormous amounts of junk and gut
+/// the checker's precision, so this is left as-is.
 fn inflecting_pos(code: &str) -> Option<Pos> {
     match code {
         "N" => Some(Pos::Noun),
@@ -115,6 +122,18 @@ fn parse_inflect_line(line: &str, t: &mut Tables) {
     let Ok(decl) = toks[1].parse::<u8>() else {
         return;
     };
+
+    // Some lines carry a trailing scholarly citation comment introduced by a
+    // `--` token (e.g. "-- G+L 130 1"), which sits AFTER the two flag columns.
+    // Strip everything from the first `--` onward before dropping the flags,
+    // otherwise the right-anchored extraction below misparses the ending.
+    let toks: &[&str] = match toks.iter().position(|&tok| tok == "--") {
+        Some(i) => &toks[..i],
+        None => &toks[..],
+    };
+    if toks.len() < 7 {
+        return;
+    }
 
     // Drop the two trailing flag columns (age, frequency).
     let core = &toks[..toks.len() - 2];
@@ -245,6 +264,20 @@ mod tests {
         // exactly the two flush-left forms should be present, nothing else.
         assert_eq!(t.whole.len(), 2);
         assert!(analyze(&t, "est"));
+    }
+
+    #[test]
+    fn ignores_trailing_citation_comments_in_inflects() {
+        // Real INFLECTS.LAT line 972: a trailing "-- G+L 130 1" citation sits
+        // AFTER the two flag columns. Without stripping it, the ending is
+        // misparsed as "" instead of "are", which then lets any V-1 stem match
+        // as a bare word.
+        let infl = "V     1 1 PRES  PASSIVE IND  2 S  2 3 are           B B    --  G+L 130 1";
+        let t = build_tables("", infl, "");
+
+        let g = Group { pos: Pos::Verb, decl: 1 };
+        assert!(t.endings[&g].contains("are"));
+        assert!(!t.endings[&g].contains(""), "bogus empty ending leaked in");
     }
 
     #[test]
