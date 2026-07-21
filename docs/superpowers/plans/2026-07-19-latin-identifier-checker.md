@@ -1046,11 +1046,15 @@ mod tests {
 
     #[test]
     fn flags_a_non_latin_function_name_and_parameter() {
-        let w = lint_src("munus ni compute(ni value) { redde value; }");
+        // `foobar` and `widget` are invented words. Avoid plausible-looking
+        // English here: `compute` and `value` would be poor choices, because
+        // `computare` and `valere` are real Latin verbs whose stems are in the
+        // dictionary.
+        let w = lint_src("munus ni foobar(ni widget) { redde widget; }");
         let names: Vec<&str> = w.iter().map(|x| x.message.as_str()).collect();
         assert_eq!(w.len(), 2, "expected function + param warnings, got {names:?}");
-        assert!(names.iter().any(|m| m.contains("compute")));
-        assert!(names.iter().any(|m| m.contains("value")));
+        assert!(names.iter().any(|m| m.contains("foobar")));
+        assert!(names.iter().any(|m| m.contains("widget")));
     }
 
     #[test]
