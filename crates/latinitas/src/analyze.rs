@@ -1,3 +1,5 @@
+use crate::model::Tables;
+
 /// Fold a word into the orthographic form the dictionary is stored in:
 /// lowercase, with `v` written as `u` and `j` as `i`.
 pub fn normalize(word: &str) -> String {
@@ -9,8 +11,6 @@ pub fn normalize(word: &str) -> String {
         })
         .collect()
 }
-
-use crate::model::Tables;
 
 /// True when `word` is a recognizable Latin word form: either an indeclinable
 /// listed whole, or some split into `stem + ending` where the stem is in the
@@ -45,7 +45,7 @@ pub fn analyze(tables: &Tables, word: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Group, Pos, Tables};
+    use crate::model::{Group, Pos};
 
     #[test]
     fn lowercases() {
@@ -109,6 +109,22 @@ mod tests {
     #[test]
     fn accepts_indeclinable_whole_words() {
         assert!(analyze(&fixture(), "et"));
+    }
+
+    #[test]
+    fn matches_a_bare_stem_via_the_empty_ending() {
+        // Pins the inclusive `0..=w.len()` split. `lux` is a stem whose group
+        // allows a zero-length ending, so the ONLY match is at i == w.len(),
+        // where the ending is "". A non-inclusive `0..w.len()` would miss it.
+        let mut t = fixture();
+        let noun3 = Group { pos: Pos::Noun, decl: 3 };
+        t.stems.insert("lux".to_string(), vec![noun3]);
+        t.endings.insert(
+            noun3,
+            ["", "is"].iter().map(|s| s.to_string()).collect(),
+        );
+
+        assert!(analyze(&t, "lux"));
     }
 
     #[test]
