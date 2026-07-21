@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["crates/lingua-serpentis"]
+members = ["crates/lingua-serpentis", "crates/latinitas"]
 default-members = ["crates/lingua-serpentis"]
