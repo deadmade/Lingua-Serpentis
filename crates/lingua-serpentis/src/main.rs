@@ -1,4 +1,4 @@
-use lingua_serpentis::run;
+use lingua_serpentis::run_with_warnings;
 use std::process::exit;
 
 fn main() {
@@ -16,8 +16,14 @@ fn main() {
         Ok(s) => s,
         Err(e) => { eprintln!("Error reading file: {e}"); exit(1); }
     };
-    match run(&src) {
-        Ok(output) => print!("{output}"),
+    match run_with_warnings(&src) {
+        Ok((output, warnings)) => {
+            // Warnings go to stderr so they never contaminate program output.
+            for w in &warnings {
+                eprintln!("{w}");
+            }
+            print!("{output}");
+        }
         Err(e) => { eprintln!("{e}"); exit(1); }
     }
 }

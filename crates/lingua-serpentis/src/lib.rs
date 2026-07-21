@@ -10,11 +10,21 @@ pub mod interp;
 pub mod latinity;
 
 use error::LResult;
+pub use error::Warning;
 
-/// Lex → parse → type-check → interpret. Returns collected `scribe` output.
-pub fn run(src: &str) -> LResult<String> {
+/// Lex → parse → type-check → lint → interpret.
+/// Returns the collected `scribe` output together with any Latinity warnings.
+/// Linting never fails and never affects whether the program runs.
+pub fn run_with_warnings(src: &str) -> LResult<(String, Vec<Warning>)> {
     let tokens = lexer::tokenize(src)?;
     let program = parser::parse(&tokens)?;
     checker::check(&program)?;
-    interp::execute(&program)
+    let warnings = latinity::lint(&program);
+    let output = interp::execute(&program)?;
+    Ok((output, warnings))
+}
+
+/// Lex → parse → type-check → interpret, discarding Latinity warnings.
+pub fn run(src: &str) -> LResult<String> {
+    run_with_warnings(src).map(|(output, _)| output)
 }
