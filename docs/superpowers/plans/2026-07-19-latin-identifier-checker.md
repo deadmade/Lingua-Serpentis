@@ -1304,7 +1304,10 @@ use lingua_serpentis::run_with_warnings;
 - [ ] **Step 6: Verify the whole suite and the CLI end to end**
 
 Run: `cargo test`
-Expected: PASS — every test in both crates.
+Expected: PASS — every test in both crates. This only holds because the root
+`Cargo.toml` sets no `default-members`; with `default-members` narrowed to
+`crates/lingua-serpentis`, a bare `cargo test` silently skips the entire
+`latinitas` suite. If that key is ever reintroduced, use `cargo test --workspace`.
 
 Run: `cargo run -- examples/calc.liss`
 Expected: prints `30532` on stdout. Any `Monitum in linea ...` lines appear on stderr; the exit code is still `0`. Confirm the exit code:
@@ -1325,7 +1328,9 @@ git commit -m "feat: report Latin identifier warnings from the pipeline and CLI"
 
 After Task 8, confirm the feature end to end:
 
-- [ ] `cargo test` passes for both crates.
+- [ ] `cargo test` passes for both crates. (Verify it really covers both — compare
+  its test count against `cargo test --workspace`. A `default-members` key in the
+  root `Cargo.toml` would silently narrow the bare form to one crate.)
 - [ ] `cargo run -- examples/calc.liss` prints `30532` and exits `0`.
 - [ ] A program with an English identifier prints a `Monitum in linea N: nomen '...' fortasse non Latinum est` line on **stderr** and still produces correct output on **stdout**.
 - [ ] Redirecting stdout alone (`> out.txt`) captures only program output, never warnings.
