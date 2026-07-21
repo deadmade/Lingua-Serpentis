@@ -1,12 +1,4 @@
-[package]
-name = "lingua-serpentis"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "lingua_serpentis"
-path = "src/lib.rs"
-
-[[bin]]
-name = "lingua-serpentis"
-path = "src/main.rs"
+[workspace]
+resolver = "2"
+members = ["crates/lingua-serpentis"]
+default-members = ["crates/lingua-serpentis"]
