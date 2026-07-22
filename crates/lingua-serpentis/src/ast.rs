@@ -26,10 +26,11 @@ pub struct FuncDecl {
     pub params: Vec<(Type, String)>,
     pub ret: Type,
     pub body: Vec<Stmt>,
-    /// Line where the parameters are written. Usually the same as the enclosing
-    /// `Stmt.line`, but a header split across lines (`munus` on one line, the
-    /// `capit (...)` clause on the next) puts the parameters lower, and anything
-    /// pointing at a parameter must use this instead.
+    /// Line of the header's parameter clause — or, when the function has no
+    /// parameters, the token right after the name. Usually the same as the
+    /// enclosing `Stmt.line`, but a header split across lines (`munus` on one
+    /// line, the `capit (...)` clause on the next) puts it lower, and anything
+    /// pointing at a parameter must use this instead of `Stmt.line`.
     pub def_line: usize,
 }
 

@@ -335,10 +335,10 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let e = self.expr()?;
-                // A call followed by `{` is a function definition whose
-                // signature line is missing — the only way that shape arises.
+                // A call followed by `{` is a function definition missing its
+                // `munus … reddit` header — the only way that shape arises.
                 if matches!(e, Expr::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
-                    return Err(self.err("signatura ante definitionem expectata"));
+                    return Err(self.err("munus ante definitionem expectatum"));
                 }
                 self.eat(&TokenKind::Semicolon)?;
                 Ok(Stmt { kind: StmtKind::ExprStmt(e), line })
@@ -577,8 +577,8 @@ mod tests {
     }
 
     #[test]
-    fn definition_without_signature_gets_real_advice() {
+    fn definition_without_header_gets_real_advice() {
         let m = parse_err("adde(a, b) { redde a + b; }");
-        assert!(m.contains("signatura ante definitionem"), "got: {m}");
+        assert!(m.contains("munus ante definitionem"), "got: {m}");
     }
 }
