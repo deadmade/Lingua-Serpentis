@@ -111,3 +111,26 @@ fn unconstrained_fraction_prints_at_nr_precision() {
     // so it prints at double precision — not the f32 "1.3333334".
     assert_eq!(run("scribe(°I:I/III);").unwrap(), "1.3333333333333333\n");
 }
+
+#[test]
+fn series_example_runs() {
+    let src = include_str!("../../../examples/series.liss");
+    assert_eq!(run(src).unwrap(), "[1, 20, 30, 40]\n91\n");
+}
+
+#[test]
+fn lists_have_value_semantics() {
+    // Passing a list to a function copies it: the caller's list is untouched
+    // even though the callee appends to its own copy.
+    let src = r#"
+        munus auctus capit (ni lista s) reddit ni {
+            s = adde(s, °C);
+            redde longitudo(s);
+        }
+        ni lista xs = [°I, °II];
+        ni n = auctus(xs);
+        scribe(n);
+        scribe(longitudo(xs));
+    "#;
+    assert_eq!(run(src).unwrap(), "3\n2\n");
+}
