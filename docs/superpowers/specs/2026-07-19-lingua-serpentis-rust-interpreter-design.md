@@ -113,8 +113,8 @@ Carried over from the existing Python `LanguageDefinition.py`:
 | Type | Keyword | Rust runtime | Notes |
 |---|---|---|---|
 | int | `ni` | `i64` | Roman-numeral integer literals |
-| float | `mnr` | `f64` | |
-| double | `nr` | `f64` | Distinct keyword, same backing as float in v1 |
+| float | `mnr` | `f32` | |
+| double | `nr` | `f64` | Distinct type since 2026-07-22 (float is `f32`) |
 | string | `voc` | `String` | Literals in `"..."` |
 | char | `lit` | `char` | |
 | bool | `veritas` | `bool` | Holds `verus` / `falsus` |
@@ -330,5 +330,6 @@ The Python project is **reference-only** and is not modified. Concepts ported:
 
 ## 10. Open Questions
 - Final Latin wording for type-error messages (cosmetic; settled during impl).
-- Whether `mnr` (float) and `nr` (double) stay distinct types or collapse to one
-  in v1 (leaning: keep the keywords, back both with `f64`).
+- ~~Whether `mnr` (float) and `nr` (double) stay distinct types or collapse to
+  one in v1.~~ **Resolved 2026-07-22:** distinct types — `mnr` is `f32`, `nr` is
+  `f64`. See `docs/superpowers/specs/2026-07-22-nr-double-distinct-type-design.md`.
