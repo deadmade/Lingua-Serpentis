@@ -100,6 +100,23 @@ impl Checker {
                 let elem = self.check_list_elems(elems, None, line)?;
                 Ok(InferTy::Known(Type::List(Box::new(elem))))
             }
+            Expr::Index { base, index } => {
+                let base_ty = self.resolve_expr(base, None, line)?;
+                let elem = match base_ty {
+                    Type::List(inner) => *inner,
+                    other => return Err(LinguaError {
+                        message: format!("res typi '{}' subscribi non potest (non est series)",
+                            Self::type_name(&other)),
+                        line,
+                    }),
+                };
+                let it = self.resolve_expr(index, Some(Type::Int), line)?;
+                if it != Type::Int {
+                    return Err(LinguaError {
+                        message: "index seriei 'ni' esse debet".into(), line });
+                }
+                Ok(InferTy::Known(elem))
+            }
         }
     }
 
@@ -529,5 +546,18 @@ mod tests {
         // not default to nr.
         assert!(check_src("mnr lista xs = [°I:I/II, °I:I/IV];").is_ok());
         assert!(check_src("nr lista ys = [°I:I/II];").is_ok());
+    }
+
+    #[test]
+    fn indexing_a_list_yields_element_type() {
+        assert!(check_src("ni lista xs = [°I, °II]; ni y = xs[°I];").is_ok());
+    }
+
+    #[test]
+    fn indexing_requires_int_index_and_a_list() {
+        // mnr index rejected
+        assert!(check_src("ni lista xs = [°I]; ni y = xs[°I:I/II];").is_err());
+        // indexing a non-list rejected
+        assert!(check_src("ni n = °V; ni y = n[°I];").is_err());
     }
 }

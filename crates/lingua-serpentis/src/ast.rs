@@ -21,6 +21,7 @@ pub enum Expr {
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
     Call { name: String, args: Vec<Expr> },
     ListLit(Vec<Expr>),
+    Index { base: Box<Expr>, index: Box<Expr> },
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -102,8 +102,18 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some(TokenKind::Not) => { self.advance(); Ok(Expr::Unary { op: UnOp::Not, expr: Box::new(self.unary()?) }) }
             Some(TokenKind::Minus) => { self.advance(); Ok(Expr::Unary { op: UnOp::Neg, expr: Box::new(self.unary()?) }) }
-            _ => self.primary(),
+            _ => self.postfix(),
         }
+    }
+    fn postfix(&mut self) -> LResult<Expr> {
+        let mut e = self.primary()?;
+        while self.peek() == Some(&TokenKind::LBracket) {
+            self.advance(); // [
+            let index = self.expr()?;
+            self.eat(&TokenKind::RBracket)?;
+            e = Expr::Index { base: Box::new(e), index: Box::new(index) };
+        }
+        Ok(e)
     }
     fn primary(&mut self) -> LResult<Expr> {
         match self.peek().cloned() {
@@ -615,5 +625,17 @@ mod tests {
             name: "xs".into(),
             value: Expr::ListLit(vec![Expr::Int(1)]),
         });
+    }
+
+    #[test]
+    fn index_expression_parses() {
+        let e = parse_first_expr("xs[°I];");
+        assert_eq!(e, Expr::Index {
+            base: Box::new(Expr::Ident("xs".into())),
+            index: Box::new(Expr::Int(1)),
+        });
+        // chained indexing (nested lists): xs[°I][°II]
+        let e2 = parse_first_expr("xs[°I][°II];");
+        assert!(matches!(e2, Expr::Index { base, .. } if matches!(*base, Expr::Index { .. })));
     }
 }

@@ -73,6 +73,22 @@ impl Interp {
                 for el in elems { vals.push(self.eval(el, line)?); }
                 Ok(Value::List(vals))
             }
+            Expr::Index { base, index } => {
+                let b = self.eval(base, line)?;
+                let i = self.eval(index, line)?;
+                match (b, i) {
+                    (Value::List(items), Value::Int(idx)) => {
+                        if idx < 1 || (idx as usize) > items.len() {
+                            return Err(LinguaError {
+                                message: format!("index extra fines: {} (longitudo {})", idx, items.len()),
+                                line,
+                            });
+                        }
+                        Ok(items[(idx - 1) as usize].clone())
+                    }
+                    _ => Err(LinguaError { message: "subscriptio invalida".into(), line }),
+                }
+            }
         }
     }
 
@@ -358,5 +374,20 @@ mod tests {
     fn list_literal_prints() {
         assert_eq!(run("scribe([°I, °II, °III]);"), "[1, 2, 3]\n");
         assert_eq!(run("scribe([]);"), "[]\n");
+    }
+
+    #[test]
+    fn index_read_is_one_based() {
+        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°I]);"), "10\n");
+        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°III]);"), "30\n");
+    }
+
+    #[test]
+    fn index_out_of_range_errors() {
+        let bad_hi = "ni lista xs = [°I, °II]; scribe(xs[°III]);";
+        assert!(execute(&parse(&tokenize(bad_hi).unwrap()).unwrap()).is_err());
+        // index 0 (bare `nullus`) is below the 1-based floor
+        let bad_lo = "ni lista xs = [°I, °II]; scribe(xs[nullus]);";
+        assert!(execute(&parse(&tokenize(bad_lo).unwrap()).unwrap()).is_err());
     }
 }
