@@ -13,6 +13,7 @@ pub enum TokenKind {
     TyInt, TyFloat, TyText, TyChar, TyBool,   // ni | (mnr|nr) | voc | lit | veritas
     // keywords
     If, Else, While, For, Func, Return, Break, Continue, Print,
+    Takes, Yields,                             // capit | reddit
     // word operators
     And, Or, Not,                              // et | vel | non
     Eq, Ne, Gt, Lt,                            // par_est | par_non_est | maior_est | minor_est

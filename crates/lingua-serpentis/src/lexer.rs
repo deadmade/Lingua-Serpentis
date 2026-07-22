@@ -101,6 +101,8 @@ fn word_to_kind(word: String) -> TokenKind {
         "abrumpe" => TokenKind::Break,
         "continua" => TokenKind::Continue,
         "scribe" => TokenKind::Print,
+        "capit" => TokenKind::Takes,
+        "reddit" => TokenKind::Yields,
         "ni" => TokenKind::TyInt,
         "mnr" | "nr" => TokenKind::TyFloat, // both float in v1
         "voc" => TokenKind::TyText,
@@ -211,6 +213,14 @@ mod tests {
     fn keyword_prefix_does_not_split_identifier() {
         // "nimis" starts with keyword "ni" but must stay a single identifier
         assert_eq!(kinds("nimis"), vec![TokenKind::Ident("nimis".into())]);
+    }
+
+    #[test]
+    fn header_keywords() {
+        assert_eq!(kinds("capit reddit"), vec![TokenKind::Takes, TokenKind::Yields]);
+        // A longer word that merely starts with a header keyword stays one ident.
+        assert_eq!(kinds("capitulum"), vec![TokenKind::Ident("capitulum".into())]);
+        assert_eq!(kinds("redditus"), vec![TokenKind::Ident("redditus".into())]);
     }
 
     #[test]
