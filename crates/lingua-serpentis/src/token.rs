@@ -19,8 +19,6 @@ pub enum TokenKind {
     Eq, Ne, Gt, Lt,                            // par_est | par_non_est | maior_est | minor_est
     // symbol operators
     Assign, Plus, Minus, Star, Slash, Percent,
-    // signature notation
-    ColonColon, Arrow,                         // :: | ->
     // punctuation
     LParen, RParen, LBrace, RBrace, Semicolon, Comma,
     // identifiers

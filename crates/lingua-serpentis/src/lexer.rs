@@ -22,12 +22,6 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             ';' => { tokens.push(Token { kind: TokenKind::Semicolon, line }); i += 1; }
             ',' => { tokens.push(Token { kind: TokenKind::Comma, line }); i += 1; }
             '+' => { tokens.push(Token { kind: TokenKind::Plus, line }); i += 1; }
-            '-' if chars.get(i + 1) == Some(&'>') => {
-                tokens.push(Token { kind: TokenKind::Arrow, line }); i += 2;
-            }
-            ':' if chars.get(i + 1) == Some(&':') => {
-                tokens.push(Token { kind: TokenKind::ColonColon, line }); i += 2;
-            }
             '-' => { tokens.push(Token { kind: TokenKind::Minus, line }); i += 1; }
             '*' => { tokens.push(Token { kind: TokenKind::Star, line }); i += 1; }
             '/' => { tokens.push(Token { kind: TokenKind::Slash, line }); i += 1; }
@@ -140,14 +134,6 @@ mod tests {
     }
 
     #[test]
-    fn signature_symbols() {
-        assert_eq!(
-            kinds(":: ->"),
-            vec![TokenKind::ColonColon, TokenKind::Arrow]
-        );
-    }
-
-    #[test]
     fn arrow_does_not_swallow_plain_minus() {
         assert_eq!(kinds("- -"), vec![TokenKind::Minus, TokenKind::Minus]);
         assert_eq!(kinds("a-b"), vec![
@@ -160,13 +146,12 @@ mod tests {
         assert!(tokenize(":").is_err());
     }
 
-    // `:` is a Roman-numeral body char (vinculum separator), so a numeral
-    // butted directly against `::` swallows the colons. Unreachable through
-    // valid syntax — `::` only ever follows an identifier — but pinned so the
-    // behaviour is a decision rather than an accident.
     #[test]
-    fn numeral_swallows_adjacent_colons() {
-        assert!(tokenize("°X::ni").is_err());
+    fn retired_signature_symbols_no_longer_tokenize() {
+        // `::` and `->` were the old function-signature notation; both are gone,
+        // so each now fails as an unknown symbol.
+        assert!(tokenize("::").is_err());
+        assert!(tokenize("->").is_err());
     }
 
     #[test]
