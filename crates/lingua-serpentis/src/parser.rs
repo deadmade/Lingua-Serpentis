@@ -137,12 +137,25 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Ident(name))
                 }
             }
+            Some(TokenKind::LBracket) => {
+                self.advance(); // [
+                let mut elems = Vec::new();
+                if self.peek() != Some(&TokenKind::RBracket) {
+                    elems.push(self.expr()?);
+                    while self.peek() == Some(&TokenKind::Comma) {
+                        self.advance();
+                        elems.push(self.expr()?);
+                    }
+                }
+                self.eat(&TokenKind::RBracket)?;
+                Ok(Expr::ListLit(elems))
+            }
             _ => Err(self.err("expressio expectata")),
         }
     }
 
     fn type_keyword(&mut self) -> Option<Type> {
-        let ty = match self.peek()? {
+        let mut ty = match self.peek()? {
             TokenKind::TyInt => Type::Int,
             TokenKind::TyFloat => Type::Float,
             TokenKind::TyDouble => Type::Double,
@@ -152,6 +165,10 @@ impl<'a> Parser<'a> {
             _ => return None,
         };
         self.advance();
+        while self.peek() == Some(&TokenKind::Lista) {
+            self.advance();
+            ty = Type::List(Box::new(ty));
+        }
         Some(ty)
     }
 
@@ -581,5 +598,22 @@ mod tests {
     fn definition_without_header_gets_real_advice() {
         let m = parse_err("adde(a, b) { redde a + b; }");
         assert!(m.contains("munus ante definitionem"), "got: {m}");
+    }
+
+    #[test]
+    fn list_literal_parses() {
+        let e = parse_first_expr("[°I, °II, °III];");
+        assert_eq!(e, Expr::ListLit(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]));
+        assert_eq!(parse_first_expr("[];"), Expr::ListLit(vec![]));
+    }
+
+    #[test]
+    fn list_type_declaration_parses() {
+        let s = parse_all("ni lista xs = [°I];");
+        assert_eq!(s[0].kind, StmtKind::Let {
+            ty: Type::List(Box::new(Type::Int)),
+            name: "xs".into(),
+            value: Expr::ListLit(vec![Expr::Int(1)]),
+        });
     }
 }

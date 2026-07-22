@@ -6,6 +6,7 @@ pub enum Value {
     Text(String),
     Char(char),
     Bool(bool),
+    List(Vec<Value>),
 }
 
 impl Value {
@@ -17,6 +18,10 @@ impl Value {
             Value::Text(s) => s.clone(),
             Value::Char(c) => c.to_string(),
             Value::Bool(b) => (if *b { "verus" } else { "falsus" }).to_string(),
+            Value::List(items) => {
+                let inner: Vec<String> = items.iter().map(|v| v.display()).collect();
+                format!("[{}]", inner.join(", "))
+            }
         }
     }
 }

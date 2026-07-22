@@ -20,6 +20,7 @@ pub enum Expr {
     Unary { op: UnOp, expr: Box<Expr> },
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
     Call { name: String, args: Vec<Expr> },
+    ListLit(Vec<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

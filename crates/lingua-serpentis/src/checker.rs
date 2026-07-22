@@ -96,7 +96,56 @@ impl Checker {
                 }
                 Ok(InferTy::Known(ret))
             }
+            Expr::ListLit(elems) => {
+                let elem = self.check_list_elems(elems, None, line)?;
+                Ok(InferTy::Known(Type::List(Box::new(elem))))
+            }
         }
+    }
+
+    /// Resolve a list literal's elements to a single element type. `expected`
+    /// is the demanded element type: `Some` when the context fixes it (element
+    /// float literals then adapt to it), `None` to infer from the first element
+    /// (floats then default to `nr`). Errors on an empty slice with no expected
+    /// type, or on heterogeneous elements. Returns the ELEMENT type; callers
+    /// wrap it in `Type::List`.
+    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, line: usize) -> LResult<Type> {
+        if elems.is_empty() {
+            return match expected {
+                Some(t) => Ok(t),
+                None => Err(LinguaError {
+                    message: "typus elementorum seriei vacuae ignotus".into(), line }),
+            };
+        }
+        let (first_el, rest) = elems.split_first_mut().unwrap();
+        let first = self.resolve_expr(first_el, expected.clone(), line)?;
+        for el in rest {
+            let want = expected.clone().or_else(|| Some(first.clone()));
+            let t = self.resolve_expr(el, want, line)?;
+            if t != first {
+                return Err(LinguaError {
+                    message: format!("elementa seriei discrepant: '{}' et '{}'",
+                        Self::type_name(&first), Self::type_name(&t)),
+                    line,
+                });
+            }
+        }
+        Ok(first)
+    }
+
+    /// Type a list literal against an optional expected list type (the primary
+    /// path, since it has the expected element type in context).
+    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>, line: usize) -> LResult<Type> {
+        let elem_expected = match &expected {
+            Some(Type::List(inner)) => Some((**inner).clone()),
+            _ => None,
+        };
+        let elems = match e {
+            Expr::ListLit(v) => v,
+            _ => unreachable!("resolve_list called on non-list"),
+        };
+        let elem = self.check_list_elems(elems, elem_expected, line)?;
+        Ok(Type::List(Box::new(elem)))
     }
 
     /// Synthesize `e`'s type, resolving a bare fractional literal to a concrete
@@ -105,6 +154,9 @@ impl Checker {
     /// type; with no float context it defaults to `nr`; demanded as a non-float
     /// type it is an error.
     fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>, line: usize) -> LResult<Type> {
+        if matches!(e, Expr::ListLit(_)) {
+            return self.resolve_list(e, expected, line);
+        }
         match self.check_expr(e, line)? {
             InferTy::Known(t) => Ok(t),
             InferTy::FloatLit => {
@@ -449,5 +501,33 @@ mod tests {
             Checker::type_name(&Type::List(Box::new(Type::List(Box::new(Type::Text))))),
             "voc lista lista"
         );
+    }
+
+    #[test]
+    fn homogeneous_list_literal_checks() {
+        assert!(check_src("ni lista xs = [°I, °II, °III];").is_ok());
+        assert!(check_src("voc lista ns = [\"a\", \"b\"];").is_ok());
+    }
+
+    #[test]
+    fn mixed_element_list_is_rejected() {
+        let err = check_src("ni lista xs = [°I, \"a\"];").unwrap_err();
+        assert!(err.message.contains("discrepant") || err.message.contains("expectat"),
+            "got: {}", err.message);
+    }
+
+    #[test]
+    fn empty_list_needs_a_declared_element_type() {
+        assert!(check_src("ni lista xs = [];").is_ok());          // annotation supplies it
+        let err = check_src("scribe([]);").unwrap_err();          // no expected type
+        assert!(err.message.contains("vacuae"), "got: {}", err.message);
+    }
+
+    #[test]
+    fn list_of_fractions_adopts_declared_precision() {
+        // Element float literals must adapt to the declared element type,
+        // not default to nr.
+        assert!(check_src("mnr lista xs = [°I:I/II, °I:I/IV];").is_ok());
+        assert!(check_src("nr lista ys = [°I:I/II];").is_ok());
     }
 }

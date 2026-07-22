@@ -68,6 +68,11 @@ impl Interp {
                 for a in args { vals.push(self.eval(a, line)?); }
                 self.call(name, vals, line)
             }
+            Expr::ListLit(elems) => {
+                let mut vals = Vec::new();
+                for el in elems { vals.push(self.eval(el, line)?); }
+                Ok(Value::List(vals))
+            }
         }
     }
 
@@ -347,5 +352,11 @@ mod tests {
         let src = "ni x = °MMMCMXCIX; ni y = x * x * x * x * x * x; scribe(y);";
         let program = parse(&tokenize(src).unwrap()).unwrap();
         assert!(execute(&program).is_err());
+    }
+
+    #[test]
+    fn list_literal_prints() {
+        assert_eq!(run("scribe([°I, °II, °III]);"), "[1, 2, 3]\n");
+        assert_eq!(run("scribe([]);"), "[]\n");
     }
 }
