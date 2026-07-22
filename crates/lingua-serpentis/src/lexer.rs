@@ -19,6 +19,8 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             ')' => { tokens.push(Token { kind: TokenKind::RParen, line }); i += 1; }
             '{' => { tokens.push(Token { kind: TokenKind::LBrace, line }); i += 1; }
             '}' => { tokens.push(Token { kind: TokenKind::RBrace, line }); i += 1; }
+            '[' => { tokens.push(Token { kind: TokenKind::LBracket, line }); i += 1; }
+            ']' => { tokens.push(Token { kind: TokenKind::RBracket, line }); i += 1; }
             ';' => { tokens.push(Token { kind: TokenKind::Semicolon, line }); i += 1; }
             ',' => { tokens.push(Token { kind: TokenKind::Comma, line }); i += 1; }
             '+' => { tokens.push(Token { kind: TokenKind::Plus, line }); i += 1; }
@@ -97,6 +99,7 @@ fn word_to_kind(word: String) -> TokenKind {
         "scribe" => TokenKind::Print,
         "capit" => TokenKind::Takes,
         "reddit" => TokenKind::Yields,
+        "lista" => TokenKind::Lista,
         "ni" => TokenKind::TyInt,
         "mnr" => TokenKind::TyFloat,
         "nr" => TokenKind::TyDouble,
@@ -220,5 +223,20 @@ mod tests {
         assert!(tokenize("\"unterminated").is_err()); // chorda non clausa
         assert!(tokenize("''").is_err());             // empty char literal
         assert!(tokenize("'ab'").is_err());           // multi-char char literal
+    }
+
+    #[test]
+    fn brackets_and_lista_keyword() {
+        assert_eq!(
+            kinds("[]"),
+            vec![TokenKind::LBracket, TokenKind::RBracket]
+        );
+        assert_eq!(kinds("lista"), vec![TokenKind::Lista]);
+        // A longer word that merely starts with `lista` stays one identifier.
+        assert_eq!(kinds("listae"), vec![TokenKind::Ident("listae".into())]);
+        assert_eq!(
+            kinds("ni lista"),
+            vec![TokenKind::TyInt, TokenKind::Lista]
+        );
     }
 }

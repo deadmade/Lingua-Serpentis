@@ -14,13 +14,14 @@ pub enum TokenKind {
     // keywords
     If, Else, While, For, Func, Return, Break, Continue, Print,
     Takes, Yields,                             // capit | reddit
+    Lista,                                     // lista  (list type constructor)
     // word operators
     And, Or, Not,                              // et | vel | non
     Eq, Ne, Gt, Lt,                            // par_est | par_non_est | maior_est | minor_est
     // symbol operators
     Assign, Plus, Minus, Star, Slash, Percent,
     // punctuation
-    LParen, RParen, LBrace, RBrace, Semicolon, Comma,
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket, Semicolon, Comma,
     // identifiers
     Ident(String),
 }
