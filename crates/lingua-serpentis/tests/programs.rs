@@ -93,3 +93,10 @@ fn nr_arithmetic_and_comparison_run() {
     assert_eq!(run("nr x = °I:I/IV + °I:I/IV; scribe(x);").unwrap(), "2.5\n");
     assert_eq!(run("scribe(°I:I/II maior_est °I:I/IV);").unwrap(), "verus\n");
 }
+
+#[test]
+fn unconstrained_fraction_prints_at_nr_precision() {
+    // A bare fractional literal in an untyped sink defaults to nr (f64),
+    // so it prints at double precision — not the f32 "1.3333334".
+    assert_eq!(run("scribe(°I:I/III);").unwrap(), "1.3333333333333333\n");
+}

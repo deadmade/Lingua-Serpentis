@@ -275,6 +275,10 @@ mod tests {
     use crate::lexer::tokenize;
     use crate::parser::parse;
 
+    // This helper parses and executes WITHOUT running the type checker,
+    // so unelaborated float literals hit the interpreter's defensive `Expr::FloatLit`
+    // arm rather than being type-refined. For precision assertions, use the full
+    // pipeline via `tests/programs.rs` instead.
     fn run(src: &str) -> String {
         let program = parse(&tokenize(src).unwrap()).unwrap();
         execute(&program).unwrap()
