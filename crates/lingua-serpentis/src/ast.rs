@@ -1,5 +1,5 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Type { Int, Float, Double, Text, Char, Bool }
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type { Int, Float, Double, Text, Char, Bool, List(Box<Type>) }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp { Add, Sub, Mul, Div, Mod, Eq, Ne, Gt, Lt, And, Or }

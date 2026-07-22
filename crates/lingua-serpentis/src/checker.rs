@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// Synthesized type of an expression during checking. `FloatLit` is the
 /// not-yet-resolved type of a fractional literal — and of arithmetic that
 /// combines only such literals; every other expression is `Known`.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 enum InferTy {
     Known(Type),
     FloatLit,
@@ -23,25 +23,26 @@ impl Checker {
     }
 
     fn lookup(&self, name: &str) -> Option<Type> {
-        self.scopes.iter().rev().find_map(|s| s.get(name).copied())
+        self.scopes.iter().rev().find_map(|s| s.get(name).cloned())
     }
     fn declare(&mut self, name: String, ty: Type) {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
-    fn type_name(t: Type) -> &'static str {
+    fn type_name(t: &Type) -> String {
         match t {
-            Type::Int => "ni", Type::Float => "mnr", Type::Double => "nr",
-            Type::Text => "voc", Type::Char => "lit", Type::Bool => "veritas",
+            Type::Int => "ni".into(), Type::Float => "mnr".into(), Type::Double => "nr".into(),
+            Type::Text => "voc".into(), Type::Char => "lit".into(), Type::Bool => "veritas".into(),
+            Type::List(inner) => format!("{} lista", Self::type_name(inner)),
         }
     }
 
     /// Name used for an `InferTy` in error messages; a bare fractional literal
     /// reports as `nr`, its default type.
-    fn infer_name(t: InferTy) -> &'static str {
+    fn infer_name(t: &InferTy) -> String {
         match t {
             InferTy::Known(ty) => Self::type_name(ty),
-            InferTy::FloatLit => "nr",
+            InferTy::FloatLit => "nr".into(),
         }
     }
 
@@ -84,11 +85,11 @@ impl Checker {
                     return Err(LinguaError { message: format!("functio '{}' numerum argumentorum falsum accepit", name), line });
                 }
                 for (want, arg) in params.iter().zip(args.iter_mut()) {
-                    let got = self.resolve_expr(arg, Some(*want), line)?;
+                    let got = self.resolve_expr(arg, Some(want.clone()), line)?;
                     if got != *want {
                         return Err(LinguaError {
                             message: format!("argumentum typum '{}' expectat, sed '{}' datum est",
-                                Self::type_name(*want), Self::type_name(got)),
+                                Self::type_name(want), Self::type_name(&got)),
                             line,
                         });
                     }
@@ -112,12 +113,12 @@ impl Checker {
                     Some(Type::Double) => Type::Double,
                     Some(other) => return Err(LinguaError {
                         message: format!("numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'",
-                            Self::type_name(other)),
+                            Self::type_name(&other)),
                         line,
                     }),
                     None => Type::Double,
                 };
-                resolve_floatlit(e, ty);
+                resolve_floatlit(e, ty.clone());
                 Ok(ty)
             }
         }
@@ -128,11 +129,11 @@ impl Checker {
         use InferTy::*;
         let mismatch = || LinguaError {
             message: format!("operatio typis '{}' et '{}' non convenit",
-                Self::infer_name(lt), Self::infer_name(rt)),
+                Self::infer_name(&lt), Self::infer_name(&rt)),
             line,
         };
         match op {
-            BinOp::Add => match (lt, rt) {
+            BinOp::Add => match (&lt, &rt) {
                 (FloatLit, FloatLit) => Ok(FloatLit),
                 (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Float)) }
                 (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Double)) }
@@ -144,7 +145,7 @@ impl Checker {
                 (Known(Type::Text), Known(Type::Text)) => Ok(Known(Type::Text)),
                 _ => Err(mismatch()),
             },
-            BinOp::Sub | BinOp::Mul | BinOp::Div => match (lt, rt) {
+            BinOp::Sub | BinOp::Mul | BinOp::Div => match (&lt, &rt) {
                 (FloatLit, FloatLit) => Ok(FloatLit),
                 (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Float)) }
                 (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Double)) }
@@ -155,11 +156,11 @@ impl Checker {
                 (Known(Type::Double), Known(Type::Double)) => Ok(Known(Type::Double)),
                 _ => Err(mismatch()),
             },
-            BinOp::Mod => match (lt, rt) {
+            BinOp::Mod => match (&lt, &rt) {
                 (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
                 _ => Err(mismatch()),
             },
-            BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Lt => match (lt, rt) {
+            BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Lt => match (&lt, &rt) {
                 (FloatLit, FloatLit) => {
                     resolve_floatlit(left, Type::Double);
                     resolve_floatlit(right, Type::Double);
@@ -172,7 +173,7 @@ impl Checker {
                 (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
-            BinOp::And | BinOp::Or => match (lt, rt) {
+            BinOp::And | BinOp::Or => match (&lt, &rt) {
                 (Known(Type::Bool), Known(Type::Bool)) => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
@@ -183,25 +184,25 @@ impl Checker {
         let line = s.line;
         match &mut s.kind {
             StmtKind::Let { ty, name, value } => {
-                let vt = self.resolve_expr(value, Some(*ty), line)?;
+                let vt = self.resolve_expr(value, Some(ty.clone()), line)?;
                 if vt != *ty {
                     return Err(LinguaError {
                         message: format!("'{}' typum '{}' expectat, sed '{}' datum est",
-                            name, Self::type_name(*ty), Self::type_name(vt)),
+                            name, Self::type_name(ty), Self::type_name(&vt)),
                         line,
                     });
                 }
-                self.declare(name.clone(), *ty);
+                self.declare(name.clone(), ty.clone());
                 Ok(())
             }
             StmtKind::Assign { name, value } => {
                 let target = self.lookup(name)
                     .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line })?;
-                let vt = self.resolve_expr(value, Some(target), line)?;
+                let vt = self.resolve_expr(value, Some(target.clone()), line)?;
                 if vt != target {
                     return Err(LinguaError {
                         message: format!("'{}' typum '{}' expectat, sed '{}' datum est",
-                            name, Self::type_name(target), Self::type_name(vt)),
+                            name, Self::type_name(&target), Self::type_name(&vt)),
                         line,
                     });
                 }
@@ -234,22 +235,22 @@ impl Checker {
             }
             StmtKind::Func(f) => {
                 self.scopes.push(HashMap::new());
-                for (t, n) in &f.params { self.declare(n.clone(), *t); }
-                let saved = self.current_ret;
-                self.current_ret = Some(f.ret);
+                for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
+                let saved = self.current_ret.clone();
+                self.current_ret = Some(f.ret.clone());
                 let r = self.check_block_inner(&mut f.body);
                 self.current_ret = saved;
                 self.scopes.pop();
                 r
             }
             StmtKind::Return(e) => {
-                let want = self.current_ret
+                let want = self.current_ret.clone()
                     .ok_or_else(|| LinguaError { message: "'redde' extra functionem".into(), line })?;
-                let got = self.resolve_expr(e, Some(want), line)?;
+                let got = self.resolve_expr(e, Some(want.clone()), line)?;
                 if got != want {
                     return Err(LinguaError {
                         message: format!("reditus typum '{}' expectat, sed '{}' datum est",
-                            Self::type_name(want), Self::type_name(got)),
+                            Self::type_name(&want), Self::type_name(&got)),
                         line,
                     });
                 }
@@ -315,7 +316,7 @@ fn resolve_floatlit(e: &mut Expr, ty: Type) {
         }
         Expr::Unary { expr, .. } => resolve_floatlit(expr, ty),
         Expr::Binary { left, right, .. } => {
-            resolve_floatlit(left, ty);
+            resolve_floatlit(left, ty.clone());
             resolve_floatlit(right, ty);
         }
         _ => {}
@@ -326,8 +327,8 @@ pub fn check(program: &mut [Stmt]) -> LResult<()> {
     let mut c = Checker::new();
     for s in program.iter() {
         if let StmtKind::Func(f) = &s.kind {
-            let ptypes = f.params.iter().map(|(t, _)| *t).collect();
-            c.funcs.insert(f.name.clone(), (ptypes, f.ret));
+            let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
+            c.funcs.insert(f.name.clone(), (ptypes, f.ret.clone()));
         }
     }
     for s in program.iter_mut() {
@@ -439,5 +440,14 @@ mod tests {
     fn function_accepts_fraction_argument_as_mnr() {
         // The literal argument adapts to the declared mnr parameter type.
         assert!(check_src("munus f capit (mnr a) reddit mnr { redde a; } scribe(f(°I:I/II));").is_ok());
+    }
+
+    #[test]
+    fn list_type_names_render_recursively() {
+        assert_eq!(Checker::type_name(&Type::List(Box::new(Type::Int))), "ni lista");
+        assert_eq!(
+            Checker::type_name(&Type::List(Box::new(Type::List(Box::new(Type::Text))))),
+            "voc lista lista"
+        );
     }
 }
