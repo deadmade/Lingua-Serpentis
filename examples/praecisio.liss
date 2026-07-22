@@ -8,11 +8,11 @@ scribe(brevis);          // 1.3333334
 scribe(longa);           // 1.3333333333333333
 
 // Munus quod nr accipit et reddit; litterae fractae typum contextus assumunt,
-// ergo °I:I/IV hic fit nr (non mnr).
-munus adde capit (nr x, nr y) reddit nr {
+// ergo °I:I/IV hic fit nr (non mnr). (Prius 'adde' — nunc reservatum seriebus.)
+munus iunge capit (nr x, nr y) reddit nr {
     redde x + y;
 }
-nr summa = adde(°I:I/IV, °I:I/IV);   // 1.25 + 1.25
+nr summa = iunge(°I:I/IV, °I:I/IV);   // 1.25 + 1.25
 scribe(summa);                          // 2.5
 
 // Litterae fractae sine typo declarato ad nr recidunt.
