@@ -66,6 +66,23 @@ impl Interp {
             Expr::Call { name, args } => {
                 let mut vals = Vec::new();
                 for a in args { vals.push(self.eval(a, line)?); }
+                if name.as_str() == "longitudo" {
+                    return match vals.into_iter().next() {
+                        Some(Value::List(items)) => Ok(Value::Int(items.len() as i64)),
+                        _ => Err(LinguaError { message: "'longitudo' seriem expectat".into(), line }),
+                    };
+                }
+                if name.as_str() == "adde" {
+                    let mut it = vals.into_iter();
+                    let (list, elem) = (it.next(), it.next());
+                    return match (list, elem) {
+                        (Some(Value::List(mut items)), Some(v)) => {
+                            items.push(v);
+                            Ok(Value::List(items))
+                        }
+                        _ => Err(LinguaError { message: "'adde' seriem et elementum expectat".into(), line }),
+                    };
+                }
                 self.call(name, vals, line)
             }
             Expr::ListLit(elems) => {
@@ -367,7 +384,7 @@ mod tests {
 
     #[test]
     fn function_call_returns() {
-        let src = "munus adde capit (ni a, ni b) reddit ni { redde a + b; } scribe(adde(°IV, °VI));";
+        let src = "munus iunge capit (ni a, ni b) reddit ni { redde a + b; } scribe(iunge(°IV, °VI));";
         assert_eq!(run(src), "10\n");
     }
 
@@ -429,5 +446,11 @@ mod tests {
     fn index_write_out_of_range_errors() {
         let src = "ni lista xs = [°I]; xs[°II] = °X; scribe(xs);";
         assert!(execute(&parse(&tokenize(src).unwrap()).unwrap()).is_err());
+    }
+
+    #[test]
+    fn longitudo_and_adde_run() {
+        assert_eq!(run("ni lista xs = [°I, °II, °III]; scribe(longitudo(xs));"), "3\n");
+        assert_eq!(run("ni lista xs = [°I]; xs = adde(xs, °II); scribe(xs);"), "[1, 2]\n");
     }
 }

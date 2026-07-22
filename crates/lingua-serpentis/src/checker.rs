@@ -78,6 +78,50 @@ impl Checker {
                 self.check_binary(*op, lt, rt, left, right, line)
             }
             Expr::Call { name, args } => {
+                if name.as_str() == "longitudo" {
+                    if args.len() != 1 {
+                        return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });
+                    }
+                    let t = self.resolve_expr(&mut args[0], None, line)?;
+                    return match t {
+                        Type::List(_) => Ok(InferTy::Known(Type::Int)),
+                        other => Err(LinguaError {
+                            message: format!("'longitudo' seriem expectat, non '{}'", Self::type_name(&other)),
+                            line,
+                        }),
+                    };
+                }
+                if name.as_str() == "adde" {
+                    if args.len() != 2 {
+                        return Err(LinguaError { message: "'adde' duo argumenta accipit".into(), line });
+                    }
+                    // If the list argument is a bare empty literal, the element
+                    // type comes from the value argument; otherwise the list
+                    // argument fixes it and the value must match.
+                    let empty_list_arg = matches!(&args[0], Expr::ListLit(v) if v.is_empty());
+                    if empty_list_arg {
+                        let vt = self.resolve_expr(&mut args[1], None, line)?;
+                        self.resolve_expr(&mut args[0], Some(Type::List(Box::new(vt.clone()))), line)?;
+                        return Ok(InferTy::Known(Type::List(Box::new(vt))));
+                    }
+                    let lt = self.resolve_expr(&mut args[0], None, line)?;
+                    let elem = match lt {
+                        Type::List(inner) => *inner,
+                        other => return Err(LinguaError {
+                            message: format!("'adde' seriem expectat, non '{}'", Self::type_name(&other)),
+                            line,
+                        }),
+                    };
+                    let vt = self.resolve_expr(&mut args[1], Some(elem.clone()), line)?;
+                    if vt != elem {
+                        return Err(LinguaError {
+                            message: format!("'adde': series '{}' elementum '{}' non accipit",
+                                Self::type_name(&elem), Self::type_name(&vt)),
+                            line,
+                        });
+                    }
+                    return Ok(InferTy::Known(Type::List(Box::new(elem))));
+                }
                 let (params, ret) = self.funcs.get(name)
                     .cloned()
                     .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
@@ -420,6 +464,12 @@ pub fn check(program: &mut [Stmt]) -> LResult<()> {
     let mut c = Checker::new();
     for s in program.iter() {
         if let StmtKind::Func(f) = &s.kind {
+            if f.name == "longitudo" || f.name == "adde" {
+                return Err(LinguaError {
+                    message: format!("nomen '{}' reservatum est", f.name),
+                    line: s.line,
+                });
+            }
             let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
             c.funcs.insert(f.name.clone(), (ptypes, f.ret.clone()));
         }
@@ -476,7 +526,7 @@ mod tests {
 
     #[test]
     fn function_return_type_checked() {
-        assert!(check_src("munus adde capit (ni a, ni b) reddit ni { redde a + b; } scribe(adde(°I, °II));").is_ok());
+        assert!(check_src("munus iunge capit (ni a, ni b) reddit ni { redde a + b; } scribe(iunge(°I, °II));").is_ok());
     }
 
     #[test]
@@ -594,5 +644,25 @@ mod tests {
         assert!(check_src("ni n = °V; n[°I] = °X;").is_err());
         // non-int index
         assert!(check_src("ni lista xs = [°I]; xs[°I:I/II] = °X;").is_err());
+    }
+
+    #[test]
+    fn longitudo_returns_int() {
+        assert!(check_src("ni lista xs = [°I, °II]; ni n = longitudo(xs);").is_ok());
+        assert!(check_src("ni n = longitudo(°V);").is_err()); // not a list
+    }
+
+    #[test]
+    fn adde_appends_same_element_type() {
+        assert!(check_src("ni lista xs = [°I]; xs = adde(xs, °II);").is_ok());
+        assert!(check_src("ni lista xs = [°I]; xs = adde(xs, \"a\");").is_err()); // wrong elem
+        // empty-literal list argument takes its element type from the value arg
+        assert!(check_src("ni lista xs = adde([], °I);").is_ok());
+    }
+
+    #[test]
+    fn reserved_builtin_names_cannot_be_user_functions() {
+        assert!(check_src("munus adde capit (ni a) reddit ni { redde a; }").is_err());
+        assert!(check_src("munus longitudo reddit ni { redde °I; }").is_err());
     }
 }
