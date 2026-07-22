@@ -14,10 +14,10 @@
 - **Build/test command (this machine).** `cargo` is not on `PATH` and MSVC `link.exe` needs importing first. Run every `cargo` command through this wrapper (from the repo root):
 
 ```powershell
-cmd /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && set PATH=%USERPROFILE%\.cargo\bin;%PATH% && cargo test -p lingua-serpentis'
+cmd /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && "%USERPROFILE%\.cargo\bin\cargo.exe" test -p lingua-serpentis'
 ```
 
-  Task steps below write the bare `cargo test -p lingua-serpentis <filter>`; wrap it as above when actually running. A bare `cargo test` also covers both crates (`default-members` was removed).
+  Invoke `cargo.exe` by absolute path and let `vcvars64.bat` supply the linker PATH. Do **not** chain `set PATH=%USERPROFILE%\.cargo\bin;%PATH%` after vcvars — cmd expands `%PATH%` once, against the *pre-vcvars* environment, which wipes the freshly-added linker path (`link.exe not found`). Append `<filter>` for a focused run; a bare `cargo test` covers both crates (`default-members` was removed).
 - **Manifest hygiene.** Something in this environment rewrites `edition = "2021"` → `"2024"` and `resolver = "2"` → `"3"` in the three `Cargo.toml` files as an *uncommitted* change. Before every `git add`, stage only the files the task names — never `git add -A`. Check `git status` and leave the manifests unstaged.
 - **Latin error messages.** No new user-facing error strings are expected (§5 of the spec). If one becomes necessary, validate each content word with `latinitas::is_latin` before committing.
 - **Branch.** Work stays on `rust-rewrite` (unmerged, per project convention). Commit there; do not merge to `master`.
