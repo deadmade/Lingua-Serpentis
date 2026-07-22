@@ -67,3 +67,29 @@ fn mnr_is_single_precision() {
     // This pins that `mnr` really rounds at f32 precision.
     assert_eq!(run("mnr x = °I:I/III; scribe(x);").unwrap(), "1.3333334\n");
 }
+
+#[test]
+fn nr_is_double_precision() {
+    assert_eq!(run("nr y = °I:I/III; scribe(y);").unwrap(), "1.3333333333333333\n");
+}
+
+#[test]
+fn representable_fraction_prints_same_under_both() {
+    // 5.5 is exact in both, so the two types agree here — guards against a test
+    // that leans on divergence for a value that does not actually diverge.
+    assert_eq!(run("mnr x = °V:I/II; scribe(x);").unwrap(), "5.5\n");
+    assert_eq!(run("nr y = °V:I/II; scribe(y);").unwrap(), "5.5\n");
+}
+
+#[test]
+fn mixing_float_types_is_a_type_error() {
+    assert!(run("mnr a = °I:I/II; nr b = °I:I/IV; scribe(a + b);").is_err());
+}
+
+#[test]
+fn nr_arithmetic_and_comparison_run() {
+    // Exercises the interpreter's Double arms end-to-end: 1.25 + 1.25 = 2.5,
+    // and 1.5 > 1.25. Without these the eval_binary/cmp Double arms are untested.
+    assert_eq!(run("nr x = °I:I/IV + °I:I/IV; scribe(x);").unwrap(), "2.5\n");
+    assert_eq!(run("scribe(°I:I/II maior_est °I:I/IV);").unwrap(), "verus\n");
+}

@@ -17,8 +17,8 @@ pub use error::Warning;
 /// Linting never fails and never affects whether the program runs.
 pub fn run_with_warnings(src: &str) -> LResult<(String, Vec<Warning>)> {
     let tokens = lexer::tokenize(src)?;
-    let program = parser::parse(&tokens)?;
-    checker::check(&program)?;
+    let mut program = parser::parse(&tokens)?;
+    checker::check(&mut program)?;
     let warnings = latinity::lint(&program);
     let output = interp::execute(&program)?;
     Ok((output, warnings))

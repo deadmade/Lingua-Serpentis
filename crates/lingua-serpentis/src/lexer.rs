@@ -98,7 +98,8 @@ fn word_to_kind(word: String) -> TokenKind {
         "capit" => TokenKind::Takes,
         "reddit" => TokenKind::Yields,
         "ni" => TokenKind::TyInt,
-        "mnr" | "nr" => TokenKind::TyFloat, // both float in v1
+        "mnr" => TokenKind::TyFloat,
+        "nr" => TokenKind::TyDouble,
         "voc" => TokenKind::TyText,
         "lit" => TokenKind::TyChar,
         "veritas" => TokenKind::TyBool,
@@ -181,6 +182,12 @@ mod tests {
     fn strings_and_chars() {
         assert_eq!(kinds("\"salve\""), vec![TokenKind::Text("salve".into())]);
         assert_eq!(kinds("'x'"), vec![TokenKind::Char('x')]);
+    }
+
+    #[test]
+    fn mnr_and_nr_are_distinct_type_keywords() {
+        assert_eq!(kinds("mnr"), vec![TokenKind::TyFloat]);
+        assert_eq!(kinds("nr"), vec![TokenKind::TyDouble]);
     }
 
     #[test]

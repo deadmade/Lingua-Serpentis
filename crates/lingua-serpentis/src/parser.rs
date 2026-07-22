@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> LResult<Expr> {
         match self.peek().cloned() {
             Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
-            Some(TokenKind::Float(f)) => { self.advance(); Ok(Expr::Float(f)) }
+            Some(TokenKind::Float(f)) => { self.advance(); Ok(Expr::FloatLit(f)) }
             Some(TokenKind::Text(s)) => { self.advance(); Ok(Expr::Text(s)) }
             Some(TokenKind::Char(c)) => { self.advance(); Ok(Expr::Char(c)) }
             Some(TokenKind::True) => { self.advance(); Ok(Expr::Bool(true)) }
@@ -145,6 +145,7 @@ impl<'a> Parser<'a> {
         let ty = match self.peek()? {
             TokenKind::TyInt => Type::Int,
             TokenKind::TyFloat => Type::Float,
+            TokenKind::TyDouble => Type::Double,
             TokenKind::TyText => Type::Text,
             TokenKind::TyChar => Type::Char,
             TokenKind::TyBool => Type::Bool,
@@ -234,8 +235,8 @@ impl<'a> Parser<'a> {
         // name belongs. Caught here so it gets real advice, not `nomen expectatum`.
         if matches!(
             self.peek(),
-            Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyText
-                 | TokenKind::TyChar | TokenKind::TyBool)
+            Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyDouble
+                 | TokenKind::TyText | TokenKind::TyChar | TokenKind::TyBool)
         ) {
             return Err(self.err("typus reditus post 'reddit' ponendus, non ante nomen"));
         }

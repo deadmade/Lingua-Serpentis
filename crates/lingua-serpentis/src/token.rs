@@ -10,7 +10,7 @@ pub enum TokenKind {
     True,
     False,
     // type keywords
-    TyInt, TyFloat, TyText, TyChar, TyBool,   // ni | (mnr|nr) | voc | lit | veritas
+    TyInt, TyFloat, TyDouble, TyText, TyChar, TyBool,   // ni | mnr | nr | voc | lit | veritas
     // keywords
     If, Else, While, For, Func, Return, Break, Continue, Print,
     Takes, Yields,                             // capit | reddit

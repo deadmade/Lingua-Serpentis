@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Type { Int, Float, Text, Char, Bool }
+pub enum Type { Int, Float, Double, Text, Char, Bool }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp { Add, Sub, Mul, Div, Mod, Eq, Ne, Gt, Lt, And, Or }
@@ -10,7 +10,9 @@ pub enum UnOp { Not, Neg }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Int(i64),
-    Float(f64),
+    FloatLit(f64), // abstract fractional literal, pre-elaboration
+    Float(f32),    // resolved mnr
+    Double(f64),   // resolved nr
     Text(String),
     Char(char),
     Bool(bool),

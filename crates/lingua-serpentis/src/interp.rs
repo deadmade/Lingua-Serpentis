@@ -40,7 +40,9 @@ impl Interp {
     fn eval(&mut self, e: &Expr, line: usize) -> LResult<Value> {
         match e {
             Expr::Int(i) => Ok(Value::Int(*i)),
-            Expr::Float(f) => Ok(Value::Float(*f as f32)),
+            Expr::FloatLit(f) => Ok(Value::Double(*f)), // defensive: an unelaborated literal defaults to nr
+            Expr::Float(f) => Ok(Value::Float(*f)),
+            Expr::Double(f) => Ok(Value::Double(*f)),
             Expr::Text(s) => Ok(Value::Text(s.clone())),
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
@@ -52,6 +54,7 @@ impl Interp {
                     (UnOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
                     (UnOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
                     (UnOp::Neg, Value::Float(f)) => Ok(Value::Float(-f)),
+                    (UnOp::Neg, Value::Double(f)) => Ok(Value::Double(-f)),
                     _ => Err(LinguaError { message: "operatio unaria invalida".into(), line }),
                 }
             }
@@ -191,23 +194,27 @@ fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
         BinOp::Add => match (l, r) {
             (Int(a), Int(b)) => a.checked_add(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a + b)),
+            (Double(a), Double(b)) => Ok(Double(a + b)),
             (Text(a), Text(b)) => Ok(Text(a + &b)),
             _ => Err(bad()),
         },
         BinOp::Sub => match (l, r) {
             (Int(a), Int(b)) => a.checked_sub(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a - b)),
+            (Double(a), Double(b)) => Ok(Double(a - b)),
             _ => Err(bad()),
         },
         BinOp::Mul => match (l, r) {
             (Int(a), Int(b)) => a.checked_mul(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a * b)),
+            (Double(a), Double(b)) => Ok(Double(a * b)),
             _ => Err(bad()),
         },
         BinOp::Div => match (l, r) {
             (Int(_), Int(0)) => Err(LinguaError { message: "divisio per nullum".into(), line }),
             (Int(a), Int(b)) => a.checked_div(b).map(Int).ok_or_else(overflow),
             (Float(a), Float(b)) => Ok(Float(a / b)),
+            (Double(a), Double(b)) => Ok(Double(a / b)),
             _ => Err(bad()),
         },
         BinOp::Mod => match (l, r) {
@@ -235,6 +242,8 @@ fn cmp(l: Value, r: Value, line: usize, keep: impl Fn(std::cmp::Ordering) -> boo
     let ord = match (l, r) {
         (Int(a), Int(b)) => a.cmp(&b),
         (Float(a), Float(b)) => a.partial_cmp(&b)
+            .ok_or_else(|| LinguaError { message: "comparatio NaN".into(), line })?,
+        (Double(a), Double(b)) => a.partial_cmp(&b)
             .ok_or_else(|| LinguaError { message: "comparatio NaN".into(), line })?,
         (Text(a), Text(b)) => a.cmp(&b),
         (Char(a), Char(b)) => a.cmp(&b),
