@@ -23,6 +23,17 @@ fn calc_example_still_runs() {
 }
 
 #[test]
+fn praecisio_example_runs() {
+    // Keeps the mnr/nr precision example honest: mnr rounds at f32, nr at f64,
+    // and an unconstrained fractional literal defaults to nr.
+    let src = include_str!("../../../examples/praecisio.liss");
+    assert_eq!(
+        run(src).unwrap(),
+        "1.3333334\n1.3333333333333333\n2.5\n1.3333333333333333\n"
+    );
+}
+
+#[test]
 fn type_error_reports_latin_and_line() {
     let src = "ni x = \"salve\";";
     let err = run(src).unwrap_err();

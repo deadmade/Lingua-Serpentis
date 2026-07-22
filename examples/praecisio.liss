@@ -1,0 +1,19 @@
+// Typi fluitantes distincti: mnr (float, f32) et nr (double, f64).
+// Eadem fractio Romana, praecisio tamen diversa.
+
+// °I:I/III est unus plus tertia pars (1 + 1/3).
+mnr brevis = °I:I/III;   // praecisio singula
+nr longa = °I:I/III;     // praecisio duplex
+scribe(brevis);          // 1.3333334
+scribe(longa);           // 1.3333333333333333
+
+// Munus quod nr accipit et reddit; litterae fractae typum contextus assumunt,
+// ergo °I:I/IV hic fit nr (non mnr).
+munus adde capit (nr x, nr y) reddit nr {
+    redde x + y;
+}
+nr summa = adde(°I:I/IV, °I:I/IV);   // 1.25 + 1.25
+scribe(summa);                          // 2.5
+
+// Litterae fractae sine typo declarato ad nr recidunt.
+scribe(°I:I/III);                       // 1.3333333333333333
