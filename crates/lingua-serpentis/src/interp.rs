@@ -453,4 +453,22 @@ mod tests {
         assert_eq!(run("ni lista xs = [°I, °II, °III]; scribe(longitudo(xs));"), "3\n");
         assert_eq!(run("ni lista xs = [°I]; xs = adde(xs, °II); scribe(xs);"), "[1, 2]\n");
     }
+
+    #[test]
+    fn list_equality_runs() {
+        assert_eq!(run("scribe([°I, °II] par_est [°I, °II]);"), "verus\n");
+        assert_eq!(run("scribe([°I] par_est [°II]);"), "falsus\n");
+    }
+
+    #[test]
+    fn nested_list_read() {
+        assert_eq!(
+            run("ni lista lista m = [[°I, °II], [°III]]; scribe(m[°I][°II]);"),
+            "2\n"
+        );
+        assert_eq!(
+            run("ni lista lista m = [[°I, °II], [°III]]; scribe(m[°II][°I]);"),
+            "3\n"
+        );
+    }
 }

@@ -273,7 +273,7 @@ impl Checker {
                 (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
                 _ => Err(mismatch()),
             },
-            BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Lt => match (&lt, &rt) {
+            BinOp::Eq | BinOp::Ne => match (&lt, &rt) {
                 (FloatLit, FloatLit) => {
                     resolve_floatlit(left, Type::Double);
                     resolve_floatlit(right, Type::Double);
@@ -283,6 +283,23 @@ impl Checker {
                 (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Bool)) }
                 (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Bool)) }
                 (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Bool)) }
+                (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
+                _ => Err(mismatch()),
+            },
+            BinOp::Gt | BinOp::Lt => match (&lt, &rt) {
+                (FloatLit, FloatLit) => {
+                    resolve_floatlit(left, Type::Double);
+                    resolve_floatlit(right, Type::Double);
+                    Ok(Known(Type::Bool))
+                }
+                (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Bool)) }
+                (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Bool)) }
+                (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Bool)) }
+                (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Bool)) }
+                (Known(Type::List(_)), Known(Type::List(_))) => Err(LinguaError {
+                    message: "series ordine comparari non potest (par_est/par_non_est tantum)".into(),
+                    line,
+                }),
                 (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
@@ -664,5 +681,21 @@ mod tests {
     fn reserved_builtin_names_cannot_be_user_functions() {
         assert!(check_src("munus adde capit (ni a) reddit ni { redde a; }").is_err());
         assert!(check_src("munus longitudo reddit ni { redde °I; }").is_err());
+    }
+
+    #[test]
+    fn list_ordering_is_a_type_error() {
+        let gt = check_src("ni lista xs = [°I]; ni lista ys = [°II]; scribe(xs maior_est ys);");
+        assert!(gt.is_err());
+        assert!(gt.unwrap_err().message.contains("ordine"));
+        let lt = check_src("ni lista xs = [°I]; ni lista ys = [°II]; scribe(xs minor_est ys);");
+        assert!(lt.is_err());
+        assert!(lt.unwrap_err().message.contains("ordine"));
+    }
+
+    #[test]
+    fn list_equality_is_allowed() {
+        assert!(check_src("scribe([°I] par_est [°I]);").is_ok());
+        assert!(check_src("scribe([°I] par_non_est [°I]);").is_ok());
     }
 }
