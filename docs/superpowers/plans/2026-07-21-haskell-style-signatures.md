@@ -1,5 +1,8 @@
 # Separate Function Signatures Implementation Plan
 
+> **Superseded by** `2026-07-22-capit-reddit-function-headers.md`. Kept as a
+> historical record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace Lingua Serpentis's C-style inline function types with a standalone ML/Haskell-style signature line (`munus summare :: ni -> ni -> ni`).

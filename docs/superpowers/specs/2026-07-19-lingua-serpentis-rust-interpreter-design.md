@@ -172,8 +172,7 @@ error.
 ### 5.6 Functions
 
 ```
-munus summare :: ni -> ni -> ni
-summare(a, b) {
+munus summare capit (ni a, ni b) reddit ni {
     ni c = a + b;
     redde c;
 }
@@ -195,8 +194,7 @@ the runtime `Value`, so no manual `printf` format specifiers).
 ### 5.9 Example program
 
 ```
-munus summare :: ni -> ni -> ni
-summare(a, b) {
+munus summare capit (ni a, ni b) reddit ni {
     ni c = a + b;
     redde c;
 }

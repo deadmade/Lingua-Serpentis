@@ -1,5 +1,9 @@
 # Lingua Serpentis — Separate Function Signatures Design
 
+> **Superseded by** `2026-07-22-capit-reddit-function-headers-design.md`. The `::`
+> / `->` signature described here was replaced by the `capit` / `reddit` header
+> before it reached production. Kept as a historical record.
+
 - **Date:** 2026-07-21
 - **Status:** Approved (design) — pending implementation plan
 - **Author:** Manuel (with Claude)
