@@ -214,7 +214,7 @@ Checked at parse time, phrased in the terse Latin the parser already uses.
 | Condition | Message (draft) |
 |---|---|
 | `munus` then a type keyword (old C-form / return-type-first) | `typus reditus post 'reddit' ponendus, non ante nomen` |
-| Name then `(` (parameters without `capit`) | `'capit' ante parametros expectatum` |
+| Name then `(` (parameters without `capit`) | `'capit' ante parametra expectatum` |
 | `capit ()` with empty parentheses | `munus sine parametris 'capit' omittat` |
 | `reddit` (and return type) missing before `{` | `'reddit' et typus reditus expectati` |
 | No type after `reddit` | `typus post 'reddit' expectatus` |
