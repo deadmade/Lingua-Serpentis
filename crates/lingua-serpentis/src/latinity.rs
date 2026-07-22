@@ -36,9 +36,9 @@ fn lint_stmt(s: &Stmt, out: &mut Vec<Warning>) {
         StmtKind::Func(f) => {
             check_name(&f.name, s.line, out);
             for (_, param) in &f.params {
-                // A declaration spans a `::` signature line and a definition
-                // line. `s.line` is the signature line, but parameters are
-                // named on the definition line, so report them there.
+                // Parameters are written in the `capit (...)` clause, which for a
+                // header split across lines sits below the `munus`/name line;
+                // report them at `def_line`, not the enclosing `Stmt.line`.
                 check_name(param, f.def_line, out);
             }
             lint_block(&f.body, out);
@@ -100,7 +100,7 @@ mod tests {
         // English here: `compute` and `value` would be poor choices, because
         // `computare` and `valere` are real Latin verbs whose stems are in the
         // dictionary.
-        let w = lint_src("munus foobar :: ni -> ni foobar(widget) { redde widget; }");
+        let w = lint_src("munus foobar capit (ni widget) reddit ni { redde widget; }");
         let names: Vec<&str> = w.iter().map(|x| x.message.as_str()).collect();
         assert_eq!(w.len(), 2, "expected function + param warnings, got {names:?}");
         assert!(names.iter().any(|m| m.contains("foobar")));
@@ -109,13 +109,13 @@ mod tests {
 
     #[test]
     fn parameters_are_reported_on_the_definition_line() {
-        // A real multi-line declaration: the `::` signature is line 1 and the
-        // definition header — where the parameter is actually written — is
+        // The header may be split across lines: `munus foobar` on line 1 and the
+        // `capit (...)` clause — where the parameter is actually written — on
         // line 2. Reporting the parameter at the enclosing `Stmt.line` would
-        // blame line 1. Every other lint test collapses the declaration onto a
-        // single line, where the two coincide and the bug is invisible.
-        let src = "munus foobar :: ni -> ni\n\
-                   foobar(widget) {\n\
+        // blame line 1. Every other lint test keeps the header on one line,
+        // where the two coincide and the bug would be invisible.
+        let src = "munus foobar\n\
+                   capit (ni widget) reddit ni {\n\
                    ni result = widget;\n\
                    redde result;\n\
                    }";
@@ -123,11 +123,11 @@ mod tests {
 
         let param = w.iter().find(|x| x.message.contains("widget"))
             .expect("expected a warning for the parameter 'widget'");
-        assert_eq!(param.line, 2, "parameter must be reported on the definition line");
+        assert_eq!(param.line, 2, "parameter must be reported on the line it is written");
 
-        // The function name itself still belongs to the signature line, and
-        // the body declaration to its own line — so this really is pinning the
-        // parameter, not a blanket line shift.
+        // The function name still belongs to the `munus` line, and the body
+        // declaration to its own line — so this really is pinning the parameter,
+        // not a blanket line shift.
         let name = w.iter().find(|x| x.message.contains("foobar"))
             .expect("expected a warning for the function name 'foobar'");
         assert_eq!(name.line, 1);
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn reaches_declarations_inside_function_bodies() {
-        let w = lint_src("munus summa :: ni summa() { ni result = °V; redde result; }");
+        let w = lint_src("munus summa reddit ni { ni result = °V; redde result; }");
         assert!(w.iter().any(|x| x.message.contains("result")));
     }
 

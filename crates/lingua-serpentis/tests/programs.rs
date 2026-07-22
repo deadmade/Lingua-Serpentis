@@ -5,8 +5,7 @@ use lingua_serpentis::run_with_warnings;
 #[test]
 fn full_program_with_function_and_if() {
     let src = r#"
-        munus summare :: ni -> ni -> ni
-        summare(a, b) {
+        munus summare capit (ni a, ni b) reddit ni {
             ni c = a + b;
             redde c;
         }

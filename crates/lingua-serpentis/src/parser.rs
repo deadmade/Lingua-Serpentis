@@ -237,56 +237,46 @@ impl<'a> Parser<'a> {
             Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyText
                  | TokenKind::TyChar | TokenKind::TyBool)
         ) {
-            return Err(self.err("typus in signatura declarandus, non in definitione"));
+            return Err(self.err("typus reditus post 'reddit' ponendus, non ante nomen"));
         }
 
-        let sig_name = self.ident()?;
-        self.eat(&TokenKind::ColonColon)?;
+        let name = self.ident()?;
 
-        // At least one type; the last is the return type, the rest are parameters.
-        let mut types = vec![
-            self.type_keyword().ok_or_else(|| self.err("typus post '::' expectatus"))?
-        ];
-        while self.peek() == Some(&TokenKind::Arrow) {
-            self.advance();
-            types.push(
-                self.type_keyword().ok_or_else(|| self.err("typus post '->' expectatus"))?
-            );
-        }
-        let ret = types.pop().expect("vec built with at least one element above");
-
-        // The definition header may sit on a later line than the signature;
-        // parameters live here, so record it for anything that reports on them.
+        // `capit (...)` introduces a non-empty parameter clause; its absence
+        // means the function takes nothing. `def_line` marks where the
+        // parameters are written, which for a header split across lines differs
+        // from the `munus` line.
         let def_line = self.line();
-        let def_name = self.ident()?;
-        if def_name != sig_name {
-            return Err(self.err(&format!(
-                "nomen definitionis '{}' non congruit cum signatura '{}'",
-                def_name, sig_name
-            )));
-        }
-
-        self.eat(&TokenKind::LParen)?;
-        let mut names = Vec::new();
-        if self.peek() != Some(&TokenKind::RParen) {
+        let mut params: Vec<(Type, String)> = Vec::new();
+        if self.peek() == Some(&TokenKind::Takes) {
+            self.advance(); // capit
+            self.eat(&TokenKind::LParen)?;
+            if self.peek() == Some(&TokenKind::RParen) {
+                return Err(self.err("munus sine parametris 'capit' omittat"));
+            }
             loop {
-                names.push(self.ident()?);
+                let ty = self.type_keyword()
+                    .ok_or_else(|| self.err("typus parametri expectatus"))?;
+                let pname = self.ident()?;
+                params.push((ty, pname));
                 if self.peek() == Some(&TokenKind::Comma) { self.advance(); } else { break; }
             }
-        }
-        self.eat(&TokenKind::RParen)?;
-
-        if names.len() != types.len() {
-            return Err(self.err(&format!(
-                "signatura {} parametra promittit, definitio {} habet",
-                types.len(), names.len()
-            )));
+            self.eat(&TokenKind::RParen)?;
+        } else if self.peek() == Some(&TokenKind::LParen) {
+            return Err(self.err("'capit' ante parametra expectatum"));
         }
 
-        let params = types.into_iter().zip(names).collect();
+        // `reddit <type>` — always present, even for an `ni` return.
+        if self.peek() != Some(&TokenKind::Yields) {
+            return Err(self.err("'reddit' et typus reditus expectati"));
+        }
+        self.advance(); // reddit
+        let ret = self.type_keyword()
+            .ok_or_else(|| self.err("typus post 'reddit' expectatus"))?;
+
         let body = self.block()?;
         Ok(Stmt {
-            kind: StmtKind::Func(FuncDecl { name: sig_name, params, ret, body, def_line }),
+            kind: StmtKind::Func(FuncDecl { name, params, ret, body, def_line }),
             line,
         })
     }
@@ -510,7 +500,7 @@ mod tests {
 
     #[test]
     fn function_declaration_and_return() {
-        let s = parse_all("munus adde :: ni -> ni -> ni\nadde(a, b) { redde a + b; }");
+        let s = parse_all("munus adde capit (ni a, ni b) reddit ni { redde a + b; }");
         match &s[0].kind {
             StmtKind::Func(f) => {
                 assert_eq!(f.name, "adde");
@@ -524,7 +514,7 @@ mod tests {
 
     #[test]
     fn zero_argument_function() {
-        let s = parse_all("munus duo :: ni\nduo() { redde °II; }");
+        let s = parse_all("munus duo reddit ni { redde °II; }");
         match &s[0].kind {
             StmtKind::Func(f) => {
                 assert_eq!(f.name, "duo");
@@ -537,7 +527,7 @@ mod tests {
 
     #[test]
     fn mixed_parameter_types() {
-        let s = parse_all("munus test :: voc -> ni -> veritas\ntest(v, n) { redde verus; }");
+        let s = parse_all("munus test capit (voc v, ni n) reddit veritas { redde verus; }");
         match &s[0].kind {
             StmtKind::Func(f) => {
                 assert_eq!(f.ret, Type::Bool);
@@ -548,43 +538,42 @@ mod tests {
     }
 
     #[test]
-    fn signature_name_must_match_definition() {
-        let m = parse_err("munus adde :: ni -> ni\nsubtrahe(a) { redde a; }");
-        assert!(m.contains("non congruit"), "got: {m}");
+    fn empty_capit_is_rejected() {
+        // With no parameters, `capit ()` must be omitted entirely.
+        let m = parse_err("munus f capit () reddit ni { redde °I; }");
+        assert!(m.contains("sine parametris"), "got: {m}");
     }
 
     #[test]
-    fn too_few_parameters_rejected() {
-        let m = parse_err("munus adde :: ni -> ni -> ni\nadde(a) { redde a; }");
-        assert!(m.contains("2 parametra promittit"), "got: {m}");
-        assert!(m.contains("1 habet"), "got: {m}");
+    fn parameters_without_capit_are_rejected() {
+        let m = parse_err("munus f(ni a) reddit ni { redde a; }");
+        assert!(m.contains("ante parametra"), "got: {m}");
     }
 
     #[test]
-    fn too_many_parameters_rejected() {
-        let m = parse_err("munus adde :: ni -> ni\nadde(a, b) { redde a; }");
-        assert!(m.contains("1 parametra promittit"), "got: {m}");
-        assert!(m.contains("2 habet"), "got: {m}");
+    fn missing_reddit_is_rejected() {
+        let m = parse_err("munus f capit (ni a) { redde a; }");
+        assert!(m.contains("typus reditus"), "got: {m}");
     }
 
     #[test]
-    fn dangling_arrow_rejected() {
-        let m = parse_err("munus adde :: ni ->\nadde(a) { redde a; }");
-        assert!(m.contains("post '->'"), "got: {m}");
+    fn missing_return_type_is_rejected() {
+        let m = parse_err("munus f reddit { redde °I; }");
+        assert!(m.contains("post 'reddit'"), "got: {m}");
     }
 
     #[test]
-    fn dangling_colon_colon_rejected() {
-        let m = parse_err("munus adde ::\nadde(a) { redde a; }");
-        assert!(m.contains("post '::'"), "got: {m}");
+    fn parameter_without_a_type_is_rejected() {
+        let m = parse_err("munus f capit (a) reddit ni { redde °I; }");
+        assert!(m.contains("typus parametri"), "got: {m}");
     }
 
-    // Load-bearing: the old syntax was removed deliberately. Without this,
+    // Load-bearing: the old syntaxes were removed deliberately. Without this,
     // a future change could quietly restore a dual-syntax parser.
     #[test]
     fn old_inline_form_is_rejected() {
         let m = parse_err("munus ni adde(ni a, ni b) { redde a + b; }");
-        assert!(m.contains("in signatura declarandus"), "got: {m}");
+        assert!(m.contains("ante nomen"), "got: {m}");
     }
 
     #[test]

@@ -26,10 +26,10 @@ pub struct FuncDecl {
     pub params: Vec<(Type, String)>,
     pub ret: Type,
     pub body: Vec<Stmt>,
-    /// Line of the *definition* header (`nomen(params) {`). A declaration
-    /// spans two lines — a `::` signature line and a definition line — and the
-    /// enclosing `Stmt.line` is the signature line, so anything that needs to
-    /// point at a parameter must use this instead.
+    /// Line where the parameters are written. Usually the same as the enclosing
+    /// `Stmt.line`, but a header split across lines (`munus` on one line, the
+    /// `capit (...)` clause on the next) puts the parameters lower, and anything
+    /// pointing at a parameter must use this instead.
     pub def_line: usize,
 }
 

@@ -1,5 +1,4 @@
-munus summare :: ni -> ni -> ni
-summare(a, b) {
+munus summare capit (ni a, ni b) reddit ni {
     ni c = a + b;
     redde c;
 }
