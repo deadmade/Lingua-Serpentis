@@ -60,3 +60,10 @@ fn type_errors_still_halt_before_any_linting() {
     // A type error aborts the pipeline, so no warnings are produced at all.
     assert!(run_with_warnings("ni x = \"salve\";").is_err());
 }
+
+#[test]
+fn mnr_is_single_precision() {
+    // 1 + 1/3 has no exact binary form; f32 and f64 round it differently.
+    // This pins that `mnr` really rounds at f32 precision.
+    assert_eq!(run("mnr x = °I:I/III; scribe(x);").unwrap(), "1.3333334\n");
+}

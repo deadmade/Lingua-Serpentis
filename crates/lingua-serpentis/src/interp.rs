@@ -40,7 +40,7 @@ impl Interp {
     fn eval(&mut self, e: &Expr, line: usize) -> LResult<Value> {
         match e {
             Expr::Int(i) => Ok(Value::Int(*i)),
-            Expr::Float(f) => Ok(Value::Float(*f)),
+            Expr::Float(f) => Ok(Value::Float(*f as f32)),
             Expr::Text(s) => Ok(Value::Text(s.clone())),
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
