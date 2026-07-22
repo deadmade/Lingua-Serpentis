@@ -57,6 +57,7 @@ fn lint_stmt(s: &Stmt, out: &mut Vec<Warning>) {
         }
         // Assignments and expressions only *use* names declared elsewhere.
         StmtKind::Assign { .. }
+        | StmtKind::IndexAssign { .. }
         | StmtKind::Print(_)
         | StmtKind::ExprStmt(_)
         | StmtKind::Return(_)

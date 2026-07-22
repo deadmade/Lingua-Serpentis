@@ -131,6 +131,32 @@ impl Interp {
                 self.assign(name, v, s.line)?;
                 Ok(Flow::Normal)
             }
+            StmtKind::IndexAssign { name, index, value } => {
+                let idx = self.eval(index, s.line)?;
+                let v = self.eval(value, s.line)?;
+                let idx = match idx {
+                    Value::Int(i) => i,
+                    _ => return Err(LinguaError { message: "index seriei invalidus".into(), line: s.line }),
+                };
+                for scope in self.scopes.iter_mut().rev() {
+                    if let Some(slot) = scope.get_mut(name) {
+                        return match slot {
+                            Value::List(items) => {
+                                if idx < 1 || (idx as usize) > items.len() {
+                                    return Err(LinguaError {
+                                        message: format!("index extra fines: {} (longitudo {})", idx, items.len()),
+                                        line: s.line,
+                                    });
+                                }
+                                items[(idx - 1) as usize] = v;
+                                Ok(Flow::Normal)
+                            }
+                            _ => Err(LinguaError { message: format!("'{}' non est series", name), line: s.line }),
+                        };
+                    }
+                }
+                Err(LinguaError { message: format!("variabilis ignota: '{}'", name), line: s.line })
+            }
             StmtKind::Print(e) => {
                 let v = self.eval(e, s.line)?;
                 self.out.push_str(&v.display());
@@ -389,5 +415,19 @@ mod tests {
         // index 0 (bare `nullus`) is below the 1-based floor
         let bad_lo = "ni lista xs = [°I, °II]; scribe(xs[nullus]);";
         assert!(execute(&parse(&tokenize(bad_lo).unwrap()).unwrap()).is_err());
+    }
+
+    #[test]
+    fn index_write_mutates_in_place() {
+        assert_eq!(
+            run("ni lista xs = [°I, °II, °III]; xs[°II] = °X; scribe(xs);"),
+            "[1, 10, 3]\n"
+        );
+    }
+
+    #[test]
+    fn index_write_out_of_range_errors() {
+        let src = "ni lista xs = [°I]; xs[°II] = °X; scribe(xs);";
+        assert!(execute(&parse(&tokenize(src).unwrap()).unwrap()).is_err());
     }
 }

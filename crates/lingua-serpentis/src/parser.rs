@@ -363,6 +363,21 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let e = self.expr()?;
+                // index assignment: <ident>[<expr>] = <expr> ;
+                if matches!(e, Expr::Index { .. }) && self.peek() == Some(&TokenKind::Assign) {
+                    let (base, index) = match e {
+                        Expr::Index { base, index } => (base, index),
+                        _ => unreachable!(),
+                    };
+                    let name = match *base {
+                        Expr::Ident(n) => n,
+                        _ => return Err(self.err("sinistra subscriptionis variabilis esse debet")),
+                    };
+                    self.advance(); // =
+                    let value = self.expr()?;
+                    self.eat(&TokenKind::Semicolon)?;
+                    return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line });
+                }
                 // A call followed by `{` is a function definition missing its
                 // `munus … reddit` header — the only way that shape arises.
                 if matches!(e, Expr::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
@@ -637,5 +652,22 @@ mod tests {
         // chained indexing (nested lists): xs[°I][°II]
         let e2 = parse_first_expr("xs[°I][°II];");
         assert!(matches!(e2, Expr::Index { base, .. } if matches!(*base, Expr::Index { .. })));
+    }
+
+    #[test]
+    fn index_assignment_parses() {
+        let s = parse_all("xs[°II] = °X;");
+        assert_eq!(s[0].kind, StmtKind::IndexAssign {
+            name: "xs".into(),
+            index: Expr::Int(2),
+            value: Expr::Int(10),
+        });
+    }
+
+    #[test]
+    fn bare_index_is_still_an_expr_statement() {
+        // `xs[°I];` with no `=` must remain an ExprStmt, not become an assign.
+        let s = parse_all("xs[°I];");
+        assert!(matches!(s[0].kind, StmtKind::ExprStmt(Expr::Index { .. })));
     }
 }

@@ -325,6 +325,30 @@ impl Checker {
                 }
                 Ok(())
             }
+            StmtKind::IndexAssign { name, index, value } => {
+                let target = self.lookup(name)
+                    .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line })?;
+                let elem = match target {
+                    Type::List(inner) => *inner,
+                    other => return Err(LinguaError {
+                        message: format!("'{}' non est series (typus '{}')", name, Self::type_name(&other)),
+                        line,
+                    }),
+                };
+                let it = self.resolve_expr(index, Some(Type::Int), line)?;
+                if it != Type::Int {
+                    return Err(LinguaError { message: "index seriei 'ni' esse debet".into(), line });
+                }
+                let vt = self.resolve_expr(value, Some(elem.clone()), line)?;
+                if vt != elem {
+                    return Err(LinguaError {
+                        message: format!("elementum typum '{}' expectat, sed '{}' datum est",
+                            Self::type_name(&elem), Self::type_name(&vt)),
+                        line,
+                    });
+                }
+                Ok(())
+            }
             StmtKind::Break | StmtKind::Continue => Ok(()),
         }
     }
@@ -559,5 +583,16 @@ mod tests {
         assert!(check_src("ni lista xs = [°I]; ni y = xs[°I:I/II];").is_err());
         // indexing a non-list rejected
         assert!(check_src("ni n = °V; ni y = n[°I];").is_err());
+    }
+
+    #[test]
+    fn index_assignment_checks_element_type() {
+        assert!(check_src("ni lista xs = [°I, °II]; xs[°I] = °X;").is_ok());
+        // wrong element type
+        assert!(check_src("ni lista xs = [°I]; xs[°I] = \"a\";").is_err());
+        // assigning through a non-list variable
+        assert!(check_src("ni n = °V; n[°I] = °X;").is_err());
+        // non-int index
+        assert!(check_src("ni lista xs = [°I]; xs[°I:I/II] = °X;").is_err());
     }
 }

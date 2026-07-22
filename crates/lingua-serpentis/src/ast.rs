@@ -48,6 +48,7 @@ pub struct Stmt {
 pub enum StmtKind {
     Let { ty: Type, name: String, value: Expr },
     Assign { name: String, value: Expr },
+    IndexAssign { name: String, index: Expr, value: Expr },
     Print(Expr),
     ExprStmt(Expr),
     If { cond: Expr, then: Vec<Stmt>, else_: Option<Vec<Stmt>> },
