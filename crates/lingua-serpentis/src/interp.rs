@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::error::{LinguaError, LResult};
+use crate::fraction;
 use crate::roman::Roman;
 use crate::value::Value;
 use std::collections::HashMap;
@@ -41,9 +42,12 @@ impl Interp {
     fn eval(&mut self, e: &Expr, line: usize) -> LResult<Value> {
         match e {
             Expr::Int(r) => Ok(Value::Int(r.clone())),
-            Expr::FloatLit(f) => Ok(Value::Double(*f)), // defensive: an unelaborated literal defaults to nr
-            Expr::Float(f) => Ok(Value::Float(*f)),
-            Expr::Double(f) => Ok(Value::Double(*f)),
+            Expr::FloatLit { numer, den } => {
+                // defensive: an unelaborated literal (checker skipped) defaults to nr
+                Ok(Value::Double(fraction::from_rational(numer, den, &fraction::scripulum_grain())))
+            }
+            Expr::Float(c) => Ok(Value::Float(c.clone())),
+            Expr::Double(c) => Ok(Value::Double(c.clone())),
             Expr::Text(s) => Ok(Value::Text(s.clone())),
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
@@ -54,8 +58,8 @@ impl Interp {
                 match (op, v) {
                     (UnOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
                     (UnOp::Neg, Value::Int(r)) => Ok(Value::Int(r.neg())),
-                    (UnOp::Neg, Value::Float(f)) => Ok(Value::Float(-f)),
-                    (UnOp::Neg, Value::Double(f)) => Ok(Value::Double(-f)),
+                    (UnOp::Neg, Value::Float(c)) => Ok(Value::Float(c.neg())),
+                    (UnOp::Neg, Value::Double(c)) => Ok(Value::Double(c.neg())),
                     _ => Err(LinguaError { message: "operatio unaria invalida".into(), line }),
                 }
             }
@@ -257,28 +261,34 @@ fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
     match op {
         BinOp::Add => match (l, r) {
             (Int(a), Int(b)) => Ok(Int(a.add(&b))),
-            (Float(a), Float(b)) => Ok(Float(a + b)),
-            (Double(a), Double(b)) => Ok(Double(a + b)),
+            (Float(a), Float(b)) => Ok(Float(a.add(&b))),
+            (Double(a), Double(b)) => Ok(Double(a.add(&b))),
             (Text(a), Text(b)) => Ok(Text(a + &b)),
             _ => Err(bad()),
         },
         BinOp::Sub => match (l, r) {
             (Int(a), Int(b)) => Ok(Int(a.sub(&b))),
-            (Float(a), Float(b)) => Ok(Float(a - b)),
-            (Double(a), Double(b)) => Ok(Double(a - b)),
+            (Float(a), Float(b)) => Ok(Float(a.sub(&b))),
+            (Double(a), Double(b)) => Ok(Double(a.sub(&b))),
             _ => Err(bad()),
         },
         BinOp::Mul => match (l, r) {
             (Int(a), Int(b)) => Ok(Int(a.mul(&b))),
-            (Float(a), Float(b)) => Ok(Float(a * b)),
-            (Double(a), Double(b)) => Ok(Double(a * b)),
+            (Float(a), Float(b)) => Ok(Float(fraction::mul(&a, &b, &fraction::uncia_grain()))),
+            (Double(a), Double(b)) => Ok(Double(fraction::mul(&a, &b, &fraction::scripulum_grain()))),
             _ => Err(bad()),
         },
         BinOp::Div => match (l, r) {
             (Int(_), Int(ref b)) if b.is_zero() => Err(LinguaError { message: "divisio per nullum".into(), line }),
             (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).0)),
-            (Float(a), Float(b)) => Ok(Float(a / b)),
-            (Double(a), Double(b)) => Ok(Double(a / b)),
+            (Float(a), Float(b)) => match fraction::div(&a, &b, &fraction::uncia_grain()) {
+                Some(q) => Ok(Float(q)),
+                None => Err(LinguaError { message: "divisio per nullum".into(), line }),
+            },
+            (Double(a), Double(b)) => match fraction::div(&a, &b, &fraction::scripulum_grain()) {
+                Some(q) => Ok(Double(q)),
+                None => Err(LinguaError { message: "divisio per nullum".into(), line }),
+            },
             _ => Err(bad()),
         },
         BinOp::Mod => match (l, r) {
@@ -305,10 +315,8 @@ fn cmp(l: Value, r: Value, line: usize, keep: impl Fn(std::cmp::Ordering) -> boo
     use Value::*;
     let ord = match (l, r) {
         (Int(a), Int(b)) => a.cmp(&b),
-        (Float(a), Float(b)) => a.partial_cmp(&b)
-            .ok_or_else(|| LinguaError { message: "comparatio NaN".into(), line })?,
-        (Double(a), Double(b)) => a.partial_cmp(&b)
-            .ok_or_else(|| LinguaError { message: "comparatio NaN".into(), line })?,
+        (Float(a), Float(b)) => a.cmp(&b),
+        (Double(a), Double(b)) => a.cmp(&b),
         (Text(a), Text(b)) => a.cmp(&b),
         (Char(a), Char(b)) => a.cmp(&b),
         (Bool(a), Bool(b)) => a.cmp(&b),

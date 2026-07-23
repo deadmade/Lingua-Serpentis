@@ -226,7 +226,7 @@ pub(crate) fn convert_int_roman(s: &str) -> Result<Roman, String> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RomanNumber {
     Int(Roman),
-    Float(f64),
+    Frac { numer: Roman, den: Roman },
 }
 
 pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
@@ -249,11 +249,11 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
             let den_str = fp.next().ok_or("fractio sine denominatore")?;
             let num = convert_int_roman(num_str)?;
             let den = convert_int_roman(den_str)?;
-            // defensive: guards a future where a denominator could evaluate to 0
             if den.is_zero() {
                 return Err("denominator est nullus".into());
             }
-            Ok(RomanNumber::Float(int_val.to_f64() + num.to_f64() / den.to_f64()))
+            let numer = int_val.mul(&den).add(&num);
+            Ok(RomanNumber::Frac { numer, den })
         }
     }
 }
@@ -431,7 +431,10 @@ mod tests {
 
     #[test]
     fn parse_fraction_literal() {
-        assert_eq!(parse_roman("°V:I/II").unwrap(), RomanNumber::Float(5.5));
+        assert_eq!(
+            parse_roman("°V:I/II").unwrap(),
+            RomanNumber::Frac { numer: Roman::from_u64(11), den: Roman::from_u64(2) }
+        );
     }
 
     #[test]

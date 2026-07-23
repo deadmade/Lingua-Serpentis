@@ -12,9 +12,9 @@ pub enum UnOp { Not, Neg }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Int(Roman),
-    FloatLit(f64), // abstract fractional literal, pre-elaboration
-    Float(f32),    // resolved mnr
-    Double(f64),   // resolved nr
+    FloatLit { numer: Roman, den: Roman }, // abstract fractional literal (exact rational), pre-elaboration
+    Float(Roman),  // resolved mnr: count of unciae (1/12)
+    Double(Roman), // resolved nr:  count of scripula (1/288)
     Text(String),
     Char(char),
     Bool(bool),

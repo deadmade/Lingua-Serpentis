@@ -49,7 +49,7 @@ impl Checker {
     fn check_expr(&self, e: &mut Expr, line: usize) -> LResult<InferTy> {
         match e {
             Expr::Int(_) => Ok(InferTy::Known(Type::Int)),
-            Expr::FloatLit(_) => Ok(InferTy::FloatLit),
+            Expr::FloatLit { .. } => Ok(InferTy::FloatLit),
             Expr::Float(_) => Ok(InferTy::Known(Type::Float)),
             Expr::Double(_) => Ok(InferTy::Known(Type::Double)),
             Expr::Text(_) => Ok(InferTy::Known(Type::Text)),
@@ -456,15 +456,18 @@ impl Checker {
 }
 
 /// Rewrite every still-abstract fractional literal reachable through negation
-/// and arithmetic into a concrete-precision node. Narrows to `f32` for `mnr`.
-/// Only ever called on an expression whose synthesized type was `FloatLit`, so
-/// there are no concrete float leaves to clobber.
+/// and arithmetic into a concrete-precision node, narrowing the exact rational
+/// onto the type's grain grid (uncia for mnr, scripulum for nr) by truncation.
+/// Only ever called on an expression whose synthesized type was `FloatLit`.
 fn resolve_floatlit(e: &mut Expr, ty: Type) {
     match e {
-        Expr::FloatLit(f) => {
+        Expr::FloatLit { numer, den } => {
+            let (numer, den) = (numer.clone(), den.clone());
             *e = match ty {
-                Type::Float => Expr::Float(*f as f32),
-                Type::Double => Expr::Double(*f),
+                Type::Float => Expr::Float(
+                    crate::fraction::from_rational(&numer, &den, &crate::fraction::uncia_grain())),
+                Type::Double => Expr::Double(
+                    crate::fraction::from_rational(&numer, &den, &crate::fraction::scripulum_grain())),
                 _ => return,
             };
         }

@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn roman_numbers_become_values() {
         assert_eq!(kinds("°XXV"), vec![TokenKind::Int(Roman::from_u64(25))]);
-        assert_eq!(kinds("°V:I/II"), vec![TokenKind::Float(5.5)]);
+        assert_eq!(kinds("°V:I/II"), vec![TokenKind::Frac { numer: Roman::from_u64(11), den: Roman::from_u64(2) }]);
         assert_eq!(kinds("nullus"), vec![TokenKind::Int(Roman::zero())]);
     }
 

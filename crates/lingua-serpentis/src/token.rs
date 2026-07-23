@@ -4,7 +4,7 @@ use crate::roman::{Roman, RomanNumber};
 pub enum TokenKind {
     // literals (values already converted)
     Int(Roman),
-    Float(f64),
+    Frac { numer: Roman, den: Roman },
     Text(String),
     Char(char),
     True,
@@ -37,7 +37,7 @@ impl From<RomanNumber> for TokenKind {
     fn from(n: RomanNumber) -> Self {
         match n {
             RomanNumber::Int(r) => TokenKind::Int(r),
-            RomanNumber::Float(f) => TokenKind::Float(f),
+            RomanNumber::Frac { numer, den } => TokenKind::Frac { numer, den },
         }
     }
 }

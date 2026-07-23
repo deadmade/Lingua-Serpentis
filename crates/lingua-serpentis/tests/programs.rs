@@ -24,12 +24,12 @@ fn calc_example_still_runs() {
 
 #[test]
 fn praecisio_example_runs() {
-    // Keeps the mnr/nr precision example honest: mnr rounds at f32, nr at f64,
-    // and an unconstrained fractional literal defaults to nr.
+    // mnr grains at the uncia (1/12), nr at the scripulum (1/288); an
+    // unconstrained fractional literal defaults to nr.
     let src = include_str!("../../../examples/praecisio.liss");
     assert_eq!(
         run(src).unwrap(),
-        "1.3333334\n1.3333333333333333\n2.5\n1.3333333333333333\n"
+        "I et triens\nI et triens\nI\nI et semuncia\nII et semis\nI et triens\n"
     );
 }
 
@@ -73,23 +73,28 @@ fn type_errors_still_halt_before_any_linting() {
 }
 
 #[test]
-fn mnr_is_single_precision() {
-    // 1 + 1/3 has no exact binary form; f32 and f64 round it differently.
-    // This pins that `mnr` really rounds at f32 precision.
-    assert_eq!(run("mnr x = °I:I/III; scribe(x);").unwrap(), "1.3333334\n");
+fn mnr_truncates_below_its_uncia_grain() {
+    // 1/24 is below mnr's uncia grid, so it is dropped — only the whole prints.
+    assert_eq!(run("mnr x = °I:I/XXIV; scribe(x);").unwrap(), "I\n");
 }
 
 #[test]
-fn nr_is_double_precision() {
-    assert_eq!(run("nr y = °I:I/III; scribe(y);").unwrap(), "1.3333333333333333\n");
+fn nr_keeps_the_sub_uncia_part() {
+    // nr's scripulum grid holds 1/24 exactly: it is a semuncia.
+    assert_eq!(run("nr y = °I:I/XXIV; scribe(y);").unwrap(), "I et semuncia\n");
+}
+
+#[test]
+fn exact_third_prints_same_under_both() {
+    // 1/3 = 4/12 is exact on both grids, so mnr and nr agree here.
+    assert_eq!(run("mnr x = °I:I/III; scribe(x);").unwrap(), "I et triens\n");
+    assert_eq!(run("nr y = °I:I/III; scribe(y);").unwrap(), "I et triens\n");
 }
 
 #[test]
 fn representable_fraction_prints_same_under_both() {
-    // 5.5 is exact in both, so the two types agree here — guards against a test
-    // that leans on divergence for a value that does not actually diverge.
-    assert_eq!(run("mnr x = °V:I/II; scribe(x);").unwrap(), "5.5\n");
-    assert_eq!(run("nr y = °V:I/II; scribe(y);").unwrap(), "5.5\n");
+    assert_eq!(run("mnr x = °V:I/II; scribe(x);").unwrap(), "V et semis\n");
+    assert_eq!(run("nr y = °V:I/II; scribe(y);").unwrap(), "V et semis\n");
 }
 
 #[test]
@@ -99,17 +104,25 @@ fn mixing_float_types_is_a_type_error() {
 
 #[test]
 fn nr_arithmetic_and_comparison_run() {
-    // Exercises the interpreter's Double arms end-to-end: 1.25 + 1.25 = 2.5,
-    // and 1.5 > 1.25. Without these the eval_binary/cmp Double arms are untested.
-    assert_eq!(run("nr x = °I:I/IV + °I:I/IV; scribe(x);").unwrap(), "2.5\n");
+    assert_eq!(run("nr x = °I:I/IV + °I:I/IV; scribe(x);").unwrap(), "II et semis\n");
     assert_eq!(run("scribe(°I:I/II maior_est °I:I/IV);").unwrap(), "verus\n");
 }
 
 #[test]
-fn unconstrained_fraction_prints_at_nr_precision() {
-    // A bare fractional literal in an untyped sink defaults to nr (f64),
-    // so it prints at double precision — not the f32 "1.3333334".
-    assert_eq!(run("scribe(°I:I/III);").unwrap(), "1.3333333333333333\n");
+fn unconstrained_fraction_defaults_to_nr() {
+    // A bare fractional literal in an untyped sink defaults to nr.
+    assert_eq!(run("scribe(°I:I/III);").unwrap(), "I et triens\n");
+}
+
+#[test]
+fn fraction_divide_by_zero_errors() {
+    // (½) / (½ − ½): a runtime zero divisor is an error, not inf.
+    assert!(run("nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z);").is_err());
+}
+
+#[test]
+fn fraction_modulo_is_a_type_error() {
+    assert!(run("nr x = °I:I/II % °I:I/IV;").is_err());
 }
 
 #[test]

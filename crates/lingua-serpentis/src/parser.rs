@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> LResult<Expr> {
         match self.peek().cloned() {
             Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
-            Some(TokenKind::Float(f)) => { self.advance(); Ok(Expr::FloatLit(f)) }
+            Some(TokenKind::Frac { numer, den }) => { self.advance(); Ok(Expr::FloatLit { numer, den }) }
             Some(TokenKind::Text(s)) => { self.advance(); Ok(Expr::Text(s)) }
             Some(TokenKind::Char(c)) => { self.advance(); Ok(Expr::Char(c)) }
             Some(TokenKind::True) => { self.advance(); Ok(Expr::Bool(true)) }
