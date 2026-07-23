@@ -168,6 +168,54 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
     }
 }
 
+const ONES3: [&str; 3] = ["X", "C", "M"];
+const FIVES3: [&str; 3] = ["V", "L", "D"];
+
+fn with_bars(base: &str, bars: usize) -> String {
+    let mut s = base.to_string();
+    for _ in 0..bars { s.push('\u{0305}'); } // U+0305 COMBINING OVERLINE
+    s
+}
+
+/// The "one" glyph for a tier: I, X, C, M, X̄, C̄, M̄, X̿, … (bar = ×1000).
+fn glyph_one(tier: usize) -> String {
+    if tier == 0 { return "I".to_string(); }
+    with_bars(ONES3[(tier - 1) % 3], (tier - 1) / 3)
+}
+
+/// The "five" glyph for a tier: V, L, D, V̄, L̄, D̄, V̿, …
+fn glyph_five(tier: usize) -> String {
+    with_bars(FIVES3[tier % 3], tier / 3)
+}
+
+/// Render one tier's digit (0..=9) with the classic subtractive rules, using
+/// this tier's one/five glyphs plus the next tier's one glyph for the 9 case.
+fn render_digit(d: u8, tier: usize) -> String {
+    let one = glyph_one(tier);
+    let five = glyph_five(tier);
+    match d {
+        0 => String::new(),
+        1..=3 => one.repeat(d as usize),
+        4 => format!("{one}{five}"),
+        5 => five,
+        6..=8 => format!("{five}{}", one.repeat((d - 5) as usize)),
+        9 => format!("{one}{}", glyph_one(tier + 1)),
+        _ => unreachable!("tier digit out of range"),
+    }
+}
+
+impl Roman {
+    pub fn display(&self) -> String {
+        if self.is_zero() { return "nullus".to_string(); }
+        let mut s = String::new();
+        if self.negative { s.push('-'); }
+        for k in (0..self.tiers.len()).rev() {
+            s.push_str(&render_digit(self.tiers[k].digit(), k));
+        }
+        s
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,5 +302,32 @@ mod tests {
     fn parse_rejects_malformed_or_zero_fraction() {
         assert!(parse_roman("°V:I").is_err());        // missing '/denominator'
         assert!(parse_roman("°V:I/nullus").is_err()); // zero/invalid denominator rejected
+    }
+
+    #[test]
+    fn display_basic_and_subtractive() {
+        assert_eq!(r(1).display(), "I");
+        assert_eq!(r(4).display(), "IV");
+        assert_eq!(r(9).display(), "IX");
+        assert_eq!(r(40).display(), "XL");
+        assert_eq!(r(90).display(), "XC");
+        assert_eq!(r(91).display(), "XCI");
+        assert_eq!(r(2024).display(), "MMXXIV");
+        assert_eq!(r(3999).display(), "MMMCMXCIX");
+        // 30532 = 30000 + 500 + 30 + 2 → X̄X̄X̄ D XXX II
+        assert_eq!(r(30532).display(), "X\u{0305}X\u{0305}X\u{0305}DXXXII");
+    }
+
+    #[test]
+    fn display_zero_and_negative() {
+        assert_eq!(Roman::zero().display(), "nullus");
+        assert_eq!(r(-25).display(), "-XXV");
+    }
+
+    #[test]
+    fn display_vinculum_thousands() {
+        assert_eq!(r(4000).display(), "MV\u{0305}");  // M V̄  (5000 - 1000)
+        assert_eq!(r(5000).display(), "V\u{0305}");   // V̄
+        assert_eq!(r(10000).display(), "X\u{0305}");  // X̄
     }
 }
