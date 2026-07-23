@@ -107,6 +107,7 @@ fn mag_mul(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
 /// Magnitude divide, returning (quotient, remainder). Requires d != 0.
 /// Doubling long division, built on `mag_add`/`mag_sub`/`mag_cmp`.
 fn mag_divmod(n: &[Tier], d: &[Tier]) -> (Vec<Tier>, Vec<Tier>) {
+    debug_assert!(!d.is_empty(), "mag_divmod requires a non-zero divisor");
     use std::cmp::Ordering;
     if mag_cmp(n, d) == Ordering::Less {
         return (Vec::new(), n.to_vec());
@@ -364,7 +365,7 @@ mod tests {
 
     #[test]
     fn roman_value_roundtrips_through_i64() {
-        for n in [0i64, 1, 4, 9, 25, 40, 91, 3999, 4000, 30532, -7, -3999, i64::MAX] {
+        for n in [0i64, 1, 4, 9, 25, 40, 91, 3999, 4000, 30532, -7, -3999, i64::MAX, i64::MIN] {
             assert_eq!(r(n).to_i64(), Some(n), "n={n}");
         }
     }
