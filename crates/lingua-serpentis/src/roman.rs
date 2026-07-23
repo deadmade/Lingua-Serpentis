@@ -76,6 +76,57 @@ fn mag_sub(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
     trim(out) // borrow ends at 0 because a >= b
 }
 
+/// Halve a magnitude, returning (quotient, remainder ∈ {0,1}) — long division
+/// by two from the most-significant tier down.
+fn mag_halve(a: &[Tier]) -> (Vec<Tier>, u8) {
+    let mut out = vec![Tier { units: 0, five: 0 }; a.len()];
+    let mut rem = 0u8;
+    for k in (0..a.len()).rev() {
+        let cur = rem * 10 + a[k].digit(); // <= 19
+        out[k] = Tier::from_digit(cur / 2);
+        rem = cur % 2;
+    }
+    (trim(out), rem)
+}
+
+/// Magnitude multiply via the doubling ladder (Russian-peasant): only `mag_add`
+/// (doubling) and `mag_halve`. Never a host multiply of the value.
+fn mag_mul(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
+    let mut result: Vec<Tier> = Vec::new();
+    let mut x = a.to_vec();
+    let mut y = b.to_vec();
+    while !y.is_empty() {
+        let (yh, bit) = mag_halve(&y);
+        if bit == 1 { result = mag_add(&result, &x); }
+        x = mag_add(&x, &x);
+        y = yh;
+    }
+    result
+}
+
+/// Magnitude divide, returning (quotient, remainder). Requires d != 0.
+/// Doubling long division, built on `mag_add`/`mag_sub`/`mag_cmp`.
+fn mag_divmod(n: &[Tier], d: &[Tier]) -> (Vec<Tier>, Vec<Tier>) {
+    use std::cmp::Ordering;
+    if mag_cmp(n, d) == Ordering::Less {
+        return (Vec::new(), n.to_vec());
+    }
+    // Largest dd = d * 2^k with dd <= n, tracking pow = 2^k.
+    let mut dd = d.to_vec();
+    let mut pow = Roman::from_u64(1).tiers;
+    loop {
+        let next = mag_add(&dd, &dd);
+        if mag_cmp(&next, n) != Ordering::Greater {
+            dd = next;
+            pow = mag_add(&pow, &pow);
+        } else {
+            break;
+        }
+    }
+    let (q1, r1) = mag_divmod(&mag_sub(n, &dd), d);
+    (mag_add(&pow, &q1), r1)
+}
+
 impl Roman {
     pub fn zero() -> Roman {
         Roman { negative: false, tiers: Vec::new() }
@@ -275,6 +326,18 @@ impl Roman {
     pub fn sub(&self, other: &Roman) -> Roman {
         self.add(&other.neg())
     }
+
+    pub fn mul(&self, other: &Roman) -> Roman {
+        make(self.negative != other.negative, mag_mul(&self.tiers, &other.tiers))
+    }
+
+    /// Truncating division toward zero; the remainder's sign follows the
+    /// dividend — matching Rust's `i64` `/` and `%`. Caller must ensure
+    /// `!other.is_zero()`.
+    pub fn div_rem(&self, other: &Roman) -> (Roman, Roman) {
+        let (q, rem) = mag_divmod(&self.tiers, &other.tiers);
+        (make(self.negative != other.negative, q), make(self.negative, rem))
+    }
 }
 
 impl PartialOrd for Roman {
@@ -443,5 +506,35 @@ mod tests {
         assert!(r(3999) < r(4000));
         assert!(r(100) > r(99));
         assert_eq!(r(42).cmp(&r(42)), std::cmp::Ordering::Equal);
+    }
+
+    #[test]
+    fn mul_matches_i64() {
+        let cases = [(0, 5), (7, 6), (25, 40), (123, 45), (3999, 3999),
+                     (-6, 7), (6, -7), (-6, -7), (1000, 1000)];
+        for (a, b) in cases {
+            assert_eq!(r(a).mul(&r(b)).to_i64(), Some(a * b), "{a}*{b}");
+        }
+    }
+
+    #[test]
+    fn div_rem_matches_i64_truncating() {
+        let cases = [(7, 2), (-7, 2), (7, -2), (-7, -2), (30507, 25), (100, 10), (5, 7)];
+        for (a, b) in cases {
+            let (q, rem) = r(a).div_rem(&r(b));
+            assert_eq!(q.to_i64(), Some(a / b), "{a}/{b} quotient");
+            assert_eq!(rem.to_i64(), Some(a % b), "{a}%{b} remainder");
+        }
+    }
+
+    #[test]
+    fn multiply_is_unbounded() {
+        // 3999^6 ≈ 4.1e21, far beyond i64::MAX; the tier engine must not overflow.
+        let base = r(3999);
+        let mut acc = r(1);
+        for _ in 0..6 { acc = acc.mul(&base); }
+        assert!(acc.to_i64().is_none(), "should exceed i64 range");
+        assert!(acc > r(0));
+        assert!(acc.display().contains('\u{0305}'), "a number this big prints with a vinculum");
     }
 }
