@@ -28,8 +28,8 @@ unit** — computed on directly (by the same carry/borrow numeral engine that ba
 ```
 scribe(°I:I/III);          → I et triens        (was: 1.3333333333333333)
 scribe(°I:I/II + °I:I/II); → III                (½ + ½ carries to a whole; was 3)
-mnr m = °nullus:I/XXIV;    scribe(m);  → nullus  (1/24 is finer than mnr's grain)
-nr   n = °nullus:I/XXIV;   scribe(n);  → semuncia
+mnr m = °I:I/XXIV;    scribe(m);  → I             (1/24 is below mnr's uncia grain — dropped)
+nr   n = °I:I/XXIV;   scribe(n);  → I et semuncia (nr keeps it: 1/24 = semuncia)
 ```
 
 After this change there is no decimal anywhere a user can see. The whole language
@@ -80,6 +80,13 @@ multiply and divide are the existing operations plus one rescaling `div_rem`
   `°V` is an `ni` literal (`RomanNumber::Int`), and there is still no way to write
   a fractional literal without the `:N/D` fraction part. Unchanged from before;
   still deferred.
+- **Zero-integer-part fraction literals.** The lexer's `is_roman_body` admits only
+  `I V X L C D M . : /`, so a `°…` literal's integer part can never be empty or the
+  `nullus` keyword — a bare sub-1 fraction like `1/24` is **not writable** as a
+  literal. Write `1 + 1/24` as `°I:I/XXIV` instead. (Sub-1 *values* still arise at
+  runtime from arithmetic — e.g. `°I:I/XXIV - °I:I/XLVIII` → `sicilicus` — and the
+  display handles a zero whole part by omitting it, so this is purely a literal-
+  grammar limitation.) Lifting it (a `°:N/D` or `°nullus:N/D` form) is deferred.
 - **A rounding mode.** Off-grid results truncate toward zero (§3.3); there is no
   round-to-nearest and therefore no tie-break rule.
 - **Arbitrary (non-duodecimal) rationals.** Every value lives on the grain grid by
@@ -119,10 +126,11 @@ fraction — giving a genuine coarse-vs-fine precision ladder that mirrors
 `f32`-vs-`f64` in spirit while being exact on its own grid.
 
 **Accepted consequence — `mnr` is deliberately coarse.** At uncia grain, `mnr`
-cannot represent 1/8, 1/5, 1/24, or anything off the twelfths grid; such a literal
-truncates (§3.3), sometimes all the way to `nullus` (e.g. `1/24` → `nullus` as
-`mnr`, `semuncia` as `nr`). This is the honest analogue of float precision loss
-and is the intended, approved behaviour, not a bug. (The grain floor for `mnr` is
+cannot represent 1/8, 1/5, 1/24, or anything off the twelfths grid; such a value
+truncates (§3.3), sometimes dropping the sub-uncia part entirely — e.g. `1 + 1/24`
+prints `I` as `mnr` (the 1/24 vanishes) but `I et semuncia` as `nr`. This is the
+honest analogue of float precision loss and is the intended, approved behaviour,
+not a bug. (The grain floor for `mnr` is
 a single constant; moving it finer, e.g. to `semuncia`, is a one-line change if
 ever wanted — but uncia is the chosen default: most authentic, sharpest contrast.)
 
@@ -401,11 +409,11 @@ printed.
   (`1.3333334` vs `1.3333333333333333`), which no longer exists — 1/3 is exact on
   both grids (`I et triens`). The new file demonstrates the **grain** difference
   instead, e.g.:
-  - `mnr` `°nullus:I/XXIV` → `nullus` vs `nr` `°nullus:I/XXIV` → `semuncia`
-    (the new canonical `mnr`≠`nr` demonstration — 1/24 is below the uncia grid);
+  - `mnr` `°I:I/XXIV` → `I` vs `nr` `°I:I/XXIV` → `I et semuncia`
+    (the new canonical `mnr` vs `nr` demonstration — 1/24 is below the uncia grid,
+    so `mnr` drops it and prints just the whole `I`);
   - a `°I:I/II + °I:I/II` → `III` carry example;
-  - a truncating `°I:I/VII` (1/7) example showing `mnr` `uncia`-level vs `nr`'s
-    long `uncia et semuncia et sextula et scripulum` stack.
+  - the exact-on-both case `°I:I/III` → `I et triens` for both types.
 - **The old canonical test flips.** Any test asserting `°I:I/III` prints
   `1.3333334`/`1.3333333333333333` now asserts `I et triens` for both types; a
   *new* test pins the grain-difference demo above so the `mnr`/`nr` distinction
