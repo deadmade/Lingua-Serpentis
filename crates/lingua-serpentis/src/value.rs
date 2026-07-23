@@ -1,6 +1,8 @@
+use crate::roman::Roman;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Int(i64),
+    Int(Roman),
     Float(f32),
     Double(f64),
     Text(String),
@@ -12,7 +14,7 @@ pub enum Value {
 impl Value {
     pub fn display(&self) -> String {
         match self {
-            Value::Int(i) => i.to_string(),
+            Value::Int(r) => r.display(),
             Value::Float(f) => f.to_string(),
             Value::Double(f) => f.to_string(),
             Value::Text(s) => s.clone(),

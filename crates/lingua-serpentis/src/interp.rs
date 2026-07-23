@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::error::{LinguaError, LResult};
+use crate::roman::Roman;
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -39,7 +40,7 @@ impl Interp {
 
     fn eval(&mut self, e: &Expr, line: usize) -> LResult<Value> {
         match e {
-            Expr::Int(i) => Ok(Value::Int(*i)),
+            Expr::Int(i) => Ok(Value::Int(Roman::from_i64(*i))),
             Expr::FloatLit(f) => Ok(Value::Double(*f)), // defensive: an unelaborated literal defaults to nr
             Expr::Float(f) => Ok(Value::Float(*f)),
             Expr::Double(f) => Ok(Value::Double(*f)),
@@ -52,7 +53,7 @@ impl Interp {
                 let v = self.eval(expr, line)?;
                 match (op, v) {
                     (UnOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
-                    (UnOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
+                    (UnOp::Neg, Value::Int(r)) => Ok(Value::Int(r.neg())),
                     (UnOp::Neg, Value::Float(f)) => Ok(Value::Float(-f)),
                     (UnOp::Neg, Value::Double(f)) => Ok(Value::Double(-f)),
                     _ => Err(LinguaError { message: "operatio unaria invalida".into(), line }),
@@ -68,7 +69,7 @@ impl Interp {
                 for a in args { vals.push(self.eval(a, line)?); }
                 if name.as_str() == "longitudo" {
                     return match vals.into_iter().next() {
-                        Some(Value::List(items)) => Ok(Value::Int(items.len() as i64)),
+                        Some(Value::List(items)) => Ok(Value::Int(Roman::from_usize(items.len()))),
                         _ => Err(LinguaError { message: "'longitudo' seriem expectat".into(), line }),
                     };
                 }
@@ -95,13 +96,13 @@ impl Interp {
                 let i = self.eval(index, line)?;
                 match (b, i) {
                     (Value::List(items), Value::Int(idx)) => {
-                        if idx < 1 || (idx as usize) > items.len() {
-                            return Err(LinguaError {
-                                message: format!("index extra fines: {} (longitudo {})", idx, items.len()),
+                        match idx.to_usize() {
+                            Some(i) if i >= 1 && i <= items.len() => Ok(items[i - 1].clone()),
+                            _ => Err(LinguaError {
+                                message: format!("index extra fines: {} (longitudo {})", idx.display(), items.len()),
                                 line,
-                            });
+                            }),
                         }
-                        Ok(items[(idx - 1) as usize].clone())
                     }
                     _ => Err(LinguaError { message: "subscriptio invalida".into(), line }),
                 }
@@ -130,7 +131,7 @@ impl Interp {
             for s in &f.body {
                 if let Flow::Return(v) = self.exec(s)? { return Ok(v); }
             }
-            Ok(Value::Int(0))
+            Ok(Value::Int(Roman::zero()))
         })();
         self.scopes = saved;
         result
@@ -152,22 +153,22 @@ impl Interp {
                 let idx = self.eval(index, s.line)?;
                 let v = self.eval(value, s.line)?;
                 let idx = match idx {
-                    Value::Int(i) => i,
+                    Value::Int(r) => r,
                     _ => return Err(LinguaError { message: "index seriei invalidus".into(), line: s.line }),
                 };
                 for scope in self.scopes.iter_mut().rev() {
                     if let Some(slot) = scope.get_mut(name) {
                         return match slot {
-                            Value::List(items) => {
-                                if idx < 1 || (idx as usize) > items.len() {
-                                    return Err(LinguaError {
-                                        message: format!("index extra fines: {} (longitudo {})", idx, items.len()),
-                                        line: s.line,
-                                    });
+                            Value::List(items) => match idx.to_usize() {
+                                Some(i) if i >= 1 && i <= items.len() => {
+                                    items[i - 1] = v;
+                                    Ok(Flow::Normal)
                                 }
-                                items[(idx - 1) as usize] = v;
-                                Ok(Flow::Normal)
-                            }
+                                _ => Err(LinguaError {
+                                    message: format!("index extra fines: {} (longitudo {})", idx.display(), items.len()),
+                                    line: s.line,
+                                }),
+                            },
                             _ => Err(LinguaError { message: format!("'{}' non est series", name), line: s.line }),
                         };
                     }
@@ -253,37 +254,36 @@ impl Interp {
 fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
     use Value::*;
     let bad = || LinguaError { message: "operatio binaria invalida".into(), line };
-    let overflow = || LinguaError { message: "numerus nimis magnus (excessus arithmeticus)".into(), line };
     match op {
         BinOp::Add => match (l, r) {
-            (Int(a), Int(b)) => a.checked_add(b).map(Int).ok_or_else(overflow),
+            (Int(a), Int(b)) => Ok(Int(a.add(&b))),
             (Float(a), Float(b)) => Ok(Float(a + b)),
             (Double(a), Double(b)) => Ok(Double(a + b)),
             (Text(a), Text(b)) => Ok(Text(a + &b)),
             _ => Err(bad()),
         },
         BinOp::Sub => match (l, r) {
-            (Int(a), Int(b)) => a.checked_sub(b).map(Int).ok_or_else(overflow),
+            (Int(a), Int(b)) => Ok(Int(a.sub(&b))),
             (Float(a), Float(b)) => Ok(Float(a - b)),
             (Double(a), Double(b)) => Ok(Double(a - b)),
             _ => Err(bad()),
         },
         BinOp::Mul => match (l, r) {
-            (Int(a), Int(b)) => a.checked_mul(b).map(Int).ok_or_else(overflow),
+            (Int(a), Int(b)) => Ok(Int(a.mul(&b))),
             (Float(a), Float(b)) => Ok(Float(a * b)),
             (Double(a), Double(b)) => Ok(Double(a * b)),
             _ => Err(bad()),
         },
         BinOp::Div => match (l, r) {
-            (Int(_), Int(0)) => Err(LinguaError { message: "divisio per nullum".into(), line }),
-            (Int(a), Int(b)) => a.checked_div(b).map(Int).ok_or_else(overflow),
+            (Int(_), Int(ref b)) if b.is_zero() => Err(LinguaError { message: "divisio per nullum".into(), line }),
+            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).0)),
             (Float(a), Float(b)) => Ok(Float(a / b)),
             (Double(a), Double(b)) => Ok(Double(a / b)),
             _ => Err(bad()),
         },
         BinOp::Mod => match (l, r) {
-            (Int(_), Int(0)) => Err(LinguaError { message: "modulus per nullum".into(), line }),
-            (Int(a), Int(b)) => a.checked_rem(b).map(Int).ok_or_else(overflow),
+            (Int(_), Int(ref b)) if b.is_zero() => Err(LinguaError { message: "modulus per nullum".into(), line }),
+            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).1)),
             _ => Err(bad()),
         },
         BinOp::Eq => Ok(Bool(l == r)),
@@ -350,12 +350,12 @@ mod tests {
 
     #[test]
     fn arithmetic_and_print() {
-        assert_eq!(run("scribe(°V + °III * °II);"), "11\n");
+        assert_eq!(run("scribe(°V + °III * °II);"), "XI\n");
     }
 
     #[test]
     fn variables() {
-        assert_eq!(run("ni x = °X; x = x + °II; scribe(x);"), "12\n");
+        assert_eq!(run("ni x = °X; x = x + °II; scribe(x);"), "XII\n");
     }
 
     #[test]
@@ -373,26 +373,26 @@ mod tests {
         // NOTE: brief used "°nullus"; actual lexer/roman zero-literal is bare "nullus"
         // (see src/lexer.rs word_to_kind and src/roman.rs parse_roman) — adjusted spelling only.
         let src = "ni i = nullus; ni s = nullus; indem (i minor_est °V) { s = s + i; i = i + °I; } scribe(s);";
-        assert_eq!(run(src), "10\n"); // 0+1+2+3+4
+        assert_eq!(run(src), "X\n"); // 0+1+2+3+4
     }
 
     #[test]
     fn for_loop_with_break() {
         let src = "ni total = nullus; dum (ni i = nullus; i minor_est °X; i = i + °I) { si (i par_est °III) { abrumpe; } total = total + i; } scribe(total);";
-        assert_eq!(run(src), "3\n"); // 0+1+2 then break at 3
+        assert_eq!(run(src), "III\n"); // 0+1+2 then break at 3
     }
 
     #[test]
     fn function_call_returns() {
         let src = "munus iunge capit (ni a, ni b) reddit ni { redde a + b; } scribe(iunge(°IV, °VI));";
-        assert_eq!(run(src), "10\n");
+        assert_eq!(run(src), "X\n");
     }
 
     #[test]
     fn continue_skips_iteration() {
         // skip i==2: 0+1+3+4 = 8
         let src = "ni s = nullus; dum (ni i = nullus; i minor_est °V; i = i + °I) { si (i par_est °II) { continua; } s = s + i; } scribe(s);";
-        assert_eq!(run(src), "8\n");
+        assert_eq!(run(src), "VIII\n");
     }
 
     #[test]
@@ -406,23 +406,24 @@ mod tests {
     }
 
     #[test]
-    fn arithmetic_overflow_errors() {
-        // 3999^6 overflows i64; must be a graceful Err, not a panic
+    fn unbounded_arithmetic_no_longer_overflows() {
+        // 3999^6 overflowed i64 and used to be an error; the Roman engine grows
+        // another tier instead, so this now succeeds.
         let src = "ni x = °MMMCMXCIX; ni y = x * x * x * x * x * x; scribe(y);";
         let program = parse(&tokenize(src).unwrap()).unwrap();
-        assert!(execute(&program).is_err());
+        assert!(execute(&program).is_ok());
     }
 
     #[test]
     fn list_literal_prints() {
-        assert_eq!(run("scribe([°I, °II, °III]);"), "[1, 2, 3]\n");
+        assert_eq!(run("scribe([°I, °II, °III]);"), "[I, II, III]\n");
         assert_eq!(run("scribe([]);"), "[]\n");
     }
 
     #[test]
     fn index_read_is_one_based() {
-        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°I]);"), "10\n");
-        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°III]);"), "30\n");
+        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°I]);"), "X\n");
+        assert_eq!(run("ni lista xs = [°X, °XX, °XXX]; scribe(xs[°III]);"), "XXX\n");
     }
 
     #[test]
@@ -438,7 +439,7 @@ mod tests {
     fn index_write_mutates_in_place() {
         assert_eq!(
             run("ni lista xs = [°I, °II, °III]; xs[°II] = °X; scribe(xs);"),
-            "[1, 10, 3]\n"
+            "[I, X, III]\n"
         );
     }
 
@@ -450,8 +451,8 @@ mod tests {
 
     #[test]
     fn longitudo_and_adde_run() {
-        assert_eq!(run("ni lista xs = [°I, °II, °III]; scribe(longitudo(xs));"), "3\n");
-        assert_eq!(run("ni lista xs = [°I]; xs = adde(xs, °II); scribe(xs);"), "[1, 2]\n");
+        assert_eq!(run("ni lista xs = [°I, °II, °III]; scribe(longitudo(xs));"), "III\n");
+        assert_eq!(run("ni lista xs = [°I]; xs = adde(xs, °II); scribe(xs);"), "[I, II]\n");
     }
 
     #[test]
@@ -464,11 +465,11 @@ mod tests {
     fn nested_list_read() {
         assert_eq!(
             run("ni lista lista m = [[°I, °II], [°III]]; scribe(m[°I][°II]);"),
-            "2\n"
+            "II\n"
         );
         assert_eq!(
             run("ni lista lista m = [[°I, °II], [°III]]; scribe(m[°II][°I]);"),
-            "3\n"
+            "III\n"
         );
     }
 }

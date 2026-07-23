@@ -13,13 +13,13 @@ fn full_program_with_function_and_if() {
         si (summa minor_est °C) { summa = summa + °C; }
         scribe(summa);
     "#;
-    assert_eq!(run(src).unwrap(), "30532\n"); // 25 + 30507 = 30532 (not < 100, so unchanged)
+    assert_eq!(run(src).unwrap(), "X\u{0305}X\u{0305}X\u{0305}DXXXII\n"); // 25 + 30507 = 30532 (not < 100, so unchanged)
 }
 
 #[test]
 fn calc_example_still_runs() {
     let src = include_str!("../../../examples/calc.liss");
-    assert_eq!(run(src).unwrap(), "30532\n");
+    assert_eq!(run(src).unwrap(), "X\u{0305}X\u{0305}X\u{0305}DXXXII\n");
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn non_latin_name_warns_but_program_still_runs() {
     let src = "ni result = °V; scribe(result);";
     let (output, warnings) = run_with_warnings(src).unwrap();
     // The warning must not change the program's behaviour.
-    assert_eq!(output, "5\n");
+    assert_eq!(output, "V\n");
     assert_eq!(warnings.len(), 1);
     assert_eq!(warnings[0].line, 1);
     assert!(warnings[0].message.contains("result"));
@@ -62,7 +62,7 @@ fn non_latin_name_warns_but_program_still_runs() {
 fn latin_program_produces_no_warnings() {
     let src = "ni numerus = °V; scribe(numerus);";
     let (output, warnings) = run_with_warnings(src).unwrap();
-    assert_eq!(output, "5\n");
+    assert_eq!(output, "V\n");
     assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
 }
 
@@ -115,7 +115,7 @@ fn unconstrained_fraction_prints_at_nr_precision() {
 #[test]
 fn series_example_runs() {
     let src = include_str!("../../../examples/series.liss");
-    assert_eq!(run(src).unwrap(), "[1, 20, 30, 40]\n91\n");
+    assert_eq!(run(src).unwrap(), "[I, XX, XXX, XL]\nXCI\n");
 }
 
 #[test]
@@ -132,5 +132,5 @@ fn lists_have_value_semantics() {
         scribe(n);
         scribe(longitudo(xs));
     "#;
-    assert_eq!(run(src).unwrap(), "3\n2\n");
+    assert_eq!(run(src).unwrap(), "III\nII\n");
 }
