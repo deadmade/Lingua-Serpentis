@@ -54,6 +54,11 @@ const SUBUNCIA: [(i64, &str); 5] = [
 /// sub-uncia stack, joined with " et ". Zero is `nullus`; a zero whole part is
 /// omitted; a negative value gets a single leading `-`.
 pub fn display(count: &Roman, g: &Roman) -> String {
+    // `scr_per_grain = 288 / g` below assumes a supported grain; guard it.
+    debug_assert!(
+        *g == uncia_grain() || *g == scripulum_grain(),
+        "fraction grain must be uncia (12) or scripulum (288)"
+    );
     if count.is_zero() {
         return "nullus".to_string();
     }
@@ -108,7 +113,7 @@ mod tests {
 
     #[test]
     fn mul_matches_reference() {
-        let cases = [(16i64, 16i64), (6, 6), (5, 5), (360, 2), (-5, 5)];
+        let cases = [(16i64, 16i64), (6, 6), (5, 5), (360, 2), (-5, 5), (-6, -7)];
         for (c1, c2) in cases {
             for g in [12i64, 288] {
                 let got = mul(&r(c1), &r(c2), &r(g)).to_i64().unwrap();
@@ -120,7 +125,7 @@ mod tests {
 
     #[test]
     fn div_matches_reference_and_guards_zero() {
-        let cases = [(16i64, 4i64), (66, 6), (360, 360), (-16, 6)];
+        let cases = [(16i64, 4i64), (66, 6), (360, 360), (-16, 6), (-16, -6)];
         for (c1, c2) in cases {
             for g in [12i64, 288] {
                 let got = div(&r(c1), &r(c2), &r(g)).unwrap().to_i64().unwrap();

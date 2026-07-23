@@ -126,6 +126,14 @@ fn fraction_modulo_is_a_type_error() {
 }
 
 #[test]
+fn negative_fractions_print_signed() {
+    // Unary minus on a fraction: mnr drops the 1/24 (truncation toward zero) and
+    // keeps the sign; nr keeps it as a semuncia. -(1 + 1/24).
+    assert_eq!(run("mnr n = -°I:I/XXIV; scribe(n);").unwrap(), "-I\n");
+    assert_eq!(run("nr n = -°I:I/XXIV; scribe(n);").unwrap(), "-I et semuncia\n");
+}
+
+#[test]
 fn series_example_runs() {
     let src = include_str!("../../../examples/series.liss");
     assert_eq!(run(src).unwrap(), "[I, XX, XXX, XL]\nXCI\n");
