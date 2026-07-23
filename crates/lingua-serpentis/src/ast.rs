@@ -1,3 +1,5 @@
+use crate::roman::Roman;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type { Int, Float, Double, Text, Char, Bool, List(Box<Type>) }
 
@@ -9,7 +11,7 @@ pub enum UnOp { Not, Neg }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Int(i64),
+    Int(Roman),
     FloatLit(f64), // abstract fractional literal, pre-elaboration
     Float(f32),    // resolved mnr
     Double(f64),   // resolved nr

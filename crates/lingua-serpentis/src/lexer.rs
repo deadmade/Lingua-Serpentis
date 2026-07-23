@@ -1,4 +1,5 @@
 use crate::error::{LinguaError, LResult};
+use crate::roman::Roman;
 use crate::token::{Token, TokenKind};
 
 pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
@@ -85,7 +86,7 @@ fn is_roman_body(c: char) -> bool {
 
 fn word_to_kind(word: String) -> TokenKind {
     match word.as_str() {
-        "nullus" => TokenKind::Int(0),
+        "nullus" => TokenKind::Int(Roman::zero()),
         "verus" => TokenKind::True,
         "falsus" => TokenKind::False,
         "si" => TokenKind::If,
@@ -176,9 +177,9 @@ mod tests {
 
     #[test]
     fn roman_numbers_become_values() {
-        assert_eq!(kinds("°XXV"), vec![TokenKind::Int(25)]);
+        assert_eq!(kinds("°XXV"), vec![TokenKind::Int(Roman::from_u64(25))]);
         assert_eq!(kinds("°V:I/II"), vec![TokenKind::Float(5.5)]);
-        assert_eq!(kinds("nullus"), vec![TokenKind::Int(0)]);
+        assert_eq!(kinds("nullus"), vec![TokenKind::Int(Roman::zero())]);
     }
 
     #[test]

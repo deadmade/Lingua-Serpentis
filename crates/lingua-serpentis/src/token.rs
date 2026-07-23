@@ -1,9 +1,9 @@
-use crate::roman::RomanNumber;
+use crate::roman::{Roman, RomanNumber};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // literals (values already converted)
-    Int(i64),
+    Int(Roman),
     Float(f64),
     Text(String),
     Char(char),
@@ -36,7 +36,7 @@ pub struct Token {
 impl From<RomanNumber> for TokenKind {
     fn from(n: RomanNumber) -> Self {
         match n {
-            RomanNumber::Int(i) => TokenKind::Int(i),
+            RomanNumber::Int(r) => TokenKind::Int(r),
             RomanNumber::Float(f) => TokenKind::Float(f),
         }
     }

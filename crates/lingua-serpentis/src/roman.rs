@@ -187,52 +187,50 @@ impl From<i64> for Roman {
     fn from(n: i64) -> Roman { Roman::from_i64(n) }
 }
 
-pub(crate) fn convert_single(s: &str) -> Result<i64, String> {
+pub(crate) fn convert_single(s: &str) -> Result<Roman, String> {
     if s.is_empty() {
         return Err("numerus Romanus vacuus".into());
     }
-    fn val(c: char) -> Option<i64> {
-        match c {
-            'I' => Some(1), 'V' => Some(5), 'X' => Some(10), 'L' => Some(50),
-            'C' => Some(100), 'D' => Some(500), 'M' => Some(1000), _ => None,
-        }
+    fn sym(c: char) -> Option<Roman> {
+        let v = match c {
+            'I' => 1, 'V' => 5, 'X' => 10, 'L' => 50,
+            'C' => 100, 'D' => 500, 'M' => 1000, _ => return None,
+        };
+        Some(Roman::from_u64(v))
     }
     let chars: Vec<char> = s.chars().collect();
-    let mut total = 0i64;
+    let mut total = Roman::zero();
     for i in 0..chars.len() {
-        let cur = val(chars[i]).ok_or_else(|| format!("numerus Romanus invalidus: '{}'", s))?;
-        let next = chars.get(i + 1).and_then(|c| val(*c)).unwrap_or(0);
-        if cur < next { total -= cur; } else { total += cur; }
+        let cur = sym(chars[i]).ok_or_else(|| format!("numerus Romanus invalidus: '{}'", s))?;
+        let next_bigger = chars.get(i + 1).and_then(|c| sym(*c)).is_some_and(|nx| cur < nx);
+        total = if next_bigger { total.sub(&cur) } else { total.add(&cur) };
     }
     Ok(total)
 }
 
-pub(crate) fn convert_int_roman(s: &str) -> Result<i64, String> {
-    let nums: Vec<i64> = s
-        .split('.')
-        .map(convert_single)
-        .collect::<Result<_, _>>()?;
-    let mut total = 0i64;
+pub(crate) fn convert_int_roman(s: &str) -> Result<Roman, String> {
+    let nums: Vec<Roman> = s.split('.').map(convert_single).collect::<Result<_, _>>()?;
+    let mut total = Roman::zero();
     let mut i = 0;
     while i + 1 < nums.len() {
-        total += nums[i] * nums[i + 1];
+        total = total.add(&nums[i].mul(&nums[i + 1]));
         i += 2;
     }
     if nums.len() % 2 == 1 {
-        total += nums[nums.len() - 1];
+        total = total.add(&nums[nums.len() - 1]);
     }
     Ok(total)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RomanNumber {
-    Int(i64),
+    Int(Roman),
     Float(f64),
 }
 
 pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
     if literal == "nullus" {
-        return Ok(RomanNumber::Int(0));
+        return Ok(RomanNumber::Int(Roman::zero()));
     }
     let body = literal
         .strip_prefix('°')
@@ -251,10 +249,10 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
             let num = convert_int_roman(num_str)?;
             let den = convert_int_roman(den_str)?;
             // defensive: guards a future where a denominator could evaluate to 0
-            if den == 0 {
+            if den.is_zero() {
                 return Err("denominator est nullus".into());
             }
-            Ok(RomanNumber::Float(int_val as f64 + num as f64 / den as f64))
+            Ok(RomanNumber::Float(int_val.to_f64() + num.to_f64() / den.to_f64()))
         }
     }
 }
@@ -397,11 +395,11 @@ mod tests {
 
     #[test]
     fn single_basic_and_subtractive() {
-        assert_eq!(convert_single("XXV").unwrap(), 25);
-        assert_eq!(convert_single("VII").unwrap(), 7);
-        assert_eq!(convert_single("IV").unwrap(), 4);
-        assert_eq!(convert_single("IX").unwrap(), 9);
-        assert_eq!(convert_single("M").unwrap(), 1000);
+        assert_eq!(convert_single("XXV").unwrap(), Roman::from_u64(25));
+        assert_eq!(convert_single("VII").unwrap(), Roman::from_u64(7));
+        assert_eq!(convert_single("IV").unwrap(), Roman::from_u64(4));
+        assert_eq!(convert_single("IX").unwrap(), Roman::from_u64(9));
+        assert_eq!(convert_single("M").unwrap(), Roman::from_u64(1000));
     }
 
     #[test]
@@ -412,22 +410,22 @@ mod tests {
     #[test]
     fn int_multiplicative_pairs() {
         // XXX.M.V.C.VII = 30*1000 + 5*100 + 7 = 30507
-        assert_eq!(convert_int_roman("XXX.M.V.C.VII").unwrap(), 30507);
+        assert_eq!(convert_int_roman("XXX.M.V.C.VII").unwrap(), Roman::from_u64(30507));
         // VII.M = 7*1000 = 7000  (even number of chunks: pure product)
-        assert_eq!(convert_int_roman("VII.M").unwrap(), 7000);
+        assert_eq!(convert_int_roman("VII.M").unwrap(), Roman::from_u64(7000));
         // single chunk, no dots
-        assert_eq!(convert_int_roman("XXV").unwrap(), 25);
+        assert_eq!(convert_int_roman("XXV").unwrap(), Roman::from_u64(25));
     }
 
     #[test]
     fn parse_integer_literal() {
-        assert_eq!(parse_roman("°XXV").unwrap(), RomanNumber::Int(25));
-        assert_eq!(parse_roman("°XXX.M.V.C.VII").unwrap(), RomanNumber::Int(30507));
+        assert_eq!(parse_roman("°XXV").unwrap(), RomanNumber::Int(Roman::from_u64(25)));
+        assert_eq!(parse_roman("°XXX.M.V.C.VII").unwrap(), RomanNumber::Int(Roman::from_u64(30507)));
     }
 
     #[test]
     fn parse_nullus_is_zero() {
-        assert_eq!(parse_roman("nullus").unwrap(), RomanNumber::Int(0));
+        assert_eq!(parse_roman("nullus").unwrap(), RomanNumber::Int(Roman::zero()));
     }
 
     #[test]

@@ -404,6 +404,8 @@ mod tests {
     use super::*;
     use crate::lexer::tokenize;
 
+    fn ri(n: i64) -> crate::roman::Roman { crate::roman::Roman::from_i64(n) }
+
     fn parse_first_expr(src: &str) -> Expr {
         let toks = tokenize(src).unwrap();
         let stmts = parse(&toks).unwrap();
@@ -428,14 +430,14 @@ mod tests {
         let s = parse_all("ni x = °V;");
         assert_eq!(s.len(), 1);
         assert_eq!(s[0].kind, StmtKind::Let {
-            ty: Type::Int, name: "x".into(), value: Expr::Int(5),
+            ty: Type::Int, name: "x".into(), value: Expr::Int(ri(5)),
         });
     }
 
     #[test]
     fn assignment_and_print() {
         let s = parse_all("x = °I; scribe(x);");
-        assert_eq!(s[0].kind, StmtKind::Assign { name: "x".into(), value: Expr::Int(1) });
+        assert_eq!(s[0].kind, StmtKind::Assign { name: "x".into(), value: Expr::Int(ri(1)) });
         assert_eq!(s[1].kind, StmtKind::Print(Expr::Ident("x".into())));
     }
 
@@ -445,11 +447,11 @@ mod tests {
         let e = parse_first_expr("°II + °III * °IV;");
         assert_eq!(e, Expr::Binary {
             op: BinOp::Add,
-            left: Box::new(Expr::Int(2)),
+            left: Box::new(Expr::Int(ri(2))),
             right: Box::new(Expr::Binary {
                 op: BinOp::Mul,
-                left: Box::new(Expr::Int(3)),
-                right: Box::new(Expr::Int(4)),
+                left: Box::new(Expr::Int(ri(3))),
+                right: Box::new(Expr::Int(ri(4))),
             }),
         });
     }
@@ -503,10 +505,10 @@ mod tests {
             op: BinOp::Sub,
             left: Box::new(Expr::Binary {
                 op: BinOp::Sub,
-                left: Box::new(Expr::Int(10)),
-                right: Box::new(Expr::Int(3)),
+                left: Box::new(Expr::Int(ri(10))),
+                right: Box::new(Expr::Int(ri(3))),
             }),
-            right: Box::new(Expr::Int(1)),
+            right: Box::new(Expr::Int(ri(1))),
         });
     }
 
@@ -628,7 +630,7 @@ mod tests {
     #[test]
     fn list_literal_parses() {
         let e = parse_first_expr("[°I, °II, °III];");
-        assert_eq!(e, Expr::ListLit(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]));
+        assert_eq!(e, Expr::ListLit(vec![Expr::Int(ri(1)), Expr::Int(ri(2)), Expr::Int(ri(3))]));
         assert_eq!(parse_first_expr("[];"), Expr::ListLit(vec![]));
     }
 
@@ -638,7 +640,7 @@ mod tests {
         assert_eq!(s[0].kind, StmtKind::Let {
             ty: Type::List(Box::new(Type::Int)),
             name: "xs".into(),
-            value: Expr::ListLit(vec![Expr::Int(1)]),
+            value: Expr::ListLit(vec![Expr::Int(ri(1))]),
         });
     }
 
@@ -647,7 +649,7 @@ mod tests {
         let e = parse_first_expr("xs[°I];");
         assert_eq!(e, Expr::Index {
             base: Box::new(Expr::Ident("xs".into())),
-            index: Box::new(Expr::Int(1)),
+            index: Box::new(Expr::Int(ri(1))),
         });
         // chained indexing (nested lists): xs[°I][°II]
         let e2 = parse_first_expr("xs[°I][°II];");
@@ -659,8 +661,8 @@ mod tests {
         let s = parse_all("xs[°II] = °X;");
         assert_eq!(s[0].kind, StmtKind::IndexAssign {
             name: "xs".into(),
-            index: Expr::Int(2),
-            value: Expr::Int(10),
+            index: Expr::Int(ri(2)),
+            value: Expr::Int(ri(10)),
         });
     }
 
