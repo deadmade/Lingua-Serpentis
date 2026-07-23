@@ -1,5 +1,6 @@
 pub mod error;
 pub mod roman;
+pub mod fraction;
 pub mod token;
 pub mod lexer;
 pub mod ast;
