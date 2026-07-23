@@ -6,6 +6,12 @@
 - **Amends:** `2026-07-19-lingua-serpentis-rust-interpreter-design.md` §5.2, §6.2
   (resolves its open question about whether `mnr` and `nr` collapse to one type)
 
+> **Amended 2026-07-23:** `mnr`/`nr` are no longer IEEE `f32`/`f64`. They are now
+> Roman-native duodecimal fixed-point (uncia / scripulum grain) and print in Latin
+> fraction names — see `2026-07-23-roman-native-fractions-design.md`. Passages
+> below describing binary floating-point precision (e.g. `1.3333334`) and the
+> f32/f64 backing are superseded; the `mnr`/`nr` type distinction itself stands.
+
 ## 1. Vision
 
 The design shipped in July lists two floating keywords, `mnr` (float) and `nr`

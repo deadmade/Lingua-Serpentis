@@ -72,6 +72,12 @@ indices and lengths), and it is invisible to the language.
   (e.g. `1.3333334`). Rebuilding fractions on the Roman duodecimal system
   (`uncia` = 1/12, …) is a whole second engine and is deferred (§9). This is the
   float question raised in brainstorming and set aside, not decided here.
+
+> **Superseded 2026-07-23:** that deferred second engine now exists —
+> `2026-07-23-roman-native-fractions-design.md`. Fractions are Roman-native too;
+> the "integers Roman, fractions decimal" mixed look described here no longer
+> applies.
+
 - **Casts / conversions** between `ni` and the float types. Mixing stays the same
   type error it is today.
 - **A user-facing Arabic notation.** There is intentionally still no way to write
