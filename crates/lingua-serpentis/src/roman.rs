@@ -20,7 +20,6 @@ impl Tier {
 }
 
 /// Drop trailing all-zero tiers so the canonical form is unique.
-#[allow(dead_code)] // used by arithmetic in later tasks
 fn trim(mut tiers: Vec<Tier>) -> Vec<Tier> {
     while matches!(tiers.last(), Some(t) if t.digit() == 0) {
         tiers.pop();
@@ -30,10 +29,51 @@ fn trim(mut tiers: Vec<Tier>) -> Vec<Tier> {
 
 /// Build a canonical `Roman` from a sign and carry-normalized tiers; forces zero
 /// to be non-negative.
-#[allow(dead_code)] // used by arithmetic in later tasks
 fn make(negative: bool, tiers: Vec<Tier>) -> Roman {
     let tiers = trim(tiers);
     Roman { negative: negative && !tiers.is_empty(), tiers }
+}
+
+/// Compare two magnitudes (tiers only, sign ignored). Canonical form has no
+/// trailing zero tiers, so the longer vector is strictly larger.
+fn mag_cmp(a: &[Tier], b: &[Tier]) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    if a.len() != b.len() { return a.len().cmp(&b.len()); }
+    for k in (0..a.len()).rev() {
+        let c = a[k].digit().cmp(&b[k].digit());
+        if c != Ordering::Equal { return c; }
+    }
+    Ordering::Equal
+}
+
+/// Magnitude add in base-10 digit space (per-tier carrying).
+fn mag_add(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
+    let n = a.len().max(b.len());
+    let mut out = Vec::with_capacity(n + 1);
+    let mut carry = 0u8;
+    for k in 0..n {
+        let da = a.get(k).map_or(0, |t| t.digit());
+        let db = b.get(k).map_or(0, |t| t.digit());
+        let s = da + db + carry; // <= 9 + 9 + 1 = 19
+        out.push(Tier::from_digit(s % 10));
+        carry = s / 10;
+    }
+    if carry > 0 { out.push(Tier::from_digit(carry)); }
+    trim(out)
+}
+
+/// Magnitude subtract in base-10 digit space; requires magnitude a >= b.
+fn mag_sub(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
+    let mut out = Vec::with_capacity(a.len());
+    let mut borrow = 0i16;
+    for k in 0..a.len() {
+        let da = a[k].digit() as i16;
+        let db = b.get(k).map_or(0, |t| t.digit() as i16);
+        let mut d = da - db - borrow;
+        if d < 0 { d += 10; borrow = 1; } else { borrow = 0; }
+        out.push(Tier::from_digit(d as u8));
+    }
+    trim(out) // borrow ends at 0 because a >= b
 }
 
 impl Roman {
@@ -214,6 +254,45 @@ impl Roman {
         }
         s
     }
+
+    pub fn neg(&self) -> Roman {
+        make(!self.negative, self.tiers.clone())
+    }
+
+    pub fn add(&self, other: &Roman) -> Roman {
+        use std::cmp::Ordering;
+        if self.negative == other.negative {
+            make(self.negative, mag_add(&self.tiers, &other.tiers))
+        } else {
+            match mag_cmp(&self.tiers, &other.tiers) {
+                Ordering::Greater => make(self.negative, mag_sub(&self.tiers, &other.tiers)),
+                Ordering::Less => make(other.negative, mag_sub(&other.tiers, &self.tiers)),
+                Ordering::Equal => Roman::zero(),
+            }
+        }
+    }
+
+    pub fn sub(&self, other: &Roman) -> Roman {
+        self.add(&other.neg())
+    }
+}
+
+impl PartialOrd for Roman {
+    fn partial_cmp(&self, other: &Roman) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Roman {
+    fn cmp(&self, other: &Roman) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (self.negative, other.negative) {
+            (false, true) => Ordering::Greater,
+            (true, false) => Ordering::Less,
+            (false, false) => mag_cmp(&self.tiers, &other.tiers),
+            (true, true) => mag_cmp(&other.tiers, &self.tiers), // larger magnitude is smaller
+        }
+    }
 }
 
 #[cfg(test)]
@@ -329,5 +408,40 @@ mod tests {
         assert_eq!(r(4000).display(), "MV\u{0305}");  // M V̄  (5000 - 1000)
         assert_eq!(r(5000).display(), "V\u{0305}");   // V̄
         assert_eq!(r(10000).display(), "X\u{0305}");  // X̄
+    }
+
+    #[test]
+    fn add_sub_match_i64() {
+        let cases = [(0, 0), (2, 3), (4, 1), (49, 1), (3999, 1), (30507, 25),
+                     (1234, 8766), (-3, 5), (3, -5), (-7, -8), (5, -5)];
+        for (a, b) in cases {
+            assert_eq!(r(a).add(&r(b)).to_i64(), Some(a + b), "{a}+{b}");
+            assert_eq!(r(a).sub(&r(b)).to_i64(), Some(a - b), "{a}-{b}");
+        }
+    }
+
+    #[test]
+    fn carry_and_borrow_rollover() {
+        assert_eq!(r(3999).add(&r(1)).display(), "MV\u{0305}"); // 4000
+        assert_eq!(r(4000).sub(&r(1)).display(), "MMMCMXCIX");  // 3999
+        assert_eq!(r(50).sub(&r(1)).display(), "XLIX");         // 49
+    }
+
+    #[test]
+    fn neg_and_zero() {
+        assert_eq!(r(7).neg().to_i64(), Some(-7));
+        assert_eq!(r(-7).neg().to_i64(), Some(7));
+        assert!(r(5).sub(&r(5)).is_zero());
+        assert_eq!(Roman::zero().neg(), Roman::zero());
+    }
+
+    #[test]
+    fn ordering_across_signs() {
+        assert!(r(-1) < r(0));
+        assert!(r(0) < r(1));
+        assert!(r(-5) < r(-3));
+        assert!(r(3999) < r(4000));
+        assert!(r(100) > r(99));
+        assert_eq!(r(42).cmp(&r(42)), std::cmp::Ordering::Equal);
     }
 }
