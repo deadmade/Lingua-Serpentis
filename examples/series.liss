@@ -8,5 +8,5 @@ ni summa = nullus;
 dum (ni i = °I; i minor_est longitudo(numeri) + °I; i = i + °I) {
     summa = summa + numeri[i];
 }
-scribe(numeri);   // [1, 20, 30, 40]
-scribe(summa);    // 91
+scribe(numeri);   // [I, XX, XXX, XL]
+scribe(summa);    // XCI

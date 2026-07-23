@@ -7,6 +7,11 @@
   for the signature syntax introduced in
   `2026-07-21-haskell-style-signatures-design.md`. Prose unchanged.
 
+> **Amended 2026-07-23:** the `ni` type is no longer `i64`-backed. Roman
+> numerals are now the runtime representation — see
+> `2026-07-23-roman-native-integers-design.md`. Passages below describing Roman
+> literals collapsing to `i64` and integers printing in Arabic are superseded.
+
 ## 1. Vision
 
 **Lingua Serpentis** ("Language of the Serpent") is a small, statically-typed
