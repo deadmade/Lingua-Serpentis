@@ -9,6 +9,7 @@ pub mod checker;
 pub mod value;
 pub mod interp;
 pub mod latinity;
+pub mod program;
 
 use error::LResult;
 pub use error::Warning;
