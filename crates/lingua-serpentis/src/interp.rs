@@ -68,16 +68,16 @@ impl Interp {
                 let r = self.eval(right, line)?;
                 eval_binary(*op, l, r, line)
             }
-            Expr::Call { name, args } => {
+            Expr::Call { package, name, args } => {
                 let mut vals = Vec::new();
                 for a in args { vals.push(self.eval(a, line)?); }
-                if name.as_str() == "longitudo" {
+                if package.is_none() && name.as_str() == "longitudo" {
                     return match vals.into_iter().next() {
                         Some(Value::List(items)) => Ok(Value::Int(Roman::from_usize(items.len()))),
                         _ => Err(LinguaError { message: "'longitudo' seriem expectat".into(), line }),
                     };
                 }
-                if name.as_str() == "adde" {
+                if package.is_none() && name.as_str() == "adde" {
                     let mut it = vals.into_iter();
                     let (list, elem) = (it.next(), it.next());
                     return match (list, elem) {
@@ -88,7 +88,10 @@ impl Interp {
                         _ => Err(LinguaError { message: "'adde' seriem et elementum expectat".into(), line }),
                     };
                 }
-                self.call(name, vals, line)
+                match package {
+                    Some(p) => self.call(&format!("{}.{}", p, name), vals, line),
+                    None => self.call(name, vals, line),
+                }
             }
             Expr::ListLit(elems) => {
                 let mut vals = Vec::new();

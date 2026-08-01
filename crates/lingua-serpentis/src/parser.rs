@@ -115,6 +115,21 @@ impl<'a> Parser<'a> {
         }
         Ok(e)
     }
+    // argument list: consumes '(' … ')'
+    fn call_args(&mut self) -> LResult<Vec<Expr>> {
+        self.eat(&TokenKind::LParen)?;
+        let mut args = Vec::new();
+        if self.peek() != Some(&TokenKind::RParen) {
+            args.push(self.expr()?);
+            while self.peek() == Some(&TokenKind::Comma) {
+                self.advance();
+                args.push(self.expr()?);
+            }
+        }
+        self.eat(&TokenKind::RParen)?;
+        Ok(args)
+    }
+
     fn primary(&mut self) -> LResult<Expr> {
         match self.peek().cloned() {
             Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
@@ -131,18 +146,19 @@ impl<'a> Parser<'a> {
             }
             Some(TokenKind::Ident(name)) => {
                 self.advance();
-                if self.peek() == Some(&TokenKind::LParen) {
-                    self.advance();
-                    let mut args = Vec::new();
-                    if self.peek() != Some(&TokenKind::RParen) {
-                        args.push(self.expr()?);
-                        while self.peek() == Some(&TokenKind::Comma) {
-                            self.advance();
-                            args.push(self.expr()?);
-                        }
+                if self.peek() == Some(&TokenKind::Dot) {
+                    // qualified call: the only thing a package name can do
+                    self.advance(); // .
+                    let fname = self.ident()?;
+                    if self.peek() != Some(&TokenKind::LParen) {
+                        return Err(self.err("vocatio functionis post nomen fasciculi expectata"));
                     }
-                    self.eat(&TokenKind::RParen)?;
-                    Ok(Expr::Call { name, args })
+                    let args = self.call_args()?;
+                    return Ok(Expr::Call { package: Some(name), name: fname, args });
+                }
+                if self.peek() == Some(&TokenKind::LParen) {
+                    let args = self.call_args()?;
+                    Ok(Expr::Call { package: None, name, args })
                 } else {
                     Ok(Expr::Ident(name))
                 }
@@ -399,6 +415,37 @@ pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
     Ok(stmts)
 }
 
+/// Parse one file under the package model (§4.4–4.5 of the design):
+/// `affer` lines first, then `munus` declarations, nothing else.
+pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
+    let mut p = Parser { toks: tokens, pos: 0 };
+    let mut imports: Vec<FileImport> = Vec::new();
+    while p.peek() == Some(&TokenKind::Import) {
+        let line = p.line();
+        p.advance(); // affer
+        let package = p.ident()?;
+        p.eat(&TokenKind::Semicolon)?;
+        if imports.iter().any(|i| i.package == package) {
+            return Err(LinguaError {
+                message: format!("fasciculus '{}' bis allatus", package),
+                line,
+            });
+        }
+        imports.push(FileImport { package, line });
+    }
+    let mut funcs = Vec::new();
+    while p.pos < p.toks.len() {
+        match p.peek() {
+            Some(TokenKind::Func) => funcs.push(p.func_stmt()?),
+            Some(TokenKind::Import) => {
+                return Err(p.err("'affer' ante omnia munera ponendum"));
+            }
+            _ => return Err(p.err("extra munera nihil nisi declarationes licet")),
+        }
+    }
+    Ok(FileAst { imports, funcs })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,7 +508,7 @@ mod tests {
         let e = parse_first_expr("summa maior_est adde(a, °I);");
         match e {
             Expr::Binary { op: BinOp::Gt, right, .. } => match *right {
-                Expr::Call { name, args } => {
+                Expr::Call { name, args, .. } => {
                     assert_eq!(name, "adde");
                     assert_eq!(args.len(), 2);
                 }
@@ -515,7 +562,7 @@ mod tests {
     #[test]
     fn zero_arg_call() {
         let e = parse_first_expr("adde();");
-        assert_eq!(e, Expr::Call { name: "adde".into(), args: vec![] });
+        assert_eq!(e, Expr::Call { package: None, name: "adde".into(), args: vec![] });
     }
 
     #[test]
@@ -671,5 +718,76 @@ mod tests {
         // `xs[°I];` with no `=` must remain an ExprStmt, not become an assign.
         let s = parse_all("xs[°I];");
         assert!(matches!(s[0].kind, StmtKind::ExprStmt(Expr::Index { .. })));
+    }
+
+    fn parse_file_ok(src: &str) -> FileAst {
+        parse_file(&tokenize(src).unwrap()).expect("expected a valid file")
+    }
+
+    fn parse_file_err(src: &str) -> String {
+        parse_file(&tokenize(src).unwrap())
+            .expect_err("expected a file-level parse error")
+            .message
+    }
+
+    #[test]
+    fn file_with_imports_then_functions() {
+        let f = parse_file_ok(
+            "affer mathematica;\naffer fractio;\nmunus initium reddit ni { redde nullus; }",
+        );
+        assert_eq!(f.imports.len(), 2);
+        assert_eq!(f.imports[0], FileImport { package: "mathematica".into(), line: 1 });
+        assert_eq!(f.imports[1], FileImport { package: "fractio".into(), line: 2 });
+        assert_eq!(f.funcs.len(), 1);
+        assert!(matches!(f.funcs[0].kind, StmtKind::Func(_)));
+    }
+
+    #[test]
+    fn empty_file_parses_to_nothing() {
+        let f = parse_file_ok("// solum commentarium\n");
+        assert!(f.imports.is_empty() && f.funcs.is_empty());
+    }
+
+    #[test]
+    fn duplicate_import_is_rejected() {
+        let m = parse_file_err("affer mathematica;\naffer mathematica;");
+        assert!(m.contains("bis allatus"), "got: {m}");
+    }
+
+    #[test]
+    fn import_after_a_function_is_rejected() {
+        let m = parse_file_err("munus f reddit ni { redde nullus; }\naffer mathematica;");
+        assert!(m.contains("ante omnia munera"), "got: {m}");
+    }
+
+    #[test]
+    fn top_level_statement_is_rejected() {
+        for src in ["scribe(°I);", "ni x = °V;", "si (verus) { scribe(°I); }"] {
+            let m = parse_file_err(src);
+            assert!(m.contains("nihil nisi declarationes"), "src {src:?} got: {m}");
+        }
+    }
+
+    #[test]
+    fn qualified_call_parses() {
+        let e = parse_first_expr("mathematica.summa(°I, °II);");
+        assert_eq!(e, Expr::Call {
+            package: Some("mathematica".into()),
+            name: "summa".into(),
+            args: vec![Expr::Int(ri(1)), Expr::Int(ri(2))],
+        });
+    }
+
+    #[test]
+    fn qualified_name_must_be_called() {
+        let toks = tokenize("ni x = mathematica.summa;").unwrap();
+        let m = parse(&toks).expect_err("expected error").message;
+        assert!(m.contains("vocatio"), "got: {m}");
+    }
+
+    #[test]
+    fn dot_without_a_function_name_is_rejected() {
+        let toks = tokenize("mathematica.(°I);").unwrap();
+        assert!(parse(&toks).is_err());
     }
 }

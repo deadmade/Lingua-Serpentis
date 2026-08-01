@@ -77,7 +77,13 @@ impl Checker {
                 let rt = self.check_expr(right, line)?;
                 self.check_binary(*op, lt, rt, left, right, line)
             }
-            Expr::Call { name, args } => {
+            Expr::Call { package, name, args } => {
+                if let Some(p) = package {
+                    return Err(LinguaError {
+                        message: format!("fasciculus '{}' non allatus est", p),
+                        line,
+                    });
+                }
                 if name.as_str() == "longitudo" {
                     if args.len() != 1 {
                         return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });

@@ -21,7 +21,7 @@ pub enum Expr {
     Ident(String),
     Unary { op: UnOp, expr: Box<Expr> },
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
-    Call { name: String, args: Vec<Expr> },
+    Call { package: Option<String>, name: String, args: Vec<Expr> },
     ListLit(Vec<Expr>),
     Index { base: Box<Expr>, index: Box<Expr> },
 }
@@ -60,4 +60,36 @@ pub enum StmtKind {
     Return(Expr),
     Break,
     Continue,
+}
+
+/// One `affer` line at the top of a file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileImport {
+    pub package: String,
+    pub line: usize,
+}
+
+/// A parsed `.liss` file under the package model: imports first, then
+/// functions — nothing else may appear at top level. Every element of
+/// `funcs` is a `StmtKind::Func`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileAst {
+    pub imports: Vec<FileImport>,
+    pub funcs: Vec<Stmt>,
+}
+
+/// A parsed file plus its path relative to the program root, kept for error
+/// attribution.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedFile {
+    pub path: String,
+    pub ast: FileAst,
+}
+
+/// The whole parsed program: the root folder's files plus one entry per
+/// package. `BTreeMap` keeps package order deterministic.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedProgram {
+    pub root: Vec<ParsedFile>,
+    pub packages: std::collections::BTreeMap<String, Vec<ParsedFile>>,
 }
