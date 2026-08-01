@@ -1,7 +1,7 @@
 # Lingua Serpentis — Programs and Packages (*fasciculi*) Design
 
 - **Date:** 2026-08-01
-- **Status:** Design approved in brainstorming; this written spec pending user review
+- **Status:** Approved — implemented (plan: `../plans/2026-08-01-programs-and-packages.md`)
 - **Author:** Manuel (with Claude)
 - **Relationship:** Realizes the "Imports / modules" v2 candidate from
   `2026-07-19-lingua-serpentis-rust-interpreter-design.md` §9. **Supersedes that

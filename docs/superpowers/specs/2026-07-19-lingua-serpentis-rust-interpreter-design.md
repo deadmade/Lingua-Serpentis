@@ -12,6 +12,13 @@
 > `2026-07-23-roman-native-integers-design.md`. Passages below describing Roman
 > literals collapsing to `i64` and integers printing in Arabic are superseded.
 
+> **Amended 2026-08-01:** the script-style program model is superseded — a
+> program is now a folder (or single file) that starts at `munus initium
+> reddit ni`, and top level allows only declarations, so §5.5's top-level
+> statements and §5.9's example no longer run as written. §9's "Imports /
+> modules" v2 candidate is realized as Go-style packages (*fasciculi*). See
+> `2026-08-01-programs-and-packages-design.md`.
+
 ## 1. Vision
 
 **Lingua Serpentis** ("Language of the Serpent") is a small, statically-typed
