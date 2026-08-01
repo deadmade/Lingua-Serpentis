@@ -247,6 +247,24 @@ fn single_file_program_still_needs_initium() {
 }
 
 #[test]
+fn intra_package_unqualified_calls_run() {
+    // Two files in the same package call each other with bare (unqualified)
+    // names — the checker validates this against the package's own function
+    // table, and the interpreter must resolve it there too, not against the
+    // root namespace (regression test for the package bare-call bug).
+    let files = [
+        ("principale.liss",
+         "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.decem()); redde nullus; }"),
+        ("mathematica/quinque.liss", "munus quinque reddit ni { redde °V; }"),
+        ("mathematica/decem.liss", "munus decem reddit ni { redde quinque() + quinque(); }"),
+    ];
+    let (output, code, warnings) = run_program_with_warnings(&files).unwrap();
+    assert_eq!(output, "X\n");
+    assert_eq!(code, 0);
+    assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+}
+
+#[test]
 fn computatrum_example_runs() {
     let files = [
         ("principale.liss", include_str!("../../../examples/computatrum/principale.liss")),

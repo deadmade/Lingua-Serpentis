@@ -12,11 +12,22 @@ struct Interp {
     funcs: HashMap<String, (FuncDecl, String)>, // qualified name -> (decl, source path)
     out: String,
     err_file: Option<String>, // set by the innermost frame that raised an error
+    // The package namespace of the currently executing function's frame.
+    // `None` for root and legacy (checker-less) mode; `Some(pkg)` while a
+    // package function's body is running, so its own bare calls resolve
+    // against `pkg`'s functions, mirroring the checker's namespace rule.
+    current_ns: Option<String>,
 }
 
 impl Interp {
     fn new() -> Self {
-        Interp { scopes: vec![HashMap::new()], funcs: HashMap::new(), out: String::new(), err_file: None }
+        Interp {
+            scopes: vec![HashMap::new()],
+            funcs: HashMap::new(),
+            out: String::new(),
+            err_file: None,
+            current_ns: None,
+        }
     }
 
     fn get(&self, name: &str) -> Option<Value> {
@@ -91,7 +102,17 @@ impl Interp {
                 }
                 match package {
                     Some(p) => self.call(&format!("{}.{}", p, name), vals, line),
-                    None => self.call(name, vals, line),
+                    None => {
+                        // A bare call resolves in the *executing* frame's own
+                        // namespace (no fallback to the root), exactly like
+                        // the checker: `check_file` validates a package
+                        // file's unqualified calls against that package's
+                        // own function table only.
+                        match self.current_ns.clone() {
+                            Some(ns) => self.call(&format!("{}.{}", ns, name), vals, line),
+                            None => self.call(name, vals, line),
+                        }
+                    }
                 }
             }
             Expr::ListLit(elems) => {
@@ -132,9 +153,14 @@ impl Interp {
         for ((_, pname), v) in f.params.iter().zip(args) {
             frame.insert(pname.clone(), v);
         }
+        // Package and function names cannot contain '.' (a package name must
+        // lex as a single identifier), so this split is unambiguous: a
+        // dotted lookup key's namespace is everything before the first '.'.
+        let callee_ns = name.split_once('.').map(|(pkg, _)| pkg.to_string());
         // Swap in an isolated scope stack for the call, restore afterwards
         // (unconditionally, even if the body raises an error via `?`).
         let saved = std::mem::replace(&mut self.scopes, vec![frame]);
+        let saved_ns = std::mem::replace(&mut self.current_ns, callee_ns);
         let result = (|| -> LResult<Value> {
             for s in &f.body {
                 if let Flow::Return(v) = self.exec(s)? { return Ok(v); }
@@ -142,6 +168,7 @@ impl Interp {
             Ok(Value::Int(Roman::zero()))
         })();
         self.scopes = saved;
+        self.current_ns = saved_ns;
         // Innermost frame first: the failing function's own file wins.
         if result.is_err() && self.err_file.is_none() && !file.is_empty() {
             self.err_file = Some(file);
@@ -594,6 +621,49 @@ mod tests {
                "munus duplum capit (ni n) reddit ni { redde n * °II; }")])],
         );
         assert_eq!(r.unwrap().0, "XLII\n");
+    }
+
+    #[test]
+    fn intra_package_bare_call_same_file() {
+        // A package function's bare call to a sibling in the *same file*
+        // must resolve inside the package, not against the root namespace.
+        let r = run_prog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.decem()); redde nullus; }")],
+            &[("mathematica", &[("mathematica/m.liss",
+               "munus quinque reddit ni { redde °V; }\nmunus decem reddit ni { redde quinque() + quinque(); }")])],
+        );
+        assert_eq!(r.unwrap().0, "X\n");
+    }
+
+    #[test]
+    fn intra_package_bare_call_across_files() {
+        // Same as above, but `quinque` and `decem` live in two different files
+        // of the same package — still the same namespace.
+        let r = run_prog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.decem()); redde nullus; }")],
+            &[("mathematica", &[
+                ("mathematica/quinque.liss", "munus quinque reddit ni { redde °V; }"),
+                ("mathematica/decem.liss", "munus decem reddit ni { redde quinque() + quinque(); }"),
+            ])],
+        );
+        assert_eq!(r.unwrap().0, "X\n");
+    }
+
+    #[test]
+    fn package_bare_call_ignores_root_shadow() {
+        // The root defines its own `quinque` (returning C). The package's bare
+        // call to `quinque()` must still bind to the package's own `quinque`
+        // (returning V), not silently fall through to the root's — this is
+        // the soundness half of the finding.
+        let r = run_prog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus quinque reddit ni { redde °C; }\nmunus initium reddit ni { scribe(mathematica.decem()); redde nullus; }")],
+            &[("mathematica", &[("mathematica/m.liss",
+               "munus quinque reddit ni { redde °V; }\nmunus decem reddit ni { redde quinque() + quinque(); }")])],
+        );
+        assert_eq!(r.unwrap().0, "X\n"); // not "CC\n"
     }
 
     #[test]
