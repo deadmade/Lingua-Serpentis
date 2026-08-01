@@ -1,6 +1,6 @@
 use crate::ast::*;
-use crate::error::{LinguaError, LResult};
-use std::collections::HashMap;
+use crate::error::{LinguaError, LResult, ProgramError};
+use std::collections::{HashMap, HashSet};
 
 /// Synthesized type of an expression during checking. `FloatLit` is the
 /// not-yet-resolved type of a fractional literal — and of arithmetic that
@@ -11,15 +11,25 @@ enum InferTy {
     FloatLit,
 }
 
+type Sig = (Vec<Type>, Type); // (param types, return type)
+
 struct Checker {
     scopes: Vec<HashMap<String, Type>>,
-    funcs: HashMap<String, (Vec<Type>, Type)>, // name -> (param types, return type)
+    funcs: HashMap<String, Sig>,                       // current namespace (folder)
+    packages: HashMap<String, HashMap<String, Sig>>,   // program-wide package signatures
+    imports: HashSet<String>,                          // current file's affer set
     current_ret: Option<Type>, // Some(_) while checking a function body
 }
 
 impl Checker {
     fn new() -> Self {
-        Checker { scopes: vec![HashMap::new()], funcs: HashMap::new(), current_ret: None }
+        Checker {
+            scopes: vec![HashMap::new()],
+            funcs: HashMap::new(),
+            packages: HashMap::new(),
+            imports: HashSet::new(),
+            current_ret: None,
+        }
     }
 
     fn lookup(&self, name: &str) -> Option<Type> {
@@ -27,6 +37,26 @@ impl Checker {
     }
     fn declare(&mut self, name: String, ty: Type) {
         self.scopes.last_mut().unwrap().insert(name, ty);
+    }
+
+    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], line: usize) -> LResult<()> {
+        if params.len() != args.len() {
+            return Err(LinguaError {
+                message: format!("functio '{}' numerum argumentorum falsum accepit", fname),
+                line,
+            });
+        }
+        for (want, arg) in params.iter().zip(args.iter_mut()) {
+            let got = self.resolve_expr(arg, Some(want.clone()), line)?;
+            if got != *want {
+                return Err(LinguaError {
+                    message: format!("argumentum typum '{}' expectat, sed '{}' datum est",
+                        Self::type_name(want), Self::type_name(&got)),
+                    line,
+                });
+            }
+        }
+        Ok(())
     }
 
     fn type_name(t: &Type) -> String {
@@ -77,13 +107,25 @@ impl Checker {
                 let rt = self.check_expr(right, line)?;
                 self.check_binary(*op, lt, rt, left, right, line)
             }
-            Expr::Call { package, name, args } => {
-                if let Some(p) = package {
+            Expr::Call { package: Some(p), name, args } => {
+                if !self.imports.contains(p) {
                     return Err(LinguaError {
                         message: format!("fasciculus '{}' non allatus est", p),
                         line,
                     });
                 }
+                let sigs = self.packages.get(p).ok_or_else(|| LinguaError {
+                    message: format!("fasciculus '{}' non inventus", p),
+                    line,
+                })?;
+                let (params, ret) = sigs.get(name).cloned().ok_or_else(|| LinguaError {
+                    message: format!("functio '{}' in fasciculo '{}' non inventa", name, p),
+                    line,
+                })?;
+                self.check_args(name, &params, args, line)?;
+                Ok(InferTy::Known(ret))
+            }
+            Expr::Call { package: None, name, args } => {
                 if name.as_str() == "longitudo" {
                     if args.len() != 1 {
                         return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });
@@ -131,19 +173,7 @@ impl Checker {
                 let (params, ret) = self.funcs.get(name)
                     .cloned()
                     .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
-                if params.len() != args.len() {
-                    return Err(LinguaError { message: format!("functio '{}' numerum argumentorum falsum accepit", name), line });
-                }
-                for (want, arg) in params.iter().zip(args.iter_mut()) {
-                    let got = self.resolve_expr(arg, Some(want.clone()), line)?;
-                    if got != *want {
-                        return Err(LinguaError {
-                            message: format!("argumentum typum '{}' expectat, sed '{}' datum est",
-                                Self::type_name(want), Self::type_name(&got)),
-                            line,
-                        });
-                    }
-                }
+                self.check_args(name, &params, args, line)?;
                 Ok(InferTy::Known(ret))
             }
             Expr::ListLit(elems) => {
@@ -506,6 +536,101 @@ pub fn check(program: &mut [Stmt]) -> LResult<()> {
     Ok(())
 }
 
+/// Collect one folder's function signatures across all its files, rejecting
+/// reserved names and duplicates (§4.2 — two `initium` in the root land here
+/// as the ordinary duplicate error).
+fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramError> {
+    let mut sigs: HashMap<String, Sig> = HashMap::new();
+    for file in files {
+        for s in &file.ast.funcs {
+            let StmtKind::Func(f) = &s.kind else { continue };
+            if f.name == "longitudo" || f.name == "adde" {
+                return Err(ProgramError::in_file(&file.path, LinguaError {
+                    message: format!("nomen '{}' reservatum est", f.name),
+                    line: s.line,
+                }));
+            }
+            if sigs.contains_key(&f.name) {
+                return Err(ProgramError::in_file(&file.path, LinguaError {
+                    message: format!("functio '{}' bis definita", f.name),
+                    line: s.line,
+                }));
+            }
+            let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
+            sigs.insert(f.name.clone(), (ptypes, f.ret.clone()));
+        }
+    }
+    Ok(sigs)
+}
+
+/// Check one file's bodies against its folder's namespace and its own imports.
+fn check_file(
+    file: &mut ParsedFile,
+    ns_sigs: &HashMap<String, Sig>,
+    pkg_sigs: &HashMap<String, HashMap<String, Sig>>,
+) -> Result<(), ProgramError> {
+    for imp in &file.ast.imports {
+        if !pkg_sigs.contains_key(&imp.package) {
+            return Err(ProgramError::in_file(&file.path, LinguaError {
+                message: format!("fasciculus '{}' non inventus", imp.package),
+                line: imp.line,
+            }));
+        }
+    }
+    let mut c = Checker::new();
+    c.funcs = ns_sigs.clone();
+    c.packages = pkg_sigs.clone();
+    c.imports = file.ast.imports.iter().map(|i| i.package.clone()).collect();
+    for s in file.ast.funcs.iter_mut() {
+        c.check_stmt(s).map_err(|e| ProgramError::in_file(&file.path, e))?;
+    }
+    Ok(())
+}
+
+/// Check a whole parsed program (§4 of the design): per-namespace signatures,
+/// the `initium` entry point, import validity, then every file's bodies.
+pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
+    let root_sigs = collect_sigs(&prog.root)?;
+    let mut pkg_sigs: HashMap<String, HashMap<String, Sig>> = HashMap::new();
+    for (name, files) in &prog.packages {
+        pkg_sigs.insert(name.clone(), collect_sigs(files)?);
+    }
+
+    match root_sigs.get("initium") {
+        None => return Err(ProgramError::structural(
+            "munus 'initium' in programmate non inventum")),
+        Some((params, ret)) => {
+            if !params.is_empty() || *ret != Type::Int {
+                // find the declaration to attribute the error
+                for file in &prog.root {
+                    for s in &file.ast.funcs {
+                        if let StmtKind::Func(f) = &s.kind {
+                            if f.name == "initium" {
+                                return Err(ProgramError::in_file(&file.path, LinguaError {
+                                    message: "munus 'initium' nihil capere et 'ni' reddere debet".into(),
+                                    line: s.line,
+                                }));
+                            }
+                        }
+                    }
+                }
+                unreachable!("initium was in root_sigs, so its declaration exists");
+            }
+        }
+    }
+
+    for file in prog.root.iter_mut() {
+        check_file(file, &root_sigs, &pkg_sigs)?;
+    }
+    for (name, files) in prog.packages.iter_mut() {
+        let ns = &pkg_sigs[name];
+        for file in files.iter_mut() {
+            check_file(file, ns, &pkg_sigs)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -706,5 +831,143 @@ mod tests {
     fn list_equality_is_allowed() {
         assert!(check_src("scribe([°I] par_est [°I]);").is_ok());
         assert!(check_src("scribe([°I] par_non_est [°I]);").is_ok());
+    }
+
+    use crate::ast::{ParsedFile, ParsedProgram};
+    use crate::parser::parse_file;
+    use std::collections::BTreeMap;
+
+    fn pfile(path: &str, src: &str) -> ParsedFile {
+        ParsedFile { path: path.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
+    }
+
+    fn pprog(root: &[(&str, &str)], pkgs: &[(&str, &[(&str, &str)])]) -> ParsedProgram {
+        let mut packages = BTreeMap::new();
+        for (name, files) in pkgs {
+            packages.insert(
+                name.to_string(),
+                files.iter().map(|(p, s)| pfile(p, s)).collect(),
+            );
+        }
+        ParsedProgram { root: root.iter().map(|(p, s)| pfile(p, s)).collect(), packages }
+    }
+
+    #[test]
+    fn program_with_import_and_qualified_call_checks() {
+        let mut p = pprog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.summa(°I, °II)); redde nullus; }")],
+            &[("mathematica",
+               &[("mathematica/summa.liss",
+                  "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
+        );
+        assert!(check_program(&mut p).is_ok());
+    }
+
+    #[test]
+    fn missing_initium_is_a_structural_error() {
+        let mut p = pprog(&[("a.liss", "munus f reddit ni { redde nullus; }")], &[]);
+        let e = check_program(&mut p).unwrap_err();
+        assert!(e.message.contains("initium"), "got: {}", e.message);
+        assert_eq!(e.file, None);
+        assert_eq!(e.line, None);
+    }
+
+    #[test]
+    fn initium_with_wrong_signature_is_rejected() {
+        let mut with_params = pprog(
+            &[("a.liss", "munus initium capit (ni n) reddit ni { redde n; }")], &[]);
+        let e = check_program(&mut with_params).unwrap_err();
+        assert!(e.message.contains("nihil capere"), "got: {}", e.message);
+        assert_eq!(e.file.as_deref(), Some("a.liss"));
+
+        let mut wrong_ret = pprog(
+            &[("a.liss", "munus initium reddit voc { redde \"salve\"; }")], &[]);
+        let e = check_program(&mut wrong_ret).unwrap_err();
+        assert!(e.message.contains("reddere"), "got: {}", e.message);
+    }
+
+    #[test]
+    fn duplicate_function_across_files_of_one_folder_is_rejected() {
+        let mut p = pprog(
+            &[("a.liss", "munus initium reddit ni { redde nullus; }")],
+            &[("mathematica", &[
+                ("mathematica/a.liss", "munus summa reddit ni { redde °I; }"),
+                ("mathematica/b.liss", "munus summa reddit ni { redde °II; }"),
+            ])],
+        );
+        let e = check_program(&mut p).unwrap_err();
+        assert!(e.message.contains("bis definita"), "got: {}", e.message);
+        assert_eq!(e.file.as_deref(), Some("mathematica/b.liss"));
+    }
+
+    #[test]
+    fn importing_an_unknown_package_is_rejected() {
+        let mut p = pprog(
+            &[("a.liss", "affer ignota;\nmunus initium reddit ni { redde nullus; }")], &[]);
+        let e = check_program(&mut p).unwrap_err();
+        assert!(e.message.contains("non inventus"), "got: {}", e.message);
+        assert_eq!(e.file.as_deref(), Some("a.liss"));
+        assert_eq!(e.line, Some(1));
+    }
+
+    #[test]
+    fn qualified_call_without_import_is_rejected() {
+        let mut p = pprog(
+            &[("a.liss", "munus initium reddit ni { redde mathematica.summa(°I, °II); }")],
+            &[("mathematica", &[("mathematica/s.liss",
+                "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
+        );
+        let e = check_program(&mut p).unwrap_err();
+        assert!(e.message.contains("non allatus"), "got: {}", e.message);
+    }
+
+    #[test]
+    fn unknown_function_in_a_real_package_is_rejected() {
+        let mut p = pprog(
+            &[("a.liss", "affer mathematica;\nmunus initium reddit ni { redde mathematica.ignota(); }")],
+            &[("mathematica", &[("mathematica/s.liss",
+                "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
+        );
+        let e = check_program(&mut p).unwrap_err();
+        assert!(e.message.contains("in fasciculo"), "got: {}", e.message);
+    }
+
+    #[test]
+    fn import_cycles_are_allowed() {
+        let mut p = pprog(
+            &[("a.liss", "affer par;\nmunus initium reddit ni { redde par.aequum(°IV); }")],
+            &[
+                ("par", &[("par/p.liss",
+                    "affer impar;\nmunus aequum capit (ni n) reddit ni { si (n par_est nullus) { redde °I; } redde impar.imparum(n - °I); }")]),
+                ("impar", &[("impar/i.liss",
+                    "affer par;\nmunus imparum capit (ni n) reddit ni { si (n par_est nullus) { redde nullus; } redde par.aequum(n - °I); }")]),
+            ],
+        );
+        assert!(check_program(&mut p).is_ok());
+    }
+
+    #[test]
+    fn local_and_imported_functions_may_share_a_name() {
+        // root's own `summa` returns voc; the package's returns ni — the call
+        // sites type-check against the right one, so resolution is provably
+        // by qualifier, not by accident.
+        let mut p = pprog(
+            &[("a.liss",
+               "affer mathematica;\nmunus summa reddit voc { redde \"summa\"; }\nmunus initium reddit ni { scribe(summa()); redde mathematica.summa(°I, °II); }")],
+            &[("mathematica", &[("mathematica/s.liss",
+                "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
+        );
+        assert!(check_program(&mut p).is_ok());
+    }
+
+    #[test]
+    fn initium_in_a_package_is_an_ordinary_function() {
+        let mut p = pprog(
+            &[("a.liss", "affer alia;\nmunus initium reddit ni { redde alia.initium(°V); }")],
+            &[("alia", &[("alia/x.liss",
+                "munus initium capit (ni n) reddit ni { redde n; }")])],
+        );
+        assert!(check_program(&mut p).is_ok());
     }
 }
