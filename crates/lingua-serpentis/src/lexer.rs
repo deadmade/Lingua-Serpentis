@@ -24,6 +24,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             ']' => { tokens.push(Token { kind: TokenKind::RBracket, line }); i += 1; }
             ';' => { tokens.push(Token { kind: TokenKind::Semicolon, line }); i += 1; }
             ',' => { tokens.push(Token { kind: TokenKind::Comma, line }); i += 1; }
+            '.' => { tokens.push(Token { kind: TokenKind::Dot, line }); i += 1; }
             '+' => { tokens.push(Token { kind: TokenKind::Plus, line }); i += 1; }
             '-' => { tokens.push(Token { kind: TokenKind::Minus, line }); i += 1; }
             '*' => { tokens.push(Token { kind: TokenKind::Star, line }); i += 1; }
@@ -98,6 +99,7 @@ fn word_to_kind(word: String) -> TokenKind {
         "abrumpe" => TokenKind::Break,
         "continua" => TokenKind::Continue,
         "scribe" => TokenKind::Print,
+        "affer" => TokenKind::Import,
         "capit" => TokenKind::Takes,
         "reddit" => TokenKind::Yields,
         "lista" => TokenKind::Lista,
@@ -238,6 +240,32 @@ mod tests {
         assert_eq!(
             kinds("ni lista"),
             vec![TokenKind::TyInt, TokenKind::Lista]
+        );
+    }
+
+    #[test]
+    fn affer_and_dot_tokenize() {
+        assert_eq!(
+            kinds("affer mathematica;"),
+            vec![TokenKind::Import, TokenKind::Ident("mathematica".into()), TokenKind::Semicolon]
+        );
+        assert_eq!(kinds("."), vec![TokenKind::Dot]);
+        // Word boundary: a word merely starting with `affer` stays one identifier.
+        assert_eq!(kinds("afferre"), vec![TokenKind::Ident("afferre".into())]);
+    }
+
+    #[test]
+    fn dot_inside_roman_literal_still_belongs_to_the_numeral() {
+        // 30 * 1000 — the °-branch consumes the dot before the Dot rule sees it.
+        assert_eq!(kinds("°XXX.M"), vec![TokenKind::Int(Roman::from_u64(30000))]);
+        // A qualified call around a numeral: dot, numeral, dot stay separate.
+        assert_eq!(
+            kinds("mathematica.duplica(°V)"),
+            vec![
+                TokenKind::Ident("mathematica".into()), TokenKind::Dot,
+                TokenKind::Ident("duplica".into()), TokenKind::LParen,
+                TokenKind::Int(Roman::from_u64(5)), TokenKind::RParen,
+            ]
         );
     }
 }
