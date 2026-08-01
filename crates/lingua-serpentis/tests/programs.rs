@@ -54,7 +54,7 @@ fn non_latin_name_warns_but_program_still_runs() {
     // The warning must not change the program's behaviour.
     assert_eq!(output, "V\n");
     assert_eq!(warnings.len(), 1);
-    assert_eq!(warnings[0].line, 1);
+    assert_eq!(warnings[0].line, Some(1));
     assert!(warnings[0].message.contains("result"));
 }
 

@@ -19,7 +19,8 @@ fn check_name(name: &str, line: usize, out: &mut Vec<Warning>) {
     if name.chars().count() > 1 && !latinitas::is_latin(name) {
         out.push(Warning {
             message: format!("nomen '{name}' fortasse non Latinum est"),
-            line,
+            file: None,
+            line: Some(line),
         });
     }
 }
@@ -86,7 +87,7 @@ mod tests {
     fn flags_a_non_latin_variable() {
         let w = lint_src("ni result = °V;");
         assert_eq!(w.len(), 1);
-        assert_eq!(w[0].line, 1);
+        assert_eq!(w[0].line, Some(1));
         assert!(w[0].message.contains("result"));
     }
 
@@ -124,17 +125,17 @@ mod tests {
 
         let param = w.iter().find(|x| x.message.contains("widget"))
             .expect("expected a warning for the parameter 'widget'");
-        assert_eq!(param.line, 2, "parameter must be reported on the line it is written");
+        assert_eq!(param.line, Some(2), "parameter must be reported on the line it is written");
 
         // The function name still belongs to the `munus` line, and the body
         // declaration to its own line — so this really is pinning the parameter,
         // not a blanket line shift.
         let name = w.iter().find(|x| x.message.contains("foobar"))
             .expect("expected a warning for the function name 'foobar'");
-        assert_eq!(name.line, 1);
+        assert_eq!(name.line, Some(1));
         let local = w.iter().find(|x| x.message.contains("result"))
             .expect("expected a warning for the local 'result'");
-        assert_eq!(local.line, 3);
+        assert_eq!(local.line, Some(3));
     }
 
     #[test]
@@ -166,9 +167,9 @@ mod tests {
         // trivially sorted, making the ordering assertion unfailable.
         let w = lint_src("ni result = °I;\nni foobar = °II;\nni widget = °III;");
 
-        let lines: Vec<usize> = w.iter().map(|x| x.line).collect();
+        let lines: Vec<Option<usize>> = w.iter().map(|x| x.line).collect();
         assert_eq!(lines.len(), 3, "expected three warnings to order, got {w:?}");
-        assert_eq!(lines, vec![1, 2, 3]);
+        assert_eq!(lines, vec![Some(1), Some(2), Some(3)]);
     }
 
     #[test]
