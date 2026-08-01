@@ -245,3 +245,16 @@ fn single_file_program_still_needs_initium() {
     let e = run("munus f reddit ni { redde °I; }").unwrap_err();
     assert!(e.message.contains("initium"), "got: {}", e.message);
 }
+
+#[test]
+fn computatrum_example_runs() {
+    let files = [
+        ("principale.liss", include_str!("../../../examples/computatrum/principale.liss")),
+        ("mathematica/summa.liss", include_str!("../../../examples/computatrum/mathematica/summa.liss")),
+        ("mathematica/multiplicatio.liss", include_str!("../../../examples/computatrum/mathematica/multiplicatio.liss")),
+    ];
+    let (output, code, warnings) = run_program_with_warnings(&files).unwrap();
+    assert_eq!(output, "XLII\nXLII\n");
+    assert_eq!(code, 0);
+    assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+}
