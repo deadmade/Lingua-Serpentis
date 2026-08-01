@@ -1,7 +1,7 @@
 [package]
 name = "latinitas"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Latin morphological word validation, backed by Whitaker's WORDS (public domain)"
 
 [dependencies]
