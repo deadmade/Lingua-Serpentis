@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::error::{LinguaError, LResult};
+use crate::error::{LinguaError, LResult, ProgramError};
 use crate::fraction;
 use crate::roman::Roman;
 use crate::value::Value;
@@ -9,13 +9,14 @@ enum Flow { Normal, Break, Continue, Return(Value) }
 
 struct Interp {
     scopes: Vec<HashMap<String, Value>>,
-    funcs: HashMap<String, FuncDecl>,
+    funcs: HashMap<String, (FuncDecl, String)>, // qualified name -> (decl, source path)
     out: String,
+    err_file: Option<String>, // set by the innermost frame that raised an error
 }
 
 impl Interp {
     fn new() -> Self {
-        Interp { scopes: vec![HashMap::new()], funcs: HashMap::new(), out: String::new() }
+        Interp { scopes: vec![HashMap::new()], funcs: HashMap::new(), out: String::new(), err_file: None }
     }
 
     fn get(&self, name: &str) -> Option<Value> {
@@ -118,7 +119,7 @@ impl Interp {
     }
 
     fn call(&mut self, name: &str, args: Vec<Value>, line: usize) -> LResult<Value> {
-        let f = self.funcs.get(name)
+        let (f, file) = self.funcs.get(name)
             .cloned()
             .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
         if f.params.len() != args.len() {
@@ -141,6 +142,10 @@ impl Interp {
             Ok(Value::Int(Roman::zero()))
         })();
         self.scopes = saved;
+        // Innermost frame first: the failing function's own file wins.
+        if result.is_err() && self.err_file.is_none() && !file.is_empty() {
+            self.err_file = Some(file);
+        }
         result
     }
 
@@ -189,7 +194,7 @@ impl Interp {
                 Ok(Flow::Normal)
             }
             StmtKind::ExprStmt(e) => { self.eval(e, s.line)?; Ok(Flow::Normal) }
-            StmtKind::Func(f) => { self.funcs.insert(f.name.clone(), f.clone()); Ok(Flow::Normal) }
+            StmtKind::Func(f) => { self.funcs.insert(f.name.clone(), (f.clone(), String::new())); Ok(Flow::Normal) }
             StmtKind::Break => Ok(Flow::Break),
             StmtKind::Continue => Ok(Flow::Continue),
             StmtKind::Return(e) => {
@@ -333,7 +338,7 @@ pub fn execute(program: &[Stmt]) -> LResult<String> {
     // Register functions first so order doesn't matter.
     for s in program {
         if let StmtKind::Func(f) = &s.kind {
-            it.funcs.insert(f.name.clone(), f.clone());
+            it.funcs.insert(f.name.clone(), (f.clone(), String::new()));
         }
     }
     for s in program {
@@ -342,6 +347,51 @@ pub fn execute(program: &[Stmt]) -> LResult<String> {
         }
     }
     Ok(it.out)
+}
+
+/// Unix keeps an exit status's low 8 bits: the value mod CCLVI, shifted
+/// non-negative (a negative remainder gains one modulus).
+fn exit_status(r: &Roman) -> u8 {
+    let rem = r.div_rem(&Roman::from_u64(256)).1;
+    let x = rem.to_i64().expect("|rem| < 256 fits i64");
+    ((x + 256) % 256) as u8
+}
+
+/// Run a checked program (§4.3 of the design): register every function under
+/// its qualified name, call the root's `initium`, and turn its returned ni
+/// into the process exit status.
+pub fn execute_program(prog: &ParsedProgram) -> Result<(String, u8), ProgramError> {
+    let mut it = Interp::new();
+    for file in &prog.root {
+        for s in &file.ast.funcs {
+            if let StmtKind::Func(f) = &s.kind {
+                it.funcs.insert(f.name.clone(), (f.clone(), file.path.clone()));
+            }
+        }
+    }
+    for (pkg, files) in &prog.packages {
+        for file in files {
+            for s in &file.ast.funcs {
+                if let StmtKind::Func(f) = &s.kind {
+                    it.funcs.insert(format!("{}.{}", pkg, f.name), (f.clone(), file.path.clone()));
+                }
+            }
+        }
+    }
+    match it.call("initium", Vec::new(), 0) {
+        Ok(v) => {
+            let code = match v {
+                Value::Int(r) => exit_status(&r),
+                _ => 0, // checker guarantees Int; defensive only
+            };
+            Ok((it.out, code))
+        }
+        Err(e) => Err(ProgramError {
+            file: it.err_file.take(),
+            line: Some(e.line),
+            message: e.message,
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -482,5 +532,101 @@ mod tests {
             run("ni lista lista m = [[°I, °II], [°III]]; scribe(m[°II][°I]);"),
             "III\n"
         );
+    }
+
+    use crate::ast::{ParsedFile, ParsedProgram};
+    use crate::parser::parse_file;
+    use std::collections::BTreeMap;
+
+    fn pfile(path: &str, src: &str) -> ParsedFile {
+        ParsedFile { path: path.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
+    }
+
+    fn run_prog(root: &[(&str, &str)], pkgs: &[(&str, &[(&str, &str)])])
+        -> Result<(String, u8), crate::error::ProgramError>
+    {
+        let mut packages = BTreeMap::new();
+        for (name, files) in pkgs {
+            packages.insert(name.to_string(), files.iter().map(|(p, s)| pfile(p, s)).collect());
+        }
+        let prog = ParsedProgram {
+            root: root.iter().map(|(p, s)| pfile(p, s)).collect(),
+            packages,
+        };
+        execute_program(&prog)
+    }
+
+    #[test]
+    fn initium_runs_and_exits_zero() {
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { scribe(°V); redde nullus; }")], &[]);
+        assert_eq!(r.unwrap(), ("V\n".to_string(), 0));
+    }
+
+    #[test]
+    fn exit_status_is_the_return_mod_256() {
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { redde °CCLVII; }")], &[]);
+        assert_eq!(r.unwrap().1, 1); // 257 mod 256
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { redde °CCLVI; }")], &[]);
+        assert_eq!(r.unwrap().1, 0); // 256 mod 256
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { redde °V; }")], &[]);
+        assert_eq!(r.unwrap().1, 5);
+    }
+
+    #[test]
+    fn negative_return_wraps_like_unix() {
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { redde -°I; }")], &[]);
+        assert_eq!(r.unwrap().1, 255);
+    }
+
+    #[test]
+    fn falling_off_initium_exits_zero() {
+        // The existing fall-through semantics return Int zero.
+        let r = run_prog(&[("a.liss", "munus initium reddit ni { scribe(°I); }")], &[]);
+        assert_eq!(r.unwrap(), ("I\n".to_string(), 0));
+    }
+
+    #[test]
+    fn qualified_call_reaches_the_package() {
+        let r = run_prog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.duplum(°XXI)); redde nullus; }")],
+            &[("mathematica", &[("mathematica/m.liss",
+               "munus duplum capit (ni n) reddit ni { redde n * °II; }")])],
+        );
+        assert_eq!(r.unwrap().0, "XLII\n");
+    }
+
+    #[test]
+    fn same_folder_files_share_a_namespace() {
+        let r = run_prog(
+            &[
+                ("auxilia.liss", "munus quinque reddit ni { redde °V; }"),
+                ("principale.liss", "munus initium reddit ni { scribe(quinque()); redde nullus; }"),
+            ],
+            &[],
+        );
+        assert_eq!(r.unwrap().0, "V\n");
+    }
+
+    #[test]
+    fn runtime_error_names_the_file_of_the_failing_function() {
+        let r = run_prog(
+            &[("principale.liss",
+               "affer mathematica;\nmunus initium reddit ni { redde mathematica.divide(°I, nullus); }")],
+            &[("mathematica", &[("mathematica/m.liss",
+               "munus divide capit (ni a, ni b) reddit ni { redde a / b; }")])],
+        );
+        let e = r.unwrap_err();
+        assert_eq!(e.file.as_deref(), Some("mathematica/m.liss"));
+        assert_eq!(e.line, Some(1));
+        assert!(e.message.contains("divisio"), "got: {}", e.message);
+    }
+
+    #[test]
+    fn runtime_error_in_initium_names_the_root_file() {
+        let r = run_prog(
+            &[("principale.liss", "munus initium reddit ni { redde °I / nullus; }")], &[]);
+        let e = r.unwrap_err();
+        assert_eq!(e.file.as_deref(), Some("principale.liss"));
     }
 }
