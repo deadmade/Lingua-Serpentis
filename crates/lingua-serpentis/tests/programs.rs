@@ -9,9 +9,12 @@ fn full_program_with_function_and_if() {
             ni c = a + b;
             redde c;
         }
-        ni summa = summare(°XXV, °XXX.M.V.C.VII);
-        si (summa minor_est °C) { summa = summa + °C; }
-        scribe(summa);
+        munus initium reddit ni {
+            ni summa = summare(°XXV, °XXX.M.V.C.VII);
+            si (summa minor_est °C) { summa = summa + °C; }
+            scribe(summa);
+            redde nullus;
+        }
     "#;
     assert_eq!(run(src).unwrap(), "X\u{0305}X\u{0305}X\u{0305}DXXXII\n"); // 25 + 30507 = 30532 (not < 100, so unchanged)
 }
@@ -35,7 +38,7 @@ fn praecisio_example_runs() {
 
 #[test]
 fn type_error_reports_latin_and_line() {
-    let src = "ni x = \"salve\";";
+    let src = "munus initium reddit ni { ni x = \"salve\"; redde nullus; }";
     let err = run(src).unwrap_err();
     assert_eq!(err.line, 1);
     assert!(err.to_string().starts_with("Error in linea 1:"));
@@ -43,13 +46,19 @@ fn type_error_reports_latin_and_line() {
 
 #[test]
 fn char_and_text_comparison_end_to_end() {
-    assert_eq!(lingua_serpentis::run("lit c = 'z'; scribe(c);").unwrap(), "z\n");
-    assert_eq!(lingua_serpentis::run("scribe(\"apple\" minor_est \"banana\");").unwrap(), "verus\n");
+    assert_eq!(
+        lingua_serpentis::run("munus initium reddit ni { lit c = 'z'; scribe(c); redde nullus; }").unwrap(),
+        "z\n"
+    );
+    assert_eq!(
+        lingua_serpentis::run("munus initium reddit ni { scribe(\"apple\" minor_est \"banana\"); redde nullus; }").unwrap(),
+        "verus\n"
+    );
 }
 
 #[test]
 fn non_latin_name_warns_but_program_still_runs() {
-    let src = "ni result = °V; scribe(result);";
+    let src = "munus initium reddit ni { ni result = °V; scribe(result); redde nullus; }";
     let (output, warnings) = run_with_warnings(src).unwrap();
     // The warning must not change the program's behaviour.
     assert_eq!(output, "V\n");
@@ -60,7 +69,7 @@ fn non_latin_name_warns_but_program_still_runs() {
 
 #[test]
 fn latin_program_produces_no_warnings() {
-    let src = "ni numerus = °V; scribe(numerus);";
+    let src = "munus initium reddit ni { ni numerus = °V; scribe(numerus); redde nullus; }";
     let (output, warnings) = run_with_warnings(src).unwrap();
     assert_eq!(output, "V\n");
     assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
@@ -69,68 +78,68 @@ fn latin_program_produces_no_warnings() {
 #[test]
 fn type_errors_still_halt_before_any_linting() {
     // A type error aborts the pipeline, so no warnings are produced at all.
-    assert!(run_with_warnings("ni x = \"salve\";").is_err());
+    assert!(run_with_warnings("munus initium reddit ni { ni x = \"salve\"; redde nullus; }").is_err());
 }
 
 #[test]
 fn mnr_truncates_below_its_uncia_grain() {
     // 1/24 is below mnr's uncia grid, so it is dropped — only the whole prints.
-    assert_eq!(run("mnr x = °I:I/XXIV; scribe(x);").unwrap(), "I\n");
+    assert_eq!(run("munus initium reddit ni { mnr x = °I:I/XXIV; scribe(x); redde nullus; }").unwrap(), "I\n");
 }
 
 #[test]
 fn nr_keeps_the_sub_uncia_part() {
     // nr's scripulum grid holds 1/24 exactly: it is a semuncia.
-    assert_eq!(run("nr y = °I:I/XXIV; scribe(y);").unwrap(), "I et semuncia\n");
+    assert_eq!(run("munus initium reddit ni { nr y = °I:I/XXIV; scribe(y); redde nullus; }").unwrap(), "I et semuncia\n");
 }
 
 #[test]
 fn exact_third_prints_same_under_both() {
     // 1/3 = 4/12 is exact on both grids, so mnr and nr agree here.
-    assert_eq!(run("mnr x = °I:I/III; scribe(x);").unwrap(), "I et triens\n");
-    assert_eq!(run("nr y = °I:I/III; scribe(y);").unwrap(), "I et triens\n");
+    assert_eq!(run("munus initium reddit ni { mnr x = °I:I/III; scribe(x); redde nullus; }").unwrap(), "I et triens\n");
+    assert_eq!(run("munus initium reddit ni { nr y = °I:I/III; scribe(y); redde nullus; }").unwrap(), "I et triens\n");
 }
 
 #[test]
 fn representable_fraction_prints_same_under_both() {
-    assert_eq!(run("mnr x = °V:I/II; scribe(x);").unwrap(), "V et semis\n");
-    assert_eq!(run("nr y = °V:I/II; scribe(y);").unwrap(), "V et semis\n");
+    assert_eq!(run("munus initium reddit ni { mnr x = °V:I/II; scribe(x); redde nullus; }").unwrap(), "V et semis\n");
+    assert_eq!(run("munus initium reddit ni { nr y = °V:I/II; scribe(y); redde nullus; }").unwrap(), "V et semis\n");
 }
 
 #[test]
 fn mixing_float_types_is_a_type_error() {
-    assert!(run("mnr a = °I:I/II; nr b = °I:I/IV; scribe(a + b);").is_err());
+    assert!(run("munus initium reddit ni { mnr a = °I:I/II; nr b = °I:I/IV; scribe(a + b); redde nullus; }").is_err());
 }
 
 #[test]
 fn nr_arithmetic_and_comparison_run() {
-    assert_eq!(run("nr x = °I:I/IV + °I:I/IV; scribe(x);").unwrap(), "II et semis\n");
-    assert_eq!(run("scribe(°I:I/II maior_est °I:I/IV);").unwrap(), "verus\n");
+    assert_eq!(run("munus initium reddit ni { nr x = °I:I/IV + °I:I/IV; scribe(x); redde nullus; }").unwrap(), "II et semis\n");
+    assert_eq!(run("munus initium reddit ni { scribe(°I:I/II maior_est °I:I/IV); redde nullus; }").unwrap(), "verus\n");
 }
 
 #[test]
 fn unconstrained_fraction_defaults_to_nr() {
     // A bare fractional literal in an untyped sink defaults to nr.
-    assert_eq!(run("scribe(°I:I/III);").unwrap(), "I et triens\n");
+    assert_eq!(run("munus initium reddit ni { scribe(°I:I/III); redde nullus; }").unwrap(), "I et triens\n");
 }
 
 #[test]
 fn fraction_divide_by_zero_errors() {
     // (½) / (½ − ½): a runtime zero divisor is an error, not inf.
-    assert!(run("nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z);").is_err());
+    assert!(run("munus initium reddit ni { nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z); redde nullus; }").is_err());
 }
 
 #[test]
 fn fraction_modulo_is_a_type_error() {
-    assert!(run("nr x = °I:I/II % °I:I/IV;").is_err());
+    assert!(run("munus initium reddit ni { nr x = °I:I/II % °I:I/IV; redde nullus; }").is_err());
 }
 
 #[test]
 fn negative_fractions_print_signed() {
     // Unary minus on a fraction: mnr drops the 1/24 (truncation toward zero) and
     // keeps the sign; nr keeps it as a semuncia. -(1 + 1/24).
-    assert_eq!(run("mnr n = -°I:I/XXIV; scribe(n);").unwrap(), "-I\n");
-    assert_eq!(run("nr n = -°I:I/XXIV; scribe(n);").unwrap(), "-I et semuncia\n");
+    assert_eq!(run("munus initium reddit ni { mnr n = -°I:I/XXIV; scribe(n); redde nullus; }").unwrap(), "-I\n");
+    assert_eq!(run("munus initium reddit ni { nr n = -°I:I/XXIV; scribe(n); redde nullus; }").unwrap(), "-I et semuncia\n");
 }
 
 #[test]
@@ -143,15 +152,96 @@ fn series_example_runs() {
 fn lists_have_value_semantics() {
     // Passing a list to a function copies it: the caller's list is untouched
     // even though the callee appends to its own copy.
-    let src = r#"
-        munus auctus capit (ni lista s) reddit ni {
-            s = adde(s, °C);
-            redde longitudo(s);
-        }
-        ni lista xs = [°I, °II];
-        ni n = auctus(xs);
-        scribe(n);
-        scribe(longitudo(xs));
-    "#;
+    let src = "munus auctus capit (ni lista s) reddit ni { s = adde(s, °C); redde longitudo(s); } munus initium reddit ni { ni lista xs = [°I, °II]; ni n = auctus(xs); scribe(n); scribe(longitudo(xs)); redde nullus; }";
     assert_eq!(run(src).unwrap(), "III\nII\n");
+}
+
+use lingua_serpentis::run_program_with_warnings;
+
+#[test]
+fn multi_file_program_with_package_runs() {
+    let files = [
+        ("principale.liss",
+         "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.summa(°XXV, °XVII)); redde nullus; }"),
+        ("mathematica/summa.liss",
+         "munus summa capit (ni a, ni b) reddit ni { redde a + b; }"),
+    ];
+    let (output, code, warnings) = run_program_with_warnings(&files).unwrap();
+    assert_eq!(output, "XLII\n");
+    assert_eq!(code, 0);
+    assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+}
+
+#[test]
+fn same_folder_files_need_no_import() {
+    let files = [
+        ("auxilia.liss", "munus quinque reddit ni { redde °V; }"),
+        ("principale.liss", "munus initium reddit ni { scribe(quinque()); redde nullus; }"),
+    ];
+    assert_eq!(run_program_with_warnings(&files).unwrap().0, "V\n");
+}
+
+#[test]
+fn program_without_initium_is_a_bare_error() {
+    let files = [("a.liss", "munus f reddit ni { redde nullus; }")];
+    let e = run_program_with_warnings(&files).unwrap_err();
+    assert_eq!(e.to_string(), "Error: munus 'initium' in programmate non inventum");
+}
+
+#[test]
+fn multi_file_error_names_file_and_line() {
+    let files = [
+        ("principale.liss",
+         "affer mathematica;\nmunus initium reddit ni { redde mathematica.summa(°I, °II); }"),
+        ("mathematica/summa.liss",
+         "// prima linea\nmunus summa capit (ni a, ni b) reddit ni { redde \"salve\"; }"),
+    ];
+    let e = run_program_with_warnings(&files).unwrap_err();
+    assert!(e.to_string().starts_with("Error in 'mathematica/summa.liss', linea 2:"),
+        "got: {e}");
+}
+
+#[test]
+fn exit_status_surfaces_through_the_pipeline() {
+    let files = [("a.liss", "munus initium reddit ni { redde °V; }")];
+    assert_eq!(run_program_with_warnings(&files).unwrap().1, 5);
+}
+
+#[test]
+fn import_cycle_runs() {
+    let files = [
+        ("a.liss", "affer par;\nmunus initium reddit ni { scribe(par.aequum(°X)); redde nullus; }"),
+        ("par/p.liss",
+         "affer impar;\nmunus aequum capit (ni n) reddit ni { si (n par_est nullus) { redde °I; } redde impar.imparum(n - °I); }"),
+        ("impar/i.liss",
+         "affer par;\nmunus imparum capit (ni n) reddit ni { si (n par_est nullus) { redde nullus; } redde par.aequum(n - °I); }"),
+    ];
+    // 10 is even → aequum returns I
+    assert_eq!(run_program_with_warnings(&files).unwrap().0, "I\n");
+}
+
+#[test]
+fn non_latin_package_name_warns_but_runs() {
+    let files = [
+        ("principale.liss",
+         "affer foobar;\nmunus initium reddit ni { scribe(foobar.quinque()); redde nullus; }"),
+        ("foobar/x.liss", "munus quinque reddit ni { redde °V; }"),
+    ];
+    let (output, _, warnings) = run_program_with_warnings(&files).unwrap();
+    assert_eq!(output, "V\n");
+    assert!(warnings.iter().any(|w| w.message.contains("fasciculi 'foobar'")),
+        "got: {warnings:?}");
+}
+
+#[test]
+fn top_level_statement_is_now_an_error() {
+    let e = run("scribe(°I);").unwrap_err();
+    assert!(e.message.contains("nihil nisi declarationes"), "got: {}", e.message);
+    assert_eq!(e.line, 1);
+}
+
+#[test]
+fn single_file_program_still_needs_initium() {
+    let e = run("munus f reddit ni { redde °I; }").unwrap_err();
+    assert!(e.message.contains("initium"), "got: {}", e.message);
 }

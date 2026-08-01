@@ -2,6 +2,10 @@ munus summare capit (ni a, ni b) reddit ni {
     ni c = a + b;
     redde c;
 }
-ni summa = summare(°XXV, °XXX.M.V.C.VII);
-si (summa minor_est °C) { summa = summa + °C; }
-scribe(summa);
+
+munus initium reddit ni {
+    ni summa = summare(°XXV, °XXX.M.V.C.VII);
+    si (summa minor_est °C) { summa = summa + °C; }
+    scribe(summa);
+    redde nullus;
+}

@@ -1,24 +1,28 @@
 // Typi fluitantes distincti: mnr (granum unciae, 1/12) et nr (granum scripuli, 1/288).
 // Eadem fractio Romana, granum tamen diversum.
 
-// °I:I/III est unus plus tertia pars (1 + 1/3 = 4/12, in utroque grano exacta).
-mnr tertia_brevis = °I:I/III;   // granum unciae
-nr tertia_longa = °I:I/III;     // granum scripuli
-scribe(tertia_brevis);          // I et triens
-scribe(tertia_longa);           // I et triens
-
-// °I:I/XXIV (1 + 1/24) cadit infra granum unciae: mnr id abicit, nr servat.
-mnr minor = °I:I/XXIV;          // 1/24 infra unciam -> truncatur
-nr maior = °I:I/XXIV;           // 1/24 = semuncia, exacte
-scribe(minor);                  // I
-scribe(maior);                  // I et semuncia
-
 // Munus quod nr accipit et reddit; litterae fractae typum contextus assumunt.
 munus iunge capit (nr x, nr y) reddit nr {
     redde x + y;
 }
-nr summa = iunge(°I:I/IV, °I:I/IV);   // 1¼ + 1¼ = 2½
-scribe(summa);                          // II et semis
 
-// Litterae fractae sine typo declarato ad nr recidunt.
-scribe(°I:I/III);                       // I et triens
+munus initium reddit ni {
+    // °I:I/III est unus plus tertia pars (1 + 1/3 = 4/12, in utroque grano exacta).
+    mnr tertia_brevis = °I:I/III;   // granum unciae
+    nr tertia_longa = °I:I/III;     // granum scripuli
+    scribe(tertia_brevis);          // I et triens
+    scribe(tertia_longa);           // I et triens
+
+    // °I:I/XXIV (1 + 1/24) cadit infra granum unciae: mnr id abicit, nr servat.
+    mnr minor = °I:I/XXIV;          // 1/24 infra unciam -> truncatur
+    nr maior = °I:I/XXIV;           // 1/24 = semuncia, exacte
+    scribe(minor);                  // I
+    scribe(maior);                  // I et semuncia
+
+    nr summa = iunge(°I:I/IV, °I:I/IV);   // 1¼ + 1¼ = 2½
+    scribe(summa);                          // II et semis
+
+    // Litterae fractae sine typo declarato ad nr recidunt.
+    scribe(°I:I/III);                       // I et triens
+    redde nullus;
+}

@@ -1,12 +1,15 @@
 // Series (lista): aedifica, auge, itera, scribe.
-ni lista numeri = [°X, °XX, °XXX];
-numeri = adde(numeri, °XL);   // cresce: [10, 20, 30, 40]
-numeri[°I] = °I;              // scribe primum elementum
+munus initium reddit ni {
+    ni lista numeri = [°X, °XX, °XXX];
+    numeri = adde(numeri, °XL);   // cresce: [10, 20, 30, 40]
+    numeri[°I] = °I;              // scribe primum elementum
 
-// Itera 1-index: dum i minor est longitudo + I.
-ni summa = nullus;
-dum (ni i = °I; i minor_est longitudo(numeri) + °I; i = i + °I) {
-    summa = summa + numeri[i];
+    // Itera 1-index: dum i minor est longitudo + I.
+    ni summa = nullus;
+    dum (ni i = °I; i minor_est longitudo(numeri) + °I; i = i + °I) {
+        summa = summa + numeri[i];
+    }
+    scribe(numeri);   // [I, XX, XXX, XL]
+    scribe(summa);    // XCI
+    redde nullus;
 }
-scribe(numeri);   // [I, XX, XXX, XL]
-scribe(summa);    // XCI
