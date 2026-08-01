@@ -1,4 +1,4 @@
-use crate::ast::{Stmt, StmtKind};
+use crate::ast::{ParsedProgram, Stmt, StmtKind};
 use crate::error::Warning;
 
 /// Collect a warning for every declared identifier that is not a Latin word.
@@ -10,6 +10,32 @@ pub fn lint(program: &[Stmt]) -> Vec<Warning> {
         lint_stmt(s, &mut out);
     }
     out.sort_by_key(|w| w.line);
+    out
+}
+
+/// Lint a whole program: package folder names (§4.2 — warning-only, like all
+/// Latinity checks; file names are never checked because they never appear in
+/// code), then every file's declarations attributed to their file. Package
+/// warnings come first; within a file, warnings stay sorted by line.
+pub fn lint_program(prog: &ParsedProgram) -> Vec<Warning> {
+    let mut out = Vec::new();
+    for name in prog.packages.keys() {
+        if name.chars().count() > 1 && !latinitas::is_latin(name) {
+            out.push(Warning {
+                message: format!("nomen fasciculi '{name}' fortasse non Latinum est"),
+                file: None,
+                line: None,
+            });
+        }
+    }
+    let package_files = prog.packages.values().flatten();
+    for file in prog.root.iter().chain(package_files) {
+        let mut ws = lint(&file.ast.funcs);
+        for w in &mut ws {
+            w.file = Some(file.path.clone());
+        }
+        out.extend(ws);
+    }
     out
 }
 
@@ -201,5 +227,53 @@ mod tests {
         let w = lint_src(src);
         assert_eq!(w.len(), 1, "expected exactly one warning, got {w:?}");
         assert!(w[0].message.contains("widget"));
+    }
+
+    use crate::ast::{ParsedFile, ParsedProgram};
+    use std::collections::BTreeMap;
+
+    fn pfile(path: &str, src: &str) -> ParsedFile {
+        ParsedFile {
+            path: path.into(),
+            ast: crate::parser::parse_file(&tokenize(src).unwrap()).unwrap(),
+        }
+    }
+
+    fn prog_with_package(pkg: &str) -> ParsedProgram {
+        let mut packages = BTreeMap::new();
+        packages.insert(pkg.to_string(), vec![
+            pfile(&format!("{pkg}/intus.liss"), "munus quinque reddit ni { redde °V; }"),
+        ]);
+        ParsedProgram {
+            root: vec![pfile("principale.liss",
+                "munus initium reddit ni { ni result = °V; scribe(result); redde nullus; }")],
+            packages,
+        }
+    }
+
+    #[test]
+    fn non_latin_package_name_warns_without_file_or_line() {
+        let ws = lint_program(&prog_with_package("foobar"));
+        let pkg_warning = ws.iter().find(|w| w.message.contains("fasciculi"))
+            .expect("expected a package-name warning");
+        assert!(pkg_warning.message.contains("foobar"));
+        assert_eq!(pkg_warning.file, None);
+        assert_eq!(pkg_warning.line, None);
+    }
+
+    #[test]
+    fn latin_package_name_does_not_warn() {
+        let ws = lint_program(&prog_with_package("mathematica"));
+        assert!(ws.iter().all(|w| !w.message.contains("fasciculi")), "got {ws:?}");
+    }
+
+    #[test]
+    fn file_warnings_carry_their_path() {
+        // `result` inside initium is the only non-Latin identifier.
+        let ws = lint_program(&prog_with_package("mathematica"));
+        let w = ws.iter().find(|w| w.message.contains("result"))
+            .expect("expected the 'result' warning");
+        assert_eq!(w.file.as_deref(), Some("principale.liss"));
+        assert_eq!(w.line, Some(1));
     }
 }
