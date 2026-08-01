@@ -2,6 +2,7 @@
 name = "latinitas"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "Latin morphological word validation, backed by Whitaker's WORDS (public domain)"
 
 [dependencies]
