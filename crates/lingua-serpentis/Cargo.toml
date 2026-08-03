@@ -14,3 +14,10 @@ path = "src/main.rs"
 
 [dependencies]
 latinitas = { path = "../latinitas" }
+
+[dev-dependencies]
+libtest-mimic = "0.8"
+
+[[test]]
+name = "conformance"
+harness = false
