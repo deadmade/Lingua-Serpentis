@@ -769,13 +769,18 @@ The assertion is that the error names **`mathematica/summa.liss`**, not `princip
 
 - [ ] **Step 4: Add the package and structural cases**
 
+Each program that reports a line opens with a `// pagina prima` comment, so the
+error lands below line 1 as the Global Constraints require — the same technique
+`typus-reditus-in-fasciculo` uses. The comment shifts the line only; it does not
+change which diagnostic fires.
+
 | casus | programma | expected `nuntii` |
 |---|---|---|
-| `fasciculus-non-inventus` | `principale.liss`: `affer ignota;`⏎`munus initium reddit ni { redde nullus; }` | `Error in 'principale.liss', linea 1: fasciculus 'ignota' non inventus` |
-| `fasciculus-non-allatus` | `principale.liss` using `mathematica.summa(...)` without `affer`, plus `mathematica/summa.liss` | `Error in 'principale.liss', linea 1: fasciculus 'mathematica' non allatus est` |
-| `functio-bis-definita` | two root files both defining `munus duplum` | `Error in 'principale.liss', linea 1: functio 'duplum' bis definita` |
+| `fasciculus-non-inventus` | `principale.liss`: comment, `affer ignota;`, then `munus initium reddit ni { redde nullus; }` | `Error in 'principale.liss', linea 2: fasciculus 'ignota' non inventus` |
+| `fasciculus-non-allatus` | `principale.liss` using `mathematica.summa(...)` without `affer`, plus `mathematica/summa.liss` | `Error in 'principale.liss', linea 3: fasciculus 'mathematica' non allatus est` |
+| `functio-bis-definita` | two root files both defining `munus duplum` | `Error in 'principale.liss', linea 2: functio 'duplum' bis definita` |
 | `initium-non-inventum` | one root file defining only `munus f reddit ni { redde nullus; }` | `Error: munus 'initium' in programmate non inventum` |
-| `initium-cum-parametris` | `munus initium capit (ni a) reddit ni { redde nullus; }` | `Error in 'principale.liss', linea 1: munus 'initium' nihil capere et 'ni' reddere debet` |
+| `initium-cum-parametris` | `munus initium capit (ni a) reddit ni { redde nullus; }` | `Error in 'principale.liss', linea 2: munus 'initium' nihil capere et 'ni' reddere debet` |
 | `fasciculus-in-fasciculo` | `mathematica/interior/x.liss` present | `Error: fasciculus in fasciculo non licet: 'mathematica/interior'` |
 
 `initium-non-inventum` and `fasciculus-in-fasciculo` are the structural cases exempt from the line-number rule — they carry no file and no line by design, and asserting the bare `Error: ` prefix is the point.
