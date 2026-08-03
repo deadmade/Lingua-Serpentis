@@ -16,7 +16,12 @@
 - **Every defect found is recorded, never fixed.** A `defectus/` fixture pins today's behaviour so `cargo test` stays green, plus an entry in `docs/defectus/2026-08-03-index.md`.
 - **Runtime dependencies stay at zero.** `libtest-mimic`, `insta`, `proptest` go under `[dev-dependencies]` only. Fixture walking, diffing, blessing, mutation and the subprocess runner are hand-rolled against `std`.
 - **Exact versions verified to build on this toolchain:** `libtest-mimic = "0.8"` (0.8.2), `insta = "1"` (1.48.0), `proptest = "1"` (1.11.0).
-- **All diagnostic text is Latin and is asserted verbatim.** Never `contains()`. The existing suite's `contains("typ")` style is exactly the weakness this replaces. **The sole exception is text the OS supplies** (errno strings): assert the fixed prefix with `starts_with` and comment why. Two sites qualify today, both in `cli.rs`, both on `"Error reading file: "`. Everything else — every fixture in `conformance/`, every other assertion — is byte-exact.
+- **All diagnostic text is Latin and is asserted verbatim.** Never `contains()`. The existing suite's `contains("typ")` style is exactly the weakness this replaces. **Two exceptions, and only these:**
+
+1. **Text the OS supplies** (errno strings): assert the fixed prefix with `starts_with` and comment why. Two sites qualify, both in `cli.rs`, both on `"Error reading file: "`.
+2. **Assertions inside `#[ignore]`d tests that describe behaviour which does not exist yet.** A test for a diagnostic the language has not got cannot pin it verbatim — `err.contains("alte")` is asserting that some future Latin depth-error mentions depth at all. Likewise `!stderr.contains("panicked")` asserts the *absence* of Rust's own runtime text, which is not a diagnostic of ours to quote. When the defect is fixed and the real message exists, these tighten to verbatim and lose their `#[ignore]`.
+
+Everything else — every fixture in `conformance/`, every assertion in a test that actually runs — is byte-exact.
 - **Every `errores/` fixture that produces a line number puts it on a line other than 1.** Structural errors (`Error: munus 'initium' in programmate non inventum`) carry no line and are exempt.
 - **Corpus path:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../../conformance")`. **Binary path:** `env!("CARGO_BIN_EXE_lingua-serpentis")`. **Repo root:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../..")`.
 - **Fixture directory names must avoid `.gitignore` collisions.** The repo's Python-derived `.gitignore` unanchoredly ignores `lib/`, `lib64/`, `build/`, `dist/`, `var/`, `parts/`, `eggs/`, `sdist/`, `wheels/`, `env/`, `venv/`, `ENV/`, `instance/`, `cover/`, `htmlcov/`. Never name a fixture case or a package folder inside `programma/` any of these.
