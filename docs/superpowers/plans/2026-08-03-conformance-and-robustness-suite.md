@@ -16,7 +16,7 @@
 - **Every defect found is recorded, never fixed.** A `defectus/` fixture pins today's behaviour so `cargo test` stays green, plus an entry in `docs/defectus/2026-08-03-index.md`.
 - **Runtime dependencies stay at zero.** `libtest-mimic`, `insta`, `proptest` go under `[dev-dependencies]` only. Fixture walking, diffing, blessing, mutation and the subprocess runner are hand-rolled against `std`.
 - **Exact versions verified to build on this toolchain:** `libtest-mimic = "0.8"` (0.8.2), `insta = "1"` (1.48.0), `proptest = "1"` (1.11.0).
-- **All diagnostic text is Latin and is asserted verbatim.** Never `contains()`. The existing suite's `contains("typ")` style is exactly the weakness this replaces.
+- **All diagnostic text is Latin and is asserted verbatim.** Never `contains()`. The existing suite's `contains("typ")` style is exactly the weakness this replaces. **The sole exception is text the OS supplies** (errno strings): assert the fixed prefix with `starts_with` and comment why. Two sites qualify today, both in `cli.rs`, both on `"Error reading file: "`. Everything else — every fixture in `conformance/`, every other assertion — is byte-exact.
 - **Every `errores/` fixture that produces a line number puts it on a line other than 1.** Structural errors (`Error: munus 'initium' in programmate non inventum`) carry no line and are exempt.
 - **Corpus path:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../../conformance")`. **Binary path:** `env!("CARGO_BIN_EXE_lingua-serpentis")`. **Repo root:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../..")`.
 - **Fixture directory names must avoid `.gitignore` collisions.** The repo's Python-derived `.gitignore` unanchoredly ignores `lib/`, `lib64/`, `build/`, `dist/`, `var/`, `parts/`, `eggs/`, `sdist/`, `wheels/`, `env/`, `venv/`, `ENV/`, `instance/`, `cover/`, `htmlcov/`. Never name a fixture case or a package folder inside `programma/` any of these.
@@ -1191,6 +1191,55 @@ pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
     Outcome::Exited { code: status.code().unwrap_or(-1), stdout, stderr }
 }
 
+/// Like `run_binary`, but reads a little of the child's stdout and then closes
+/// the pipe while the child is still writing. This is the only way to provoke
+/// a broken pipe, which is not observable through a file redirect.
+pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
+    use std::io::Read;
+
+    let dir = temp_dir("liss-pipe");
+    let err_path = dir.path().join("stderr");
+    let err = std::fs::File::create(&err_path).unwrap();
+
+    let mut child = Command::new(BINARY)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::from(err))
+        .spawn()
+        .expect("spawn lingua-serpentis");
+
+    {
+        let mut out = child.stdout.take().expect("piped stdout");
+        let mut buf = [0u8; 64];
+        let _ = out.read(&mut buf);
+        // `out` drops here, closing the read end while the child writes on.
+    }
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait().expect("try_wait") {
+            Some(s) => break s,
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Outcome::TimedOut;
+            }
+            None => std::thread::sleep(Duration::from_millis(5)),
+        }
+    };
+
+    let stderr = String::from_utf8_lossy(&std::fs::read(&err_path).unwrap()).into_owned();
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return Outcome::Signalled { signal, stdout: String::new(), stderr };
+        }
+    }
+    Outcome::Exited { code: status.code().unwrap_or(-1), stdout: String::new(), stderr }
+}
+
 /// A directory removed on drop. Hand-rolled because runtime deps stay at zero
 /// and `tempfile` is not worth a dev-dep for twenty lines.
 pub struct TempDir(PathBuf);
@@ -1244,7 +1293,7 @@ mod support;
 
 use std::ffi::OsStr;
 use std::time::Duration;
-use support::proc::{run_binary, temp_dir, Outcome};
+use support::proc::{run_binary, run_closing_stdout_early, temp_dir, Outcome};
 
 const T: Duration = Duration::from_secs(20);
 
@@ -1285,7 +1334,9 @@ fn a_missing_file_reports_in_english_defect_d11() {
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
     // D-11: English, in a language whose every other diagnostic is Latin.
-    assert_eq!(err, "Error reading file: No such file or directory (os error 2)\n");
+    // Prefix, not verbatim: the errno tail is OS-supplied. The prefix itself
+    // is the defect, and it is fully ours.
+    assert!(err.starts_with("Error reading file: "), "got: {err:?}");
 }
 
 #[test]
@@ -1393,6 +1444,9 @@ fn an_unreadable_file_is_reported_not_panicked() {
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
+    // Prefix, not verbatim: the OS supplies the errno tail ("Permission denied
+    // (os error 13)"), which is not portable. The only carve-out the Global
+    // Constraints allow.
     assert!(err.starts_with("Error reading file: "), "got: {err:?}");
     #[cfg(unix)]
     {
@@ -1432,10 +1486,25 @@ Append to `crates/lingua-serpentis/tests/cli.rs`:
 #[test]
 #[ignore = "D-06: Rust ignores SIGPIPE and print! panics; exit 101 with a backtrace note"]
 fn a_closed_pipe_is_not_a_panic() {
-    // Reproduce by hand: `cargo run -- big.liss | head -1`.
-    // Observed: thread 'main' panicked ... failed printing to stdout: Broken pipe
-    // Expected: exit quietly, as every other Unix tool does.
-    panic!("see docs/defectus/2026-08-03-index.md#d-06");
+    // A real reproduction, not a placeholder: read a little of the child's
+    // stdout, close the pipe, and let it keep writing. Every other Unix tool
+    // exits quietly here.
+    let d = temp_dir("liss-cli");
+    let p = d.write(
+        "fons.liss",
+        "munus initium reddit ni {\n  ni i = nullus;\n  \
+         dum (i = nullus; i minor_est °M.M.M.M.M; i = i + °I) {\n    \
+         scribe(\"linea satis longa ad tubum implendum\");\n  }\n  redde nullus;\n}",
+    );
+    let o = run_closing_stdout_early(&[OsStr::new(p.to_str().unwrap())], T);
+    match o {
+        Outcome::Exited { code, stderr, .. } => {
+            assert_ne!(code, 101, "panicked on a closed pipe; stderr: {stderr:?}");
+            assert!(!stderr.contains("panicked"), "stderr: {stderr:?}");
+        }
+        Outcome::Signalled { signal, .. } => assert_eq!(signal, 13, "expected SIGPIPE or a clean exit"),
+        Outcome::TimedOut => panic!("hung on a closed pipe"),
+    }
 }
 
 #[test]
