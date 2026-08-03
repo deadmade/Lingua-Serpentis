@@ -1,0 +1,7 @@
+munus initium reddit ni {
+  voc salutatio = "prima linea
+secunda linea";
+  scribe(salutatio);
+  ni x = ignota;
+  redde nullus;
+}

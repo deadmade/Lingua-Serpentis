@@ -1,0 +1,6 @@
+munus initium reddit ni {
+  ni counter = °I;
+  ni z = °I - °I;
+  scribe(counter / z);
+  redde nullus;
+}

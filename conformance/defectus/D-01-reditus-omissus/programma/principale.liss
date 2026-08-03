@@ -1,0 +1,10 @@
+munus nomen reddit voc {
+  si (falsus) {
+    redde "a";
+  }
+}
+
+munus initium reddit ni {
+  scribe(nomen());
+  redde nullus;
+}
