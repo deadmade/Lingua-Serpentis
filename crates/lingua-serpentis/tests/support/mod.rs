@@ -3,6 +3,8 @@
 use lingua_serpentis::Rendered;
 use std::path::{Path, PathBuf};
 
+pub mod proc;
+
 /// The four corpus categories, in the order they are reported.
 pub const CATEGORIES: [&str; 4] = ["currunt", "errores", "monita", "defectus"];
 
