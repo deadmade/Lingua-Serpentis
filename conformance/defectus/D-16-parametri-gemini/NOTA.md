@@ -7,10 +7,13 @@ the body's `redde a` sees the `voc`, and the `ni` argument is unreachable.
 
 - **Observed:** stdout `secunda\n`, stderr empty, exit 0.
 - **Expected:** an error naming the duplicated parameter `a`.
-- **Cause:** `parser.rs:305` pushes each `(ty, pname)` with no uniqueness check;
-  `checker.rs:404` declares them with `declare` (`checker.rs:38`, a
-  `HashMap::insert`); `interp.rs:153` binds them with `frame.insert`. Every one
-  of the three is last-wins.
+- **Cause:** three last-wins sites. Each line cited is the statement that must
+  change, not the enclosing function:
+  `parser.rs:305` — `params.push((ty, pname))`, no uniqueness check;
+  `checker.rs:39` — the `insert` inside `declare`, reached once per parameter
+  from `checker.rs:404`;
+  `interp.rs:154` — `frame.insert(pname.clone(), v)`, inside the loop opened at
+  `interp.rs:153`.
 
 This fixture pins the WRONG behaviour so the suite stays green. When D-16 is
 fixed this test will fail — that failure is the fix's acceptance criterion.
