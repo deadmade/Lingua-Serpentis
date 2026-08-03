@@ -17,6 +17,7 @@ latinitas = { path = "../latinitas" }
 
 [dev-dependencies]
 libtest-mimic = "0.8"
+proptest = "1"
 
 [[test]]
 name = "conformance"
