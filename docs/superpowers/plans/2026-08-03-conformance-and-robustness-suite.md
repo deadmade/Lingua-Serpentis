@@ -580,7 +580,9 @@ Expected `conformance/currunt/exemplum-calc/nuntii`:
 Monitum in linea 1: nomen 'summare' fortasse non Latinum est
 ```
 
-**This warning is defect D-18** — `latin-identifier-checker` §10 states `calc.liss` should lint cleanly, and it does not. Keep the blessed file: the fixture is what makes the divergence visible. Note it now; Task 8 writes it up.
+**This warning is defect D-18.** `2026-07-19-latin-identifier-checker-design.md` §12 leaves open whether programmer-Latin infinitives like `summare` need a supplemental word list, to be added "only if a real example fails". A real example does fail — this one — and the supplement was never added, so the open question was answered by reality and nobody acted on it. Keep the blessed file: the fixture is what makes it visible. Task 8 writes it up.
+
+`exemplum-praecisio` will also warn, on `tertia_brevis` and `tertia_longa`. That is **not** a defect and gets no ID: §9.1 lists "a name with a digit/underscore" as a specified **negative** for `latinitas::is_latin`, so the checker is behaving exactly as designed on identifiers the example's author chose. Bless it and leave it.
 
 - [ ] **Step 4: Verify the blessed expectations**
 
@@ -1033,7 +1035,7 @@ expectation as part of the fix.
 | D-15 | low | Arabic digits get the lexer's catch-all with no hint | `errores/signum-ignotum` |
 | D-16 | medium | Duplicate parameter names accepted; last binding wins | `defectus/D-16-parametri-gemini` |
 | D-17 | medium | A stray hidden directory with a `.liss` kills the program | `cli.rs` |
-| D-18 | low | `examples/calc.liss` warns though the spec says it should not | `currunt/exemplum-calc` |
+| D-18 | low | `examples/calc.liss` warns on `summare`; the design's §12 open question was answered by reality and never acted on | `currunt/exemplum-calc` |
 | D-19 | medium | ~50 unit tests run against the laxer legacy API | register only — no test |
 | D-20 | low | `x = x * x` in a loop runs forever | rule `terminates` |
 | D-21 | low | `mag_divmod`'s zero guard is a `debug_assert` | register only — unreachable today |

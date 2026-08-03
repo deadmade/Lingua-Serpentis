@@ -360,7 +360,7 @@ All reproduced against a fresh `target/debug/lingua-serpentis` on 2026-08-03.
 | D-15 | Arabic digits get the catch-all | `ni x = 5;` → `signum ignotum: '5'`, with no hint that `°V` exists — the likeliest beginner error |
 | D-16 | Duplicate parameter names accepted | `capit (ni a, voc a)` — both checker and interpreter keep the last binding; the body silently sees the `voc` |
 | D-17 | A stray hidden directory kills the program | `.git/x.liss` → `Error: nomen fasciculi '.git' non validum est`; hidden directories are not skipped |
-| D-18 | `examples/calc.liss` warns | on `summare`, though latin-identifier-checker §10 states it should lint cleanly. `programs.rs` uses `run()`, which discards warnings, so nothing notices |
+| D-18 | `examples/calc.liss` warns | on `summare`. latin-identifier-checker §12 leaves open whether programmer-Latin infinitives need a supplemental word list, to be added "only if a real example fails" — one does, and the supplement was never added. `programs.rs` uses `run()`, which discards warnings, so nothing notices |
 | D-19 | ~50 unit tests run against the legacy `parser::parse` / `checker::check` / `interp::execute` API | which still accepts top-level statements and `initium`-less scripts, has no duplicate-function check and no `initium` requirement — a laxer language than the compiler implements. Recorded only; not resolved (§2) |
 | D-20 | `x = x * x` in a loop runs forever | `Roman` is arbitrary-precision, so there is no overflow; `mag_mul` is super-quadratic and `display` quadratic again |
 | D-21 | `mag_divmod`'s zero guard is a `debug_assert` | `roman.rs:110` — in release a zero divisor spins the doubling loop forever. Every caller guards today |
