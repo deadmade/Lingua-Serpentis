@@ -159,3 +159,40 @@ fn every_curated_pathology_matches_its_recorded_verdict() {
     }
     assert!(surprises.is_empty(), "{}", surprises.join("\n"));
 }
+
+fn env_usize(key: &str, default: usize) -> usize {
+    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
+#[test]
+fn no_mutation_of_any_known_program_escapes_the_error_model() {
+    use support::mutate::{mutate, seed_corpus, Rng};
+
+    let seeds = seed_corpus(&support::repo_root());
+    assert!(!seeds.is_empty(), "no .liss files found to mutate");
+
+    let cases = env_usize("LISS_FUZZ_CASES", 300);
+    let mut rng = Rng::new(env_usize("LISS_FUZZ_SEED", 0x5EED) as u64);
+
+    let mut violations = Vec::new();
+    for n in 0..cases {
+        let (label, base) = &seeds[rng.below(seeds.len())];
+        let src = mutate(base, &mut rng);
+        match judge_source(&format!("mutatio {n} ex {label}"), &src) {
+            Verdict::Acceptable => {}
+            Verdict::Violation { rule, .. } if RECORDED_RULES.contains(&rule) => {}
+            Verdict::Violation { rule, detail } => {
+                violations.push(format!("--- {rule}: {detail}\n--- source ---\n{src}\n"));
+                if violations.len() >= 5 {
+                    break; // five repros is plenty; stop burning time
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "{} new robustness violation(s):\n{}",
+        violations.len(),
+        violations.join("\n")
+    );
+}
