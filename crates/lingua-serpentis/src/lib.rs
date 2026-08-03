@@ -92,3 +92,77 @@ pub fn run_with_warnings(src: &str) -> LResult<(String, Vec<Warning>)> {
 pub fn run(src: &str) -> LResult<String> {
     run_with_warnings(src).map(|(output, _)| output)
 }
+
+/// Everything a completed run puts in front of the user: the two streams and
+/// the process status. Kept in the library so tests can assert exactly what
+/// the CLI writes without spawning a process.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rendered {
+    pub stdout: String,
+    pub stderr: String,
+    pub code: i32,
+}
+
+/// Render a pipeline result the way the CLI does: warnings to stderr — so they
+/// never contaminate piped program output — program output to stdout, the
+/// program's own exit status on success and 1 on any error.
+pub fn render<E: std::fmt::Display>(
+    result: Result<(String, u8, Vec<Warning>), E>,
+) -> Rendered {
+    match result {
+        Ok((stdout, code, warnings)) => {
+            let mut stderr = String::new();
+            for w in &warnings {
+                stderr.push_str(&w.to_string());
+                stderr.push('\n');
+            }
+            Rendered { stdout, stderr, code: code as i32 }
+        }
+        Err(e) => Rendered { stdout: String::new(), stderr: format!("{e}\n"), code: 1 },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use error::ProgramError;
+
+    #[test]
+    fn warnings_go_to_stderr_and_output_to_stdout() {
+        let r = render(Ok::<_, ProgramError>((
+            "V\n".to_string(),
+            0,
+            vec![Warning { message: "res".into(), file: None, line: Some(2) }],
+        )));
+        assert_eq!(r.stdout, "V\n");
+        assert_eq!(r.stderr, "Monitum in linea 2: res\n");
+        assert_eq!(r.code, 0);
+    }
+
+    #[test]
+    fn every_warning_gets_its_own_line_in_order() {
+        let w = |m: &str| Warning { message: m.into(), file: None, line: None };
+        let r = render(Ok::<_, ProgramError>((
+            String::new(),
+            0,
+            vec![w("prima"), w("secunda")],
+        )));
+        assert_eq!(r.stderr, "Monitum: prima\nMonitum: secunda\n");
+    }
+
+    #[test]
+    fn the_programs_exit_status_is_carried_through() {
+        let r = render(Ok::<_, ProgramError>((String::new(), 5, vec![])));
+        assert_eq!(r.code, 5);
+    }
+
+    #[test]
+    fn an_error_renders_to_stderr_with_status_one_and_no_stdout() {
+        let r = render(Err::<(String, u8, Vec<Warning>), _>(
+            ProgramError::structural("munus 'initium' in programmate non inventum"),
+        ));
+        assert_eq!(r.stdout, "");
+        assert_eq!(r.stderr, "Error: munus 'initium' in programmate non inventum\n");
+        assert_eq!(r.code, 1);
+    }
+}

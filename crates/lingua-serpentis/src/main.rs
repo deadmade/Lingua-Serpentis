@@ -1,22 +1,13 @@
-use lingua_serpentis::{run_dir_with_warnings, run_file_with_warnings, Warning};
+use lingua_serpentis::{render, run_dir_with_warnings, run_file_with_warnings, Warning};
 use std::path::Path;
 use std::process::exit;
 
 fn finish<E: std::fmt::Display>(result: Result<(String, u8, Vec<Warning>), E>) -> ! {
-    match result {
-        Ok((output, code, warnings)) => {
-            // Warnings go to stderr so they never contaminate program output.
-            for w in &warnings {
-                eprintln!("{w}");
-            }
-            print!("{output}");
-            exit(code as i32);
-        }
-        Err(e) => {
-            eprintln!("{e}");
-            exit(1);
-        }
-    }
+    let r = render(result);
+    // Warnings and errors go to stderr so they never contaminate program output.
+    eprint!("{}", r.stderr);
+    print!("{}", r.stdout);
+    exit(r.code);
 }
 
 fn main() {
