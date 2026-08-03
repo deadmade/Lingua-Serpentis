@@ -20,7 +20,13 @@
 - **Every `errores/` fixture that produces a line number puts it on a line other than 1.** Structural errors (`Error: munus 'initium' in programmate non inventum`) carry no line and are exempt.
 - **Corpus path:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../../conformance")`. **Binary path:** `env!("CARGO_BIN_EXE_lingua-serpentis")`. **Repo root:** `concat!(env!("CARGO_MANIFEST_DIR"), "/../..")`.
 - **Fixture directory names must avoid `.gitignore` collisions.** The repo's Python-derived `.gitignore` unanchoredly ignores `lib/`, `lib64/`, `build/`, `dist/`, `var/`, `parts/`, `eggs/`, `sdist/`, `wheels/`, `env/`, `venv/`, `ENV/`, `instance/`, `cover/`, `htmlcov/`. Never name a fixture case or a package folder inside `programma/` any of these.
-- **Commit after every task.** Branch is `rust-rewrite`; do not commit unrelated staged work (`.envrc`, `flake.nix`, `flake.lock`, `.gitignore`, `.idea/` deletions are already staged by the user — always `git add` explicit paths, never `git add -A`).
+- **Commit after every task, with an explicit pathspec.** Branch is `rust-rewrite`. The user has unrelated work **already staged in the index** (`.envrc`, `flake.nix`, `flake.lock`, `.gitignore`, `.idea/` deletions). `git add <paths> && git commit -m "…"` does **not** protect it — `git commit` with no pathspec commits the *whole index*, sweeping their work in. Every commit step in the tasks below is written in that unsafe form; use this instead:
+
+  ```bash
+  git commit --only <path> [<path>…] -m "message"
+  ```
+
+  `--only` restricts the commit to the listed paths and leaves the rest of the index untouched. No `git add` needed. Never `git add -A` or `git add .`. After committing, `git status --short` must still show all ten of the user's staged entries.
 
 ---
 
