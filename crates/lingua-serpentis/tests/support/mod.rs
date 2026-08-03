@@ -3,6 +3,7 @@
 use lingua_serpentis::Rendered;
 use std::path::{Path, PathBuf};
 
+pub mod diag;
 pub mod proc;
 
 /// The four corpus categories, in the order they are reported.
