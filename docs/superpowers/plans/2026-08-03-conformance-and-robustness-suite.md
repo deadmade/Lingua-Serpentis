@@ -1490,7 +1490,7 @@ fn a_non_utf8_source_file_is_reported_not_panicked() {
 - [ ] **Step 3: Run the CLI suite**
 
 Run: `cargo test --test cli`
-Expected: PASS, 15 tests. If `a_missing_file_reports_in_english_defect_d11` fails on a
+Expected: PASS, 14 tests (the two `#[ignore]`d ones are added in Step 4, for 16 total). If `a_missing_file_reports_in_english_defect_d11` fails on a
 non-Linux OS the message text differs — that is acceptable; gate it with `#[cfg(target_os = "linux")]`
 rather than weakening the assertion.
 
