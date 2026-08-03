@@ -23,10 +23,11 @@
 - **Commit after every task, with an explicit pathspec.** Branch is `rust-rewrite`. The user has unrelated work **already staged in the index** (`.envrc`, `flake.nix`, `flake.lock`, `.gitignore`, `.idea/` deletions). `git add <paths> && git commit -m "…"` does **not** protect it — `git commit` with no pathspec commits the *whole index*, sweeping their work in. Every commit step in the tasks below is written in that unsafe form; use this instead:
 
   ```bash
+  git add <path> [<path>…]                    # ONLY for paths git does not track yet
   git commit --only <path> [<path>…] -m "message"
   ```
 
-  `--only` restricts the commit to the listed paths and leaves the rest of the index untouched. No `git add` needed. Never `git add -A` or `git add .`. After committing, `git status --short` must still show all ten of the user's staged entries.
+  `--only` restricts the commit to the listed paths and leaves the rest of the index untouched. It cannot name an **untracked** path, though — git 2.54 rejects it with `pathspec … did not match any file(s) known to git` — so new files need a `git add` of those exact paths first. Never `git add -A` or `git add .`. Include `Cargo.lock` in the pathspec whenever the task changes a manifest, or it is left as a stray uncommitted diff. After committing, `git status --short` must still show all ten of the user's staged entries.
 
 ---
 
