@@ -634,7 +634,7 @@ Each `programma/principale.liss` (all deliberately place the error below line 1)
 | `numerus-romanus-vacuus` | `munus initium reddit ni {`⏎`  ni x = °;`⏎`  redde nullus;`⏎`}` |
 | `numerus-romanus-invalidus` | `munus initium reddit ni {`⏎`  ni x = °X/;`⏎`  redde nullus;`⏎`}` |
 | `expressio-expectata` | `munus initium reddit ni {`⏎`  ni x = ;`⏎`  redde nullus;`⏎`}` |
-| `declarationes-solae` | `scribe(°I);`⏎`munus initium reddit ni { redde nullus; }` |
+| `declarationes-solae` | `munus initium reddit ni { redde nullus; }`⏎`scribe(°I);` |
 
 - [ ] **Step 2: Write the expected `nuntii` by hand, then verify by running**
 
@@ -651,6 +651,11 @@ expressio-expectata       Error in 'principale.liss', linea 2: expressio expecta
 ```
 
 Write them by hand rather than blessing: a blessed error fixture proves nothing, because blessing accepts whatever the implementation currently does. `declarationes-solae` is the exception — bless it and check the message names `nihil nisi declarationes`.
+
+`declarationes-solae` puts the offending `scribe(°I);` **after** the `munus`, not before it. Both orders are rejected, but with the statement first the parser fails on the very first token and reports `linea 1`, which the Global Constraints forbid. With it second the message is identical and the line is 2:
+```
+Error in 'principale.liss', linea 2: extra munera nihil nisi declarationes licet
+```
 
 - [ ] **Step 3: Run and confirm every one passes**
 
