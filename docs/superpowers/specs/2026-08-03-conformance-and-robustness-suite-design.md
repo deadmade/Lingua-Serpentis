@@ -347,12 +347,12 @@ All reproduced against a fresh `target/debug/lingua-serpentis` on 2026-08-03.
 | D-02 | Parser leaks Rust type names | `expectatum: Semicolon` — `parser.rs:28` prints `TokenKind` `Debug`. Renaming a variant silently changes user-facing text in 7 places |
 | D-03 | Line numbers wrong after a multi-line string | `lexer.rs:43` never increments `line` inside string bodies; every later diagnostic *and warning* is attributed N lines early |
 | D-04 | Unbounded recursion aborts | `stack overflow, aborting`, SIGABRT, exit 134 — outside the error model entirely; an embedder cannot survive it |
-| D-05 | Deep expression nesting aborts | ~20k nested parens → stack overflow in the parser |
+| D-05 | Deep expression nesting aborts | **2000** nested parens → stack overflow in the parser. 1000 is clean, so the boundary sits between them — an order of magnitude lower than this document first claimed |
 | D-06 | Broken pipe panics | `prog | head` → `failed printing to stdout: Broken pipe`, exit 101. `main.rs:12` uses `print!`; Rust ignores `SIGPIPE` |
 | D-07 | `abrumpe`/`continua` outside a loop is a silent no-op | prints both sides; `checker.rs:449` has no loop-depth tracking |
 | D-08 | A runtime error discards everything already printed | `scribe("ante")` then divide-by-zero → **empty** stdout; `scribe` accumulates into `Interp::out` and the `Err` arm never prints it |
 | D-09 | Any error discards all Latinity warnings | `lint_program` runs at `lib.rs:43`; warnings return only on the `Ok` arm at `:45` |
-| D-10 | Exit status silently truncated | `redde °CCC` → exit 116; `redde -°I` → exit 255 |
+| D-10 | Exit status silently truncated | `redde °CCC` (300) → exit **44**; `redde °C.C.C` → exit 116; `redde -°I` → exit 255. The earlier draft of this row paired the wrong program with 116 |
 | D-11 | Two English diagnostics | `Error: file must have .liss extension`, `Error reading file: {e}` — one line below the Latin `Usus:`. The second is also *wrong* for a nonexistent **directory** argument |
 | D-12 | Arabic numerals in a user-visible message | `index extra fines: III (longitudo 2)` — index via `Roman::display()`, length via `usize` |
 | D-13 | Numeral form never validated | `°IIX + °VV + °IM` → `MXIX` (10 + 10 + 999) |
@@ -364,6 +364,7 @@ All reproduced against a fresh `target/debug/lingua-serpentis` on 2026-08-03.
 | D-19 | ~50 unit tests run against the legacy `parser::parse` / `checker::check` / `interp::execute` API | which still accepts top-level statements and `initium`-less scripts, has no duplicate-function check and no `initium` requirement — a laxer language than the compiler implements. Recorded only; not resolved (§2) |
 | D-20 | `x = x * x` in a loop runs forever | `Roman` is arbitrary-precision, so there is no overflow; `mag_mul` is super-quadratic and `display` quadratic again |
 | D-21 | `mag_divmod`'s zero guard is a `debug_assert` | `roman.rs:110` — in release a zero divisor spins the doubling loop forever. Every caller guards today |
+| D-22 | English inside a Latin frame, from the **library** | a non-UTF-8 source file gives `Error: scida 'principale.liss' legi non potest: stream did not contain valid UTF-8`. Distinct from D-11, which is hand-written English in `main.rs`; this one is an OS string interpolated into an otherwise-Latin message at `program.rs:84`, with the same shape at `:73` and `:76`. Found during Task 8 |
 
 Further candidates surfaced by the survey — unreachable branches, duplicated
 Latin phrasings for one condition, the `dum` init-slot holes, Unicode

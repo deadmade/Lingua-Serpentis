@@ -1049,6 +1049,7 @@ expectation as part of the fix.
 | D-19 | medium | ~50 unit tests run against the laxer legacy API | register only — no test |
 | D-20 | low | `x = x * x` in a loop runs forever | rule `terminates` |
 | D-21 | low | `mag_divmod`'s zero guard is a `debug_assert` | register only — unreachable today |
+| D-22 | low | English OS strings interpolated into Latin messages by the library | `cli.rs`, rule `Latin only` |
 
 ---
 
