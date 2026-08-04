@@ -2305,6 +2305,48 @@ Mutation rarely gets past the parser; generated programs reach the checker
 and interpreter, and proptest shrinks any counterexample to a minimal repro."
 ```
 
+- [ ] **Step 6: Pin the reach (added after the Task 12 review)**
+
+The review of Step 2 found that
+`generated_programs_never_escape_the_error_model` **cannot fail on the very
+regression this task exists to prevent.** Its guard accepts any `Violation`
+whose rule is in `RECORDED_RULES`, and `no Rust type names` — the rule a
+parse error trips, D-02 — is one of them. The reviewer sabotaged `program()`
+so that *every* generated program is a parse error, and the property still
+passed. A generator that regressed all the way back to Task 11's blind spot
+would be silently accepted.
+
+The reach was therefore only ever evidenced by a scratch harness that was
+reverted and never committed. Replace that with a standing assertion.
+
+Add to `crates/lingua-serpentis/tests/generative.rs` a plain `#[test]` —
+**not** inside the `proptest!` block — that draws `50` values from `expr()`
+via `proptest::test_runner::TestRunner`, runs each program, and asserts that
+every one of them **reached the interpreter**: exit 0, or exit 1 whose
+diagnostic message is exactly `divisio per nullum` or exactly
+`modulus per nullum`. Those two are the only legitimate failures an all-`ni`
+arithmetic program can produce, and the verbatim rule applies to them —
+`contains()` is not permitted. Any other outcome must fail the test with the
+offending source and the full diagnostic, because it means the generator
+stopped reaching the interpreter.
+
+Assert the count, not just the absence: the test must state
+`reached == SAMPLES`. A test that vacuously passes on zero samples is the
+same defect one level up.
+
+Keep it at 50 samples. The reviewer measured 400 samples with **zero** parse
+or checker errors, so 50 is far more than enough to catch a wholesale
+regression, and each sample is a process spawn — `generative` is already the
+slowest target in the workspace at ~63s.
+
+Also correct the doc comment at the top of the file to state the generator's
+real scope, so a later reader does not over-assume coverage: only `ni`-typed
+arithmetic over `+ - * / %` and unary negation, three variables, depth 4. No
+`si`, no `dum`, no `lista`, no non-`ni` types, no recursion, no multi-file
+programs. Every checker *reject* path is still reached solely by the
+hand-written `errores/` fixtures — generation covers the checker's accept
+path only.
+
 ---
 
 ### Task 13: The catalogue ratchet
