@@ -106,14 +106,14 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
                 "(".repeat(20_000),
                 ")".repeat(20_000)
             ),
-            Some("no abort"), // D-05
+            None,
         ),
         (
             "recursio infinita",
             "munus recurre capit (ni n) reddit ni { redde recurre(n + °I); }\n\
              munus initium reddit ni { scribe(recurre(°I)); redde nullus; }"
                 .to_string(),
-            Some("no abort"), // D-04
+            None,
         ),
         (
             "index extra fines",

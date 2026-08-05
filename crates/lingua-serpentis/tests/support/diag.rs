@@ -69,14 +69,17 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 /// any OTHER rule is a new finding and fails the test that saw it. Shrinking
 /// this array is how progress gets measured — never add to it without adding
 /// a register entry too.
-pub const RECORDED_RULES: [&str; 4] = [
-    "no abort",   // D-04, D-05
+pub const RECORDED_RULES: [&str; 3] = [
     "terminates", // D-20
     "no panic",   // D-06
     "Latin only", // D-11, D-22
 ];
 
-// Two entries have been retired, and neither by weakening its rule:
+// Three entries have been retired, and none by weakening its rule:
+//
+// `no abort` (D-04, D-05) — the parser and the interpreter each carry a depth
+// limit now, so neither unbounded recursion nor deep nesting can overflow the
+// stack. Both defects had to go together: one rule covered them both.
 //
 // `no Rust type names` (D-02) — `parser.rs`'s `eat` was the only site in the
 // workspace that formatted a `TokenKind` with `{:?}`, and it now names the

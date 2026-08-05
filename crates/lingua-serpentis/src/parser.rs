@@ -2,9 +2,29 @@ use crate::ast::*;
 use crate::error::{LinguaError, LResult};
 use crate::token::{Token, TokenKind};
 
+/// How deeply the parser may nest before it refuses.
+///
+/// The number that matters is not how much stack the *binary* has. On this
+/// build's main thread (8 MiB) each of the three recursions below aborts
+/// somewhere past a thousand levels; on a spawned thread with Rust's default
+/// 2 MiB — which is what the in-process fixture runner uses, and what any
+/// embedder calling this library off the main thread gets — a limit of 128
+/// still parses and 192 overflows. The library has to be safe on the smaller
+/// one, so the measured ceiling is 128 and this is half of it.
+///
+/// That is far more nesting than written code uses: the counter covers block
+/// nesting and expression nesting together, and a deeply indented function
+/// with a complicated condition reaches perhaps fifteen.
+///
+/// Not configurable. There is no config surface in the language, and the
+/// robustness suite spawns this binary with whatever environment it inherits —
+/// a tunable limit would make the invariant depend on the shell that ran it.
+const ALTITUDO_MAXIMA: usize = 64;
+
 struct Parser<'a> {
     toks: &'a [Token],
     pos: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -35,8 +55,32 @@ impl<'a> Parser<'a> {
         LinguaError { message: msg.to_string(), line: self.line() }
     }
 
+    /// Run `f` one level deeper, refusing rather than overflowing the stack.
+    ///
+    /// Defectus D-05. Recursive descent re-enters itself once per nesting
+    /// level with nothing counting, so a deeply nested source aborted the
+    /// process — SIGABRT, exit 134, entirely outside the error model, and not
+    /// something an embedder can survive.
+    ///
+    /// The register cites only `primary`'s LParen arm. There are three
+    /// independent routes, and guarding one leaves the other two live:
+    /// `expr` (re-entered from parentheses, subscripts, call arguments, list
+    /// literals and every statement condition), `unary` (which self-recurses
+    /// on `non` and `-`), and `block` (via statement → if_stmt → block). One
+    /// shared counter is right for all three: they consume the same Rust
+    /// stack, and in a real program their costs add up rather than competing.
+    fn descend<T>(&mut self, f: impl FnOnce(&mut Self) -> LResult<T>) -> LResult<T> {
+        if self.depth >= ALTITUDO_MAXIMA {
+            return Err(self.err("expressio nimis alte implicata"));
+        }
+        self.depth += 1;
+        let r = f(self);
+        self.depth -= 1;
+        r
+    }
+
     // --- expressions, lowest precedence first ---
-    fn expr(&mut self) -> LResult<Expr> { self.or_expr() }
+    fn expr(&mut self) -> LResult<Expr> { self.descend(|p| p.or_expr()) }
 
     fn or_expr(&mut self) -> LResult<Expr> {
         let mut left = self.and_expr()?;
@@ -102,9 +146,17 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
     fn unary(&mut self) -> LResult<Expr> {
+        // Self-recursive on both operators, and reached without going through
+        // `expr` — so a run of `non` or `-` is its own way to overflow.
         match self.peek() {
-            Some(TokenKind::Not) => { self.advance(); Ok(Expr::Unary { op: UnOp::Not, expr: Box::new(self.unary()?) }) }
-            Some(TokenKind::Minus) => { self.advance(); Ok(Expr::Unary { op: UnOp::Neg, expr: Box::new(self.unary()?) }) }
+            Some(TokenKind::Not) => {
+                self.advance();
+                Ok(Expr::Unary { op: UnOp::Not, expr: Box::new(self.descend(|p| p.unary())?) })
+            }
+            Some(TokenKind::Minus) => {
+                self.advance();
+                Ok(Expr::Unary { op: UnOp::Neg, expr: Box::new(self.descend(|p| p.unary())?) })
+            }
             _ => self.postfix(),
         }
     }
@@ -209,16 +261,21 @@ impl<'a> Parser<'a> {
     }
 
     fn block(&mut self) -> LResult<Vec<Stmt>> {
-        self.eat(&TokenKind::LBrace)?;
-        let mut stmts = Vec::new();
-        while self.peek() != Some(&TokenKind::RBrace) {
-            if self.peek().is_none() {
-                return Err(self.err("'}' expectatum"));
+        // statement → if_stmt → block → statement is the third route to a
+        // stack overflow, independent of the expression ladder: nested `si`
+        // blocks alone abort at the same depth nested parentheses do.
+        self.descend(|p| {
+            p.eat(&TokenKind::LBrace)?;
+            let mut stmts = Vec::new();
+            while p.peek() != Some(&TokenKind::RBrace) {
+                if p.peek().is_none() {
+                    return Err(p.err("'}' expectatum"));
+                }
+                stmts.push(p.statement()?);
             }
-            stmts.push(self.statement()?);
-        }
-        self.eat(&TokenKind::RBrace)?;
-        Ok(stmts)
+            p.eat(&TokenKind::RBrace)?;
+            Ok(stmts)
+        })
     }
 
     fn if_stmt(&mut self) -> LResult<Stmt> {
@@ -421,7 +478,7 @@ impl<'a> Parser<'a> {
 }
 
 pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
-    let mut p = Parser { toks: tokens, pos: 0 };
+    let mut p = Parser { toks: tokens, pos: 0, depth: 0 };
     let mut stmts = Vec::new();
     while p.pos < p.toks.len() {
         stmts.push(p.statement()?);
@@ -432,7 +489,7 @@ pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
 /// Parse one file under the package model (§4.4–4.5 of the design):
 /// `affer` lines first, then `munus` declarations, nothing else.
 pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
-    let mut p = Parser { toks: tokens, pos: 0 };
+    let mut p = Parser { toks: tokens, pos: 0, depth: 0 };
     let mut imports: Vec<FileImport> = Vec::new();
     while p.peek() == Some(&TokenKind::Import) {
         let line = p.line();

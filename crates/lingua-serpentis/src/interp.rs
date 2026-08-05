@@ -47,7 +47,24 @@ struct Interp {
     // package function's body is running, so its own bare calls resolve
     // against `pkg`'s functions, mirroring the checker's namespace rule.
     current_ns: Option<String>,
+    depth: usize, // how many `call` frames are live; see VOCATIONES_MAXIMAE
 }
+
+/// How deep the call stack may go before the interpreter refuses.
+///
+/// Measured the same way as the parser's `ALTITUDO_MAXIMA`, and against the
+/// same 2 MiB spawned-thread stack rather than the binary's roomier main
+/// thread: 128 levels of a self-recursive function still run and 192 overflow,
+/// so the measured ceiling is 128 and this is half of it. On the main thread
+/// alone the abort did not come until somewhere past a thousand levels, which
+/// is the figure to ignore — the library must hold wherever it is called from.
+///
+/// A `call` frame is expensive: it clones the declaration, builds a frame map
+/// and recurses through `exec` and `eval`. That cost, not the limit, is what
+/// bounds recursion here; lifting the limit would need the frame to shrink.
+///
+/// Not configurable, for the same reason as the parser's limit.
+const VOCATIONES_MAXIMAE: usize = 64;
 
 impl Interp {
     fn new() -> Self {
@@ -57,6 +74,7 @@ impl Interp {
             out: String::new(),
             err_file: None,
             current_ns: None,
+            depth: 0,
         }
     }
 
@@ -166,7 +184,29 @@ impl Interp {
         }
     }
 
+    /// Call a function, one level deeper.
+    ///
+    /// Defectus D-04. `call` recursed through `exec` and `eval` back into
+    /// itself with no depth counter and no growable stack, so unbounded
+    /// recursion killed the process with SIGABRT and exit 134 — outside the
+    /// error model entirely, and `catch_unwind` cannot catch it.
+    ///
+    /// Split from `call_inner` so the counter cannot leak: the two early
+    /// returns below (unknown function, wrong argument count) would otherwise
+    /// each need their own decrement. The refusal is raised out here, so the
+    /// caller's own epilogue still attributes the error to the file whose
+    /// function made the too-deep call, which is the right one to blame.
     fn call(&mut self, name: &str, args: Vec<Value>, line: usize) -> LResult<Value> {
+        if self.depth >= VOCATIONES_MAXIMAE {
+            return Err(LinguaError { message: "vocatio nimis alte implicata".into(), line });
+        }
+        self.depth += 1;
+        let r = self.call_inner(name, args, line);
+        self.depth -= 1;
+        r
+    }
+
+    fn call_inner(&mut self, name: &str, args: Vec<Value>, line: usize) -> LResult<Value> {
         let (f, file) = self.funcs.get(name)
             .cloned()
             .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;

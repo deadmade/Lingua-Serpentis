@@ -230,14 +230,56 @@ fn a_closed_pipe_is_not_a_panic() {
 }
 
 #[test]
-#[ignore = "D-04: unbounded recursion aborts with SIGABRT (exit 134), outside the error model"]
 fn unbounded_recursion_is_a_clean_latin_error() {
     let d = temp_dir("liss-cli");
     let p = d.write("fons.liss",
         "munus recurre capit (ni n) reddit ni { redde recurre(n + °I); }\n\
          munus initium reddit ni { scribe(recurre(°I)); redde nullus; }");
     let o = run(&[p.to_str().unwrap()]);
-    let (code, _, err) = exited(&o); // panics today: the process is Signalled
+    // Was #[ignore]d and aspirational: the process used to be Signalled, so
+    // `exited` panicked before reaching any assertion. D-04.
+    let (code, out, err) = exited(&o);
     assert_eq!(code, 1);
-    assert!(err.contains("alte"), "expected a Latin depth error, got {err:?}");
+    // Verbatim now that the message exists — the Global Constraints' carve-out
+    // for `contains` inside an ignored test expires with the ignore.
+    assert_eq!(err, "Error in linea 1: vocatio nimis alte implicata\n");
+    assert_eq!(out, "");
+}
+
+#[test]
+fn deep_expression_nesting_is_a_clean_latin_error() {
+    // D-05's half. Twenty thousand parentheses used to abort the parser the
+    // same way; the register cites only this route, but nested `si` blocks and
+    // stacked unary operators each overflowed independently and are guarded by
+    // the same counter.
+    let d = temp_dir("liss-cli");
+    let src = format!(
+        "munus initium reddit ni {{ scribe({}°I{}); redde nullus; }}",
+        "(".repeat(20_000),
+        ")".repeat(20_000)
+    );
+    let p = d.write("fons.liss", &src);
+    let o = run(&[p.to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 1);
+    assert_eq!(err, "Error in linea 1: expressio nimis alte implicata\n");
+}
+
+#[test]
+fn recursion_inside_the_limit_still_runs() {
+    // The limit must not be so tight that ordinary recursion stops working.
+    let d = temp_dir("liss-cli");
+    let p = d.write("fons.liss",
+        "munus fac capit (ni n) reddit ni { si (n minor_est °II) { redde °I; } redde n * fac(n - °I); }\n\
+         munus initium reddit ni { scribe(fac(°X)); redde nullus; }");
+    let o = run(&[p.to_str().unwrap()]);
+    let (code, out, err) = exited(&o);
+    assert_eq!(code, 0);
+    assert_eq!(err, "");
+    // fac(X) is 3_628_800, printed M̅M̅M̅D̅C̅X̅X̅V̅MMMDCCC — each vinculum is a
+    // combining overline on the glyph before it, multiplying it by a thousand.
+    assert_eq!(
+        out,
+        "M\u{305}M\u{305}M\u{305}D\u{305}C\u{305}X\u{305}X\u{305}V\u{305}MMMDCCC\n"
+    );
 }
