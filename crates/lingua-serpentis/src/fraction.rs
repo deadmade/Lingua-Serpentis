@@ -16,13 +16,18 @@ pub fn scripulum_grain() -> Roman { Roman::from_u64(288) }
 /// `count = trunc(numer * g / den)`, truncating toward zero. The caller
 /// guarantees `den` is non-zero (the parser rejects a zero denominator).
 pub fn from_rational(numer: &Roman, den: &Roman, g: &Roman) -> Roman {
-    numer.mul(g).div_rem(den).0
+    // `den` comes from a parsed numeral, and no numeral this language accepts
+    // evaluates to zero — `convert_single` is at least 1 for every string it
+    // accepts, which `convert_single_is_never_zero_or_negative` pins
+    // exhaustively.
+    numer.mul(g).div_rem(den).expect("a parsed denominator is never zero").0
 }
 
 /// Multiply two grain counts: `(c1/g)*(c2/g)` back in grain units is
 /// `trunc(c1*c2 / g)`.
 pub fn mul(c1: &Roman, c2: &Roman, g: &Roman) -> Roman {
-    c1.mul(c2).div_rem(g).0
+    // The grain is a nonzero constant: XII for mnr, CCLXXXVIII for nr.
+    c1.mul(c2).div_rem(g).expect("the grain is a nonzero constant").0
 }
 
 /// Divide two grain counts: `(c1/g)/(c2/g)` back in grain units is
@@ -30,7 +35,9 @@ pub fn mul(c1: &Roman, c2: &Roman, g: &Roman) -> Roman {
 /// caller can raise `divisio per nullum`.
 pub fn div(c1: &Roman, c2: &Roman, g: &Roman) -> Option<Roman> {
     if c2.is_zero() { return None; }
-    Some(c1.mul(g).div_rem(c2).0)
+    // Guarded on the line above, which is what turns a zero divisor into
+    // `divisio per nullum` rather than a division.
+    Some(c1.mul(g).div_rem(c2).expect("c2 was just checked nonzero").0)
 }
 
 /// Fraction of the `as` for k/12, indexed by k (0..=11); index 0 is unused.
@@ -66,7 +73,7 @@ pub fn display(count: &Roman, g: &Roman) -> String {
     let magnitude = if negative { count.neg() } else { count.clone() };
 
     // whole `as` units and the leftover in grain units (0 <= rem < g).
-    let (whole, rem) = magnitude.div_rem(g);
+    let (whole, rem) = magnitude.div_rem(g).expect("the grain is a nonzero constant");
     let scr_per_grain = 288 / g.to_i64().unwrap();               // 24 for mnr, 1 for nr
     let mut scripula = rem.to_i64().unwrap() * scr_per_grain;    // 0..=287
 

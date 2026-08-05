@@ -386,7 +386,7 @@ fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
         },
         BinOp::Div => match (l, r) {
             (Int(_), Int(ref b)) if b.is_zero() => Err(divisio_per_nullum()),
-            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).0)),
+            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).expect("the zero divisor is rejected above").0)),
             (Float(a), Float(b)) => match fraction::div(&a, &b, &fraction::uncia_grain()) {
                 Some(q) => Ok(Float(q)),
                 None => Err(divisio_per_nullum()),
@@ -399,7 +399,7 @@ fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
         },
         BinOp::Mod => match (l, r) {
             (Int(_), Int(ref b)) if b.is_zero() => Err(LinguaError { message: "modulus per nullum".into(), line }),
-            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).1)),
+            (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).expect("the zero divisor is rejected above").1)),
             _ => Err(bad()),
         },
         BinOp::Eq => Ok(Bool(l == r)),
@@ -456,7 +456,7 @@ pub fn execute(program: &[Stmt]) -> LResult<String> {
 /// second return value is that sign (D-10): `Some(warning)` exactly when the
 /// returned value did not already fit in 0..=CCLV.
 fn exit_status(r: &Roman) -> (u8, Option<Warning>) {
-    let rem = r.div_rem(&Roman::from_u64(256)).1;
+    let rem = r.div_rem(&Roman::from_u64(256)).expect("CCLVI is not zero").1;
     let x = rem.to_i64().expect("|rem| < 256 fits i64");
     let code = ((x + 256) % 256) as u8;
     let truncated = *r != Roman::from_u64(code as u64);

@@ -107,7 +107,11 @@ fn mag_mul(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
 /// Magnitude divide, returning (quotient, remainder). Requires d != 0.
 /// Doubling long division, built on `mag_add`/`mag_sub`/`mag_cmp`.
 fn mag_divmod(n: &[Tier], d: &[Tier]) -> (Vec<Tier>, Vec<Tier>) {
-    debug_assert!(!d.is_empty(), "mag_divmod requires a non-zero divisor");
+    // The `d != 0` precondition is now enforced by `Roman::div_rem`, this
+    // function's only caller, which returns None rather than calling in. It
+    // was a `debug_assert!` here, compiled out of release, where an empty `d`
+    // meant `mag_cmp` never reported Greater and the doubling loop below ran
+    // until memory ran out. See D-21.
     use std::cmp::Ordering;
     if mag_cmp(n, d) == Ordering::Less {
         return (Vec::new(), n.to_vec());
@@ -346,11 +350,25 @@ impl Roman {
     }
 
     /// Truncating division toward zero; the remainder's sign follows the
-    /// dividend — matching Rust's `i64` `/` and `%`. Caller must ensure
-    /// `!other.is_zero()`.
-    pub fn div_rem(&self, other: &Roman) -> (Roman, Roman) {
+    /// dividend — matching Rust's `i64` `/` and `%`. `None` when `other` is
+    /// zero.
+    ///
+    /// Defectus D-21. The zero guard used to be a `debug_assert!` inside
+    /// `mag_divmod`, which is compiled out of a release build — and with an
+    /// empty divisor `mag_cmp` never reports Greater, so the doubling loop
+    /// runs forever, doubling `pow` until memory runs out. Every caller
+    /// happened to guard, so it was unreachable; but `div_rem` is `pub`, and
+    /// a latent release-only hang behind a caller's diligence is not a
+    /// guarantee. Returning `Option` moves the obligation into the type.
+    ///
+    /// Deliberately not an `assert!`: an unreachable panic is still a panic,
+    /// and `no panic` is a live rule the fuzzer enforces.
+    pub fn div_rem(&self, other: &Roman) -> Option<(Roman, Roman)> {
+        if other.is_zero() {
+            return None;
+        }
         let (q, rem) = mag_divmod(&self.tiers, &other.tiers);
-        (make(self.negative != other.negative, q), make(self.negative, rem))
+        Some((make(self.negative != other.negative, q), make(self.negative, rem)))
     }
 }
 
@@ -538,7 +556,7 @@ mod tests {
     fn div_rem_matches_i64_truncating() {
         let cases = [(7, 2), (-7, 2), (7, -2), (-7, -2), (30507, 25), (100, 10), (5, 7)];
         for (a, b) in cases {
-            let (q, rem) = r(a).div_rem(&r(b));
+            let (q, rem) = r(a).div_rem(&r(b)).expect("nonzero divisor");
             assert_eq!(q.to_i64(), Some(a / b), "{a}/{b} quotient");
             assert_eq!(rem.to_i64(), Some(a % b), "{a}%{b} remainder");
         }
