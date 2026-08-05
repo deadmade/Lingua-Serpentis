@@ -69,18 +69,24 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 /// any OTHER rule is a new finding and fails the test that saw it. Shrinking
 /// this array is how progress gets measured — never add to it without adding
 /// a register entry too.
-pub const RECORDED_RULES: [&str; 5] = [
-    "no abort",         // D-04, D-05
-    "terminates",       // D-20
-    "no panic",         // D-06
-    "no Arabic digits", // D-12
-    "Latin only",       // D-11, D-22
+pub const RECORDED_RULES: [&str; 4] = [
+    "no abort",   // D-04, D-05
+    "terminates", // D-20
+    "no panic",   // D-06
+    "Latin only", // D-11, D-22
 ];
 
-// `no Rust type names` was here for D-02, and is gone: `parser.rs`'s `eat` was
-// the only site in the workspace that formatted a `TokenKind` with `{:?}`, and
-// it now names the token through `TokenKind::name`. The RUST_TYPE_NAMES rule
-// itself stays — it is the assertion that keeps it that way.
+// Two entries have been retired, and neither by weakening its rule:
+//
+// `no Rust type names` (D-02) — `parser.rs`'s `eat` was the only site in the
+// workspace that formatted a `TokenKind` with `{:?}`, and it now names the
+// token through `TokenKind::name`.
+//
+// `no Arabic digits` (D-12) — `index extra fines` interpolated the list length
+// as a bare `usize`; it renders through `Roman::display` now, so no message in
+// the language carries an Arabic digit outside a quoted span.
+//
+// Both underlying checks stay in `judge`. They are what keep these fixed.
 
 /// A run either satisfies the invariant or names the rule it broke. The
 /// mapping from rule to recorded defect lives in

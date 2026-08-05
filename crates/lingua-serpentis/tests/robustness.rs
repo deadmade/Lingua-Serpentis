@@ -119,7 +119,7 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             "index extra fines",
             "munus initium reddit ni {\n  ni lista xs = [°I];\n  scribe(xs[°X]);\n  redde nullus;\n}"
                 .to_string(),
-            Some("no Arabic digits"), // D-12 — `longitudo 1` is Arabic
+            None,
         ),
         (
             // This source is missing the semicolon after `ni x = °I`, so it is

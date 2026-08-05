@@ -20,9 +20,19 @@ fn unknown_variable(name: &str, line: usize) -> LinguaError {
 /// A list subscript outside `I..=longitudo`. Shared by the reading form
 /// (`xs[i]`) and the assigning form (`xs[i] = v`), which used to carry the
 /// same sentence twice.
+///
+/// Both numbers are Roman. The length used to be interpolated as a bare
+/// `usize`, which made this the one place in the language a user could see an
+/// Arabic number — the counterexample to roman-native-integers §1's "no Arabic
+/// number anywhere a user can see" (D-12). An empty list reads `longitudo
+/// nullus`, which is what `Roman::display` renders zero as.
 fn index_error(idx: &Roman, len: usize, line: usize) -> LinguaError {
     LinguaError {
-        message: format!("index extra fines: {} (longitudo {})", idx.display(), len),
+        message: format!(
+            "index extra fines: {} (longitudo {})",
+            idx.display(),
+            Roman::from_usize(len).display()
+        ),
         line,
     }
 }

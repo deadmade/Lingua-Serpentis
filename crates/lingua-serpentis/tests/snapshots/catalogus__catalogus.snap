@@ -44,20 +44,20 @@ crates/lingua-serpentis/src/error.rs:14  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/error.rs:20  Monitum in '{}', linea {}: {}  → UNCOVERED
 crates/lingua-serpentis/src/error.rs:67  Error in linea {}: {}  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:17  variabilis ignota: '{}'  → ambiguous
-crates/lingua-serpentis/src/interp.rs:24  index extra fines: {} (longitudo {})  → fixtured
-crates/lingua-serpentis/src/interp.rs:95  operatio unaria invalida  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:109  'longitudo' seriem expectat  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:120  'adde' seriem et elementum expectat  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:153  subscriptio invalida  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:162  functio ignota: '{}'  → ambiguous
-crates/lingua-serpentis/src/interp.rs:164  functio '{}' numerum argumentorum falsum accepit  → ambiguous
-crates/lingua-serpentis/src/interp.rs:213  index seriei invalidus  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:225  '{}' non est series  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:302  condicio non est veritas  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:309  operatio binaria invalida  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:316  divisio per nullum  → fixtured
-crates/lingua-serpentis/src/interp.rs:351  modulus per nullum  → fixtured
-crates/lingua-serpentis/src/interp.rs:379  comparatio invalida  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:30  index extra fines: {} (longitudo {})  → fixtured
+crates/lingua-serpentis/src/interp.rs:105  operatio unaria invalida  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:119  'longitudo' seriem expectat  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:130  'adde' seriem et elementum expectat  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:163  subscriptio invalida  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:172  functio ignota: '{}'  → ambiguous
+crates/lingua-serpentis/src/interp.rs:174  functio '{}' numerum argumentorum falsum accepit  → ambiguous
+crates/lingua-serpentis/src/interp.rs:223  index seriei invalidus  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:235  '{}' non est series  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:312  condicio non est veritas  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:319  operatio binaria invalida  → UNCOVERED
+crates/lingua-serpentis/src/interp.rs:326  divisio per nullum  → fixtured
+crates/lingua-serpentis/src/interp.rs:361  modulus per nullum  → fixtured
+crates/lingua-serpentis/src/interp.rs:389  comparatio invalida  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:24  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/latinity.rs:46  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:40  UNPARSED  → UNPARSED
