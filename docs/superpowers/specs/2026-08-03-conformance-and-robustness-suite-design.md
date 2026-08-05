@@ -59,6 +59,18 @@ This design adds a suite built around three principles:
 
 ### Non-Goals
 
+> **Superseded 2026-08-05, for the behaviour freeze only.** The freeze below
+> was scoped to building this suite, and "the fix is a separate decision" was
+> the right call: that decision has since been taken and executed in
+> `docs/superpowers/plans/2026-08-05-defect-register-remediation.md`. Twenty-two
+> of the twenty-five defects are fixed, including both stack overflows, the
+> exit-status silence and every English string. The three that remain — D-13,
+> D-19 and D-20 — are deferred as genuine language changes, each needing a spec
+> of its own; the rest of this section still describes them correctly.
+>
+> The parts of §2 that are *not* about the freeze — no benchmark suite, no new
+> language features taken on speculatively — still stand.
+
 - **No behaviour changes.** Not the stack overflows, not the exit-status
   truncation, not the two English strings in `main.rs`. Each is documented; the
   fix is a separate decision (§8).
