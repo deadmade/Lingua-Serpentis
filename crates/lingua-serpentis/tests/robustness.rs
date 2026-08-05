@@ -63,20 +63,25 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             None,
         ),
         (
-            // Verified 2026-08-03, not as the brief predicted: this times out
-            // under the 10s deadline rather than running clean. Root cause is
-            // `latinitas::analyze::analyze` (crates/latinitas/src/analyze.rs:31-40),
-            // whose `for i in 0..=w.len()` loop hashes a `&w[..i]` slice on every
-            // iteration — O(n) per iteration, O(n^2) total in the identifier's
-            // length. Measured directly against the binary: 50_000 chars ~6.2s,
-            // 100_000 chars ~24s (still terminates, just past this timeout).
-            // Recorded as D-23, rule `terminates` (already allowlisted via D-20).
+            // This timed out under the 10s deadline until D-23 was fixed. The
+            // cause was `latinitas::analyze::analyze`, whose `for i in
+            // 0..=w.len()` loop hashed a `&w[..i]` slice on every iteration —
+            // O(n) per iteration, O(n^2) in the identifier's length. Measured
+            // against the binary on 2026-08-03: 20_000 chars 1.26s, 50_000
+            // ~6.2s, 100_000 ~24s.
+            //
+            // `analyze` now skips the splits whose stem or ending is longer
+            // than any in the dictionary, which is constant work however long
+            // the name is. Re-measured 2026-08-05, same machine: 20_000 chars
+            // 318ms, 50_000 317ms, 100_000 322ms — flat, and the remainder is
+            // the process's own dictionary-build cost, not the name. This case
+            // stays in the sweep as the regression guard for that bound.
             "nomen longissimum",
             format!(
                 "munus initium reddit ni {{ ni {} = °I; redde nullus; }}",
                 "a".repeat(100_000)
             ),
-            Some("terminates"), // D-23
+            None,
         ),
         (
             "numerus longissimus",

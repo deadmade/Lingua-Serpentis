@@ -48,6 +48,27 @@ pub fn build_tables(dictline: &str, inflects: &str, uniques: &str) -> Tables {
     t
 }
 
+/// Merge our own small supplement into the whole-word table.
+///
+/// Deliberately separate from `build_tables`, which stays a pure function of
+/// the three Whitaker files: the supplement is ours, they are Whitaker's, and
+/// keeping the arity unchanged leaves every existing `build_tables` caller
+/// alone. One word per line; `#` starts a comment; blank lines are ignored.
+///
+/// Entries land in `whole`, so they are accepted as written and inflect no
+/// further. That is the conservative choice — a supplemented infinitive should
+/// not silently license every ending of a conjugation it was never checked
+/// against.
+pub fn add_supplement(t: &mut Tables, text: &str) {
+    for line in text.lines() {
+        let word = line.split('#').next().unwrap_or("").trim();
+        if word.is_empty() {
+            continue;
+        }
+        t.whole.insert(normalize(word));
+    }
+}
+
 /// Distribute the wildcard (declension/conjugation `0`) endings onto every
 /// concrete group of the same part of speech.
 ///

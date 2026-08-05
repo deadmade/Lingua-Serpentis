@@ -12,3 +12,8 @@ reproducibly. All morphological analysis code in this crate is original.
 
 The public-domain status described above applies to those three data files only,
 and is unaffected by whatever licence this crate's own source is released under.
+
+supplement.txt is NOT Whitaker's. It is ours, it is not derived from WORDS, and
+it carries this crate's own licence. It holds the small set of programmer-Latin
+words the dictionary does not contain but real programs use; the file's own
+header states the policy for adding to it.

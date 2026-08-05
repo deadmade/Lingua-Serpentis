@@ -1,0 +1,23 @@
+# Supplemental word list — ours, not Whitaker's.
+#
+# The identifier-checker design (docs/superpowers/specs/
+# 2026-07-19-latin-identifier-checker-design.md §12) left open whether a
+# handful of common programmer-Latin infinitives used as function names are
+# present in Whitaker's dictionary or need a small supplement, and set the
+# test for adding one: "add a small data/supplement.txt only if a real example
+# fails". This file exists because one did — see defectus D-18.
+#
+# The policy, which is the whole point of keeping this file tiny:
+#
+#   Add a word only when a shipped example or a real program actually fails on
+#   it. Never add words speculatively. Every entry here is a hole punched in
+#   the Latinity checker, and a checker with enough holes stops being worth
+#   running.
+#
+# One word per line. `#` starts a comment. Entries are matched whole, so a
+# supplemented word inflects no further: add each form you actually need.
+
+# examples/calc.liss declares `munus summare`. Whitaker has the noun `summa`
+# and the verb `summo`, but not the first-conjugation infinitive `summare`
+# that programmer-Latin reaches for when naming a function.
+summare
