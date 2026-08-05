@@ -2605,6 +2605,63 @@ states, but visible ones — the header count is what the project chooses to
 live with."
 ```
 
+- [ ] **Step 7: Stop the catalogue overstating its own coverage (added after the Task 13 review)**
+
+`fixtured` is decided by matching a site's format string against the set of
+messages the corpus produced. Nothing ties a message back to the *site* that
+emitted it, so **when two sites are worded identically, provoking one marks
+both.** The review measured the damage by tagging each of the 27
+duplicate-text literals with its own `file:line` and re-running the corpus:
+**16 of the 102 sites are never actually provoked, yet report `fixtured`.**
+Real unique coverage is **59/102, not 75/102**.
+
+The 16 are `checker.rs:102, :117, :366, :369, :427, :437, :458, :524` and
+`interp.rs:51, :67, :145, :147, :206, :215, :321, :325`. Several are ordinary
+unfixtured gaps hiding behind a shared string — `interp.rs:321`/`:325` are the
+Float and Double `divisio per nullum` arms and only the Int arm is provoked;
+`checker.rs:437` is the `IndexAssign` index-type guard, distinct from the
+expression-form guard at `:195` that *is* provoked. The Step 3 triage never
+saw them, because they were never listed as `UNCOVERED`.
+
+This is inherent to the design in Step 2, not to any deviation from it.
+
+**Add a fourth status, `ambiguous`.** A site is `fixtured` only when its
+pattern is unique among all sites *and* observed. When a pattern is shared by
+more than one site and the text is observed, every site sharing it is
+`ambiguous`: the corpus proves at least one of them was reached and cannot say
+which. Count it separately in the header, so the honest reading is visible
+without a footnote:
+
+```
+102 sites · N fixtured · M ambiguous · 21 uncovered · 6 unparsed
+```
+
+`fixtured` then means *uniquely attributable*, which is the only reading a
+future reviewer can safely trust.
+
+Record the 16 in the register alongside D-24's existing blind-spot note, which
+currently scopes the problem to `checker.rs:524` alone and so understates it by
+fifteen sites.
+
+Add fixtures for the cheap reachable ones — the Float and Double division-by-zero
+arms especially. Note that a new fixture will **not** move such a site from
+`ambiguous` to `fixtured`, because the ambiguity is in the wording, not the
+coverage; the gain is a real behavioural case in the corpus, which is worth
+having on its own.
+
+**Two findings deliberately not acted on**, recorded so a later reader does not
+re-derive them:
+
+- The nine `write!(f, "…")` envelope strings in `error.rs` (`Error in linea {}: {}`,
+  `Monitum in '{}': {}`, …) are outside the marker set, so the ratchet cannot see
+  a change to them. That is acceptable here and only here: every `errores/` and
+  `monita/` fixture asserts full stderr verbatim, so altering an envelope breaks
+  dozens of fixtures immediately. The ratchet does not need to duplicate that.
+- The snapshot embeds line numbers, so editing any source file re-blesses every
+  site below the edit. That churn is the price of the snapshot doubling as a
+  navigable index of every message site, which is what makes it useful to the
+  owner. Keep the line numbers.
+
 ---
 
 ## Final Verification
