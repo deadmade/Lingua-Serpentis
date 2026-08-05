@@ -69,12 +69,19 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 /// any OTHER rule is a new finding and fails the test that saw it. Shrinking
 /// this array is how progress gets measured — never add to it without adding
 /// a register entry too.
-pub const RECORDED_RULES: [&str; 2] = [
+pub const RECORDED_RULES: [&str; 1] = [
+    // The last one, and it is held open by a defect that is deferred rather
+    // than open: D-20's `x = x * x` does not terminate because `Roman` is
+    // arbitrary-precision, so bounding it is a language change with its own
+    // spec to write, not a bug fix.
     "terminates", // D-20
-    "no panic",   // D-06
 ];
 
-// Four entries have been retired, and none by weakening its rule:
+// Five entries have been retired, and none by weakening its rule:
+//
+// `no panic` (D-06) — main.rs writes through explicit handles and treats a
+// closed pipe as an ordinary end of output, the way every Unix tool does,
+// instead of letting Rust's SIG_IGN'd SIGPIPE turn it into a panic.
 //
 // `Latin only` (D-11, D-22) — main.rs's two hand-written English strings are
 // Latin now, and the library classifies an io::Error into a Latin cause

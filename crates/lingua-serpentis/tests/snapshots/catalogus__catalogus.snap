@@ -70,9 +70,9 @@ crates/lingua-serpentis/src/lexer.rs:90  littera invalida  → fixtured
 crates/lingua-serpentis/src/lexer.rs:112  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
 crates/lingua-serpentis/src/lexer.rs:118  signum ignotum: '{}'  → fixtured
 crates/lingua-serpentis/src/lib.rs:133  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/main.rs:19  Usus: lingua-serpentis <via.liss | directorium>  → UNCOVERED
-crates/lingua-serpentis/src/main.rs:34  Error: via '{}' non inventa est  → UNCOVERED
-crates/lingua-serpentis/src/main.rs:38  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
+crates/lingua-serpentis/src/main.rs:39  Usus: lingua-serpentis <via.liss | directorium>  → UNCOVERED
+crates/lingua-serpentis/src/main.rs:54  Error: via '{}' non inventa est  → UNCOVERED
+crates/lingua-serpentis/src/main.rs:58  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
 crates/lingua-serpentis/src/parser.rs:51  expectatum: '{}'  → fixtured
 crates/lingua-serpentis/src/parser.rs:55  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/parser.rs:74  expressio nimis alte implicata  → fixtured

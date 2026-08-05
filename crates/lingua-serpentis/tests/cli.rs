@@ -281,8 +281,10 @@ fn a_non_utf8_source_file_is_reported_not_panicked() {
 }
 
 #[test]
-#[ignore = "D-06: Rust ignores SIGPIPE and print! panics; exit 101 with a backtrace note"]
 fn a_closed_pipe_is_not_a_panic() {
+    // D-06. Was #[ignore]d and aspirational: `prog | head` produced a Rust
+    // panic message, a backtrace note and exit 101 — for the most ordinary
+    // idiom a shell has.
     // A real reproduction, not a placeholder: read a little of the child's
     // stdout, close the pipe, and let it keep writing. Every other Unix tool
     // exits quietly here.
