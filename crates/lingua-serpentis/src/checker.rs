@@ -152,9 +152,13 @@ impl Checker {
                         InferTy::Known(Type::Int) => Ok(InferTy::Known(Type::Int)),
                         InferTy::Known(Type::Float) => Ok(InferTy::Known(Type::Float)),
                         InferTy::Known(Type::Double) => Ok(InferTy::Known(Type::Double)),
-                        _ => Err(LinguaError { message: "operatio unaria typo non convenit".into(), line }),
+                        // Unambiguously negation of a non-number.
+                        _ => Err(LinguaError { message: "negatio numerum requirit".into(), line }),
                     },
-                    _ => Err(LinguaError { message: "operatio unaria typo non convenit".into(), line }),
+                    // The remaining unary operator is `non`, applied to
+                    // something that is not a veritas. Quoting the keyword
+                    // matches the house style of `'longitudo' seriem expectat`.
+                    _ => Err(LinguaError { message: "'non' veritatem requirit".into(), line }),
                 }
             }
             Expr::Binary { op, left, right } => {
@@ -169,8 +173,16 @@ impl Checker {
                         line,
                     });
                 }
+                // Dead by construction, and reworded so it says which
+                // invariant tripped rather than duplicating check_file's
+                // sentence. `check_file` rejects every import whose package is
+                // absent before any body is walked, and the guard above
+                // requires the name to be among this file's imports — so a
+                // name reaching here is both imported and known to exist. Kept
+                // rather than `.expect`ed: an unreachable panic is still a
+                // panic. It reads UNCOVERED, correctly (D-24).
                 let sigs = self.packages.get(p).ok_or_else(|| LinguaError {
-                    message: format!("fasciculus '{}' non inventus", p),
+                    message: format!("fasciculus '{}' inter allatos non inventus", p),
                     line,
                 })?;
                 let (params, ret) = sigs.get(name).cloned().ok_or_else(|| LinguaError {
@@ -419,9 +431,16 @@ impl Checker {
             StmtKind::Assign { name, value } => {
                 let target = self.lookup_or_err(name, line)?;
                 let vt = self.resolve_expr(value, Some(target.clone()), line)?;
+                // `iam` is what distinguishes assigning to a variable that
+                // already has a type from declaring a new one; `Let` above
+                // keeps the original wording (D-24). The comment sits outside
+                // the constructor deliberately: the catalogue reads the first
+                // literal within 300 bytes of a constructor, and three comment
+                // lines in between are enough to push the message out of reach
+                // and leave the site reading UNPARSED.
                 if vt != target {
                     return Err(LinguaError {
-                        message: format!("'{}' typum '{}' expectat, sed '{}' datum est",
+                        message: format!("'{}' iam typum '{}' habet, sed '{}' datum est",
                             name, Self::type_name(&target), Self::type_name(&vt)),
                         line,
                     });
@@ -515,7 +534,13 @@ impl Checker {
                 };
                 let it = self.resolve_expr(index, Some(Type::Int), line)?;
                 if it != Type::Int {
-                    return Err(LinguaError { message: "index seriei 'ni' esse debet".into(), line });
+                    // The assigning form `xs[i] = v`; the reading form `xs[i]`
+                    // keeps `index seriei`. The fixture for this one is
+                    // already called errores/index-assignationis-non-ni.
+                    return Err(LinguaError {
+                        message: "index assignationis 'ni' esse debet".into(),
+                        line,
+                    });
                 }
                 let vt = self.resolve_expr(value, Some(elem.clone()), line)?;
                 if vt != elem {

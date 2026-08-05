@@ -14,7 +14,12 @@ enum Flow { Normal, Break, Continue, Return(Value) }
 /// invisible to the diagnostic catalogue, which can only tell that *some* site
 /// produced the message — see D-24.
 fn unknown_variable(name: &str, line: usize) -> LinguaError {
-    LinguaError { message: format!("variabilis ignota: '{}'", name), line }
+    // Distinct from the checker's `variabilis ignota`, which is a *static*
+    // fact about a name that is in no scope. This one is *temporal*: the name
+    // exists in the program but nothing has bound it yet at the moment it was
+    // read. `nondum` is the whole difference, and having two sentences is what
+    // lets the catalogue say which layer spoke (D-24).
+    LinguaError { message: format!("variabilis '{}' nondum instituta est", name), line }
 }
 
 /// A list subscript outside `I..=longitudo`. Shared by the reading form
@@ -209,10 +214,13 @@ impl Interp {
     fn call_inner(&mut self, name: &str, args: Vec<Value>, line: usize) -> LResult<Value> {
         let (f, file) = self.funcs.get(name)
             .cloned()
-            .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
+            // `munus`, the language's own keyword, where the checker says `functio`:
+            // the checker rejects an unknown call first, so this copy speaks only
+            // through the legacy entry point (D-24).
+            .ok_or_else(|| LinguaError { message: format!("munus ignotum: '{}'", name), line })?;
         if f.params.len() != args.len() {
             return Err(LinguaError {
-                message: format!("functio '{}' numerum argumentorum falsum accepit", name),
+                message: format!("munus '{}' numerum argumentorum falsum accepit", name),
                 line,
             });
         }
