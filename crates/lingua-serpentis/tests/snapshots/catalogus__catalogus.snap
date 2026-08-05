@@ -2,45 +2,46 @@
 source: crates/lingua-serpentis/tests/catalogus.rs
 expression: report
 ---
-100 sites · 59 fixtured · 14 ambiguous · 22 uncovered · 5 unparsed
+101 sites · 60 fixtured · 14 ambiguous · 22 uncovered · 5 unparsed
 
-crates/lingua-serpentis/src/checker.rs:55  variabilis ignota: '{}'  → ambiguous
-crates/lingua-serpentis/src/checker.rs:66  functio '{}' numerum argumentorum falsum accepit  → ambiguous
-crates/lingua-serpentis/src/checker.rs:74  argumentum typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:120  operatio unaria typo non convenit  → ambiguous
-crates/lingua-serpentis/src/checker.rs:122  operatio unaria typo non convenit  → ambiguous
-crates/lingua-serpentis/src/checker.rs:132  fasciculus '{}' non allatus est  → fixtured
-crates/lingua-serpentis/src/checker.rs:137  fasciculus '{}' non inventus  → ambiguous
-crates/lingua-serpentis/src/checker.rs:141  functio '{}' in fasciculo '{}' non inventa  → fixtured
-crates/lingua-serpentis/src/checker.rs:151  'longitudo' unum argumentum accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:156  'longitudo' seriem expectat, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:164  'adde' duo argumenta accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:178  'adde' seriem expectat, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:185  'adde': series '{}' elementum '{}' non accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:195  functio ignota: '{}'  → ambiguous
-crates/lingua-serpentis/src/checker.rs:207  res typi '{}' subscribi non potest (non est series)  → fixtured
-crates/lingua-serpentis/src/checker.rs:215  index seriei 'ni' esse debet  → ambiguous
-crates/lingua-serpentis/src/checker.rs:233  typus elementorum seriei vacuae ignotus  → fixtured
-crates/lingua-serpentis/src/checker.rs:243  elementa seriei discrepant: '{}' et '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:283  numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:299  operatio typis '{}' et '{}' non convenit  → fixtured
-crates/lingua-serpentis/src/checker.rs:355  series ordine comparari non potest (par_est/par_non_est tantum)  → fixtured
-crates/lingua-serpentis/src/checker.rs:375  '{}' typum '{}' expectat, sed '{}' datum est  → ambiguous
-crates/lingua-serpentis/src/checker.rs:388  '{}' typum '{}' expectat, sed '{}' datum est  → ambiguous
-crates/lingua-serpentis/src/checker.rs:441  'redde' extra functionem  → UNCOVERED
-crates/lingua-serpentis/src/checker.rs:444  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:456  '{}' non est series (typus '{}')  → fixtured
-crates/lingua-serpentis/src/checker.rs:463  index seriei 'ni' esse debet  → ambiguous
-crates/lingua-serpentis/src/checker.rs:467  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:480  'abrumpe' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:483  'continua' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:506  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
-crates/lingua-serpentis/src/checker.rs:520  condicio 'veritas' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:555  nomen '{}' reservatum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:590  functio '{}' bis definita  → fixtured
-crates/lingua-serpentis/src/checker.rs:610  fasciculus '{}' non inventus  → ambiguous
-crates/lingua-serpentis/src/checker.rs:636  munus 'initium' in programmate non inventum  → fixtured
-crates/lingua-serpentis/src/checker.rs:645  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:90  variabilis ignota: '{}'  → ambiguous
+crates/lingua-serpentis/src/checker.rs:101  functio '{}' numerum argumentorum falsum accepit  → ambiguous
+crates/lingua-serpentis/src/checker.rs:109  argumentum typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:155  operatio unaria typo non convenit  → ambiguous
+crates/lingua-serpentis/src/checker.rs:157  operatio unaria typo non convenit  → ambiguous
+crates/lingua-serpentis/src/checker.rs:167  fasciculus '{}' non allatus est  → fixtured
+crates/lingua-serpentis/src/checker.rs:172  fasciculus '{}' non inventus  → ambiguous
+crates/lingua-serpentis/src/checker.rs:176  functio '{}' in fasciculo '{}' non inventa  → fixtured
+crates/lingua-serpentis/src/checker.rs:186  'longitudo' unum argumentum accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:191  'longitudo' seriem expectat, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:199  'adde' duo argumenta accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:213  'adde' seriem expectat, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:220  'adde': series '{}' elementum '{}' non accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:230  functio ignota: '{}'  → ambiguous
+crates/lingua-serpentis/src/checker.rs:242  res typi '{}' subscribi non potest (non est series)  → fixtured
+crates/lingua-serpentis/src/checker.rs:250  index seriei 'ni' esse debet  → ambiguous
+crates/lingua-serpentis/src/checker.rs:268  typus elementorum seriei vacuae ignotus  → fixtured
+crates/lingua-serpentis/src/checker.rs:278  elementa seriei discrepant: '{}' et '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:318  numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:334  operatio typis '{}' et '{}' non convenit  → fixtured
+crates/lingua-serpentis/src/checker.rs:390  series ordine comparari non potest (par_est/par_non_est tantum)  → fixtured
+crates/lingua-serpentis/src/checker.rs:410  '{}' typum '{}' expectat, sed '{}' datum est  → ambiguous
+crates/lingua-serpentis/src/checker.rs:423  '{}' typum '{}' expectat, sed '{}' datum est  → ambiguous
+crates/lingua-serpentis/src/checker.rs:487  munus '{}' non in omni via reddit  → fixtured
+crates/lingua-serpentis/src/checker.rs:496  'redde' extra functionem  → UNCOVERED
+crates/lingua-serpentis/src/checker.rs:499  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:511  '{}' non est series (typus '{}')  → fixtured
+crates/lingua-serpentis/src/checker.rs:518  index seriei 'ni' esse debet  → ambiguous
+crates/lingua-serpentis/src/checker.rs:522  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:535  'abrumpe' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:538  'continua' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:561  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
+crates/lingua-serpentis/src/checker.rs:575  condicio 'veritas' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:610  nomen '{}' reservatum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:645  functio '{}' bis definita  → fixtured
+crates/lingua-serpentis/src/checker.rs:666  fasciculus '{}' non inventus  → ambiguous
+crates/lingua-serpentis/src/checker.rs:693  munus 'initium' in programmate non inventum  → fixtured
+crates/lingua-serpentis/src/checker.rs:702  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
 crates/lingua-serpentis/src/error.rs:2  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/error.rs:14  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/error.rs:20  Monitum in '{}', linea {}: {}  → UNCOVERED

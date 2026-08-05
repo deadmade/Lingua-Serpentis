@@ -20,6 +20,38 @@ struct Checker {
     imports: HashSet<String>,                          // current file's affer set
     current_ret: Option<Type>, // Some(_) while checking a function body
     loop_depth: usize,         // how many `indem`/`dum` bodies enclose the current statement
+    // Whether the functions being checked are the program's root. Only the
+    // root's `initium` may fall off its end; see the Func arm of check_stmt.
+    root_namespace: bool,
+}
+
+/// Does every path through this statement leave the function?
+///
+/// Deliberately conservative: `true` only where a return is provable. Over-
+/// rejecting costs a user one extra `redde`; under-rejecting is D-01.
+fn always_returns(s: &Stmt) -> bool {
+    match &s.kind {
+        StmtKind::Return(_) => true,
+        // Both arms, and there must *be* an else. `aut si` parses as a nested
+        // `If` inside a one-statement else block, so else-if chains fall out
+        // of the recursion with no case of their own.
+        StmtKind::If { then, else_: Some(eb), .. } => block_returns(then) && block_returns(eb),
+        // A loop may run zero times, so it never guarantees a return.
+        //
+        // `indem (verus)` is not special-cased even though it diverges, which
+        // is what Rust and Java would do. Their version of the rule only holds
+        // for a loop with no reachable break, and the checker tracks loop
+        // depth but not break targets. Treating it as non-returning is sound —
+        // it only over-rejects — no program in the corpus writes it, and the
+        // workaround is a trailing `redde`.
+        _ => false,
+    }
+}
+
+/// `any`, not "the last statement": a `redde` followed by unreachable code
+/// still returns, and this language has no dead-code lint to disagree with.
+fn block_returns(body: &[Stmt]) -> bool {
+    body.iter().any(always_returns)
 }
 
 impl Checker {
@@ -31,6 +63,9 @@ impl Checker {
             imports: HashSet::new(),
             current_ret: None,
             loop_depth: 0,
+            // The legacy single-block entry point stays permissive: it has no
+            // program around it, and D-19 defers its removal.
+            root_namespace: true,
         }
     }
 
@@ -434,7 +469,27 @@ impl Checker {
                 self.loop_depth = saved_depth;
                 self.current_ret = saved;
                 self.scopes.pop();
-                r
+                // After the body, so a genuine error inside it wins and no
+                // existing diagnostic is displaced by this one.
+                r?;
+                // Defectus D-01. Nothing asked whether a declared return was
+                // reachable on every path, and `interp::call` ended every body
+                // with Int(zero) regardless of the declared type — so a
+                // checker-approved `reddit voc` function could hand back a
+                // number. That is the type system being unsound, not merely
+                // permissive.
+                //
+                // Only the ROOT `initium` is exempt: the packages design §4.3
+                // licenses its fall-through and `interp.rs`'s
+                // `falling_off_initium_exits_zero` pins it. A package function
+                // that happens to share the name is ordinary.
+                if !(self.root_namespace && f.name == "initium") && !block_returns(&f.body) {
+                    return Err(LinguaError {
+                        message: format!("munus '{}' non in omni via reddit", f.name),
+                        line: s.line,
+                    });
+                }
+                Ok(())
             }
             StmtKind::Return(e) => {
                 let want = self.current_ret.clone()
@@ -604,6 +659,7 @@ fn check_file(
     file: &mut ParsedFile,
     ns_sigs: &HashMap<String, Sig>,
     pkg_sigs: &HashMap<String, HashMap<String, Sig>>,
+    is_root: bool,
 ) -> Result<(), ProgramError> {
     for imp in &file.ast.imports {
         if !pkg_sigs.contains_key(&imp.package) {
@@ -614,6 +670,7 @@ fn check_file(
         }
     }
     let mut c = Checker::new();
+    c.root_namespace = is_root;
     c.funcs = ns_sigs.clone();
     c.packages = pkg_sigs.clone();
     c.imports = file.ast.imports.iter().map(|i| i.package.clone()).collect();
@@ -656,12 +713,12 @@ pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
     }
 
     for file in prog.root.iter_mut() {
-        check_file(file, &root_sigs, &pkg_sigs)?;
+        check_file(file, &root_sigs, &pkg_sigs, true)?;
     }
     for (name, files) in prog.packages.iter_mut() {
         let ns = &pkg_sigs[name];
         for file in files.iter_mut() {
-            check_file(file, ns, &pkg_sigs)?;
+            check_file(file, ns, &pkg_sigs, false)?;
         }
     }
     Ok(())
@@ -681,6 +738,66 @@ mod tests {
     #[test]
     fn well_typed_program_passes() {
         assert!(check_src("ni x = °V; x = x + °I; scribe(x);").is_ok());
+    }
+
+    #[test]
+    fn a_function_must_return_on_every_path() {
+        // Defectus D-01, and the reason the type system was unsound: nothing
+        // asked whether a declared return was reachable, and interp's call
+        // fell off the end with Int(zero) whatever the declared type. A `voc`
+        // function could hand back a number.
+        let p = pprog(
+            &[("principale.liss",
+               "// pagina prima\nmunus nomen reddit voc {\n  si (falsus) { redde \"a\"; }\n}\n\
+                munus initium reddit ni { scribe(nomen()); redde nullus; }")],
+            &[],
+        );
+        let e = check_program(&mut { p }).unwrap_err();
+        assert_eq!(e.message, "munus 'nomen' non in omni via reddit");
+    }
+
+    #[test]
+    fn both_arms_of_an_if_returning_is_enough() {
+        let p = pprog(
+            &[("principale.liss",
+               "munus signum capit (ni n) reddit voc {\n  \
+                si (n minor_est nullus) { redde \"negativus\"; } aut { redde \"positivus\"; }\n}\n\
+                munus initium reddit ni { scribe(signum(°I)); redde nullus; }")],
+            &[],
+        );
+        assert!(check_program(&mut { p }).is_ok());
+    }
+
+    #[test]
+    fn only_the_root_initium_may_fall_off_its_end() {
+        // The packages design §4.3 licenses the root `initium` falling
+        // through, and interp::falling_off_initium_exits_zero pins it. A
+        // package function that merely happens to be called `initium` is an
+        // ordinary function and gets no exemption.
+        let root_ok = pprog(&[("principale.liss", "munus initium reddit ni { scribe(°I); }")], &[]);
+        assert!(check_program(&mut { root_ok }).is_ok());
+
+        let pkg = pprog(
+            &[("principale.liss", "affer mathematica;\nmunus initium reddit ni { redde nullus; }")],
+            &[("mathematica", &[("summa.liss", "munus initium reddit ni { scribe(°I); }")] as &[_])],
+        );
+        let e = check_program(&mut { pkg }).unwrap_err();
+        assert_eq!(e.message, "munus 'initium' non in omni via reddit");
+    }
+
+    #[test]
+    fn a_loop_body_does_not_count_as_returning() {
+        // Conservative on purpose: a loop may run zero times, so it never
+        // guarantees a return. `indem (verus)` is not special-cased — that
+        // would need break-target tracking the checker does not have.
+        let p = pprog(
+            &[("principale.liss",
+               "munus semper reddit ni {\n  indem (verus) { redde °I; }\n}\n\
+                munus initium reddit ni { redde semper(); }")],
+            &[],
+        );
+        let e = check_program(&mut { p }).unwrap_err();
+        assert_eq!(e.message, "munus 'semper' non in omni via reddit");
     }
 
     #[test]
