@@ -188,7 +188,10 @@ fn matches(pattern: &str, observed: &str) -> bool {
     true
 }
 
-/// Every message the corpus actually produces, from both streams.
+/// Every message the corpus actually produces. `stderr` only, and that is
+/// complete: every diagnostic — errors and Latinity warnings alike — is
+/// rendered to `stderr` by `render()`. `stdout` carries only what a program
+/// itself printed with `scribe`, which is program output, not a diagnostic.
 fn observed_messages() -> Vec<String> {
     let mut out = Vec::new();
     for f in support::discover() {
@@ -206,31 +209,73 @@ fn observed_messages() -> Vec<String> {
     out
 }
 
+/// How many sites write this exact format string. Uniqueness is decided on the
+/// pattern *as written*, byte for byte: two patterns that differ only in where
+/// a `{}` hole sits produce different sentences for a user and are therefore
+/// different messages, so they must not be merged. Normalising the holes away
+/// would collapse genuinely distinct diagnostics and understate coverage in the
+/// opposite direction.
+fn pattern_counts(sites: &[Site]) -> std::collections::HashMap<&str, usize> {
+    let mut counts = std::collections::HashMap::new();
+    for s in sites {
+        *counts.entry(s.pattern.as_str()).or_insert(0) += 1;
+    }
+    counts
+}
+
 #[test]
 fn catalogus() {
     let sites = extract_sites();
     let observed = observed_messages();
+    let counts = pattern_counts(&sites);
 
     let mut covered = 0;
+    let mut ambiguous = 0;
     let mut uncovered = 0;
     let mut unparsed = 0;
     let mut lines = Vec::new();
     for s in &sites {
+        let seen = observed.iter().any(|o| matches(&s.pattern, o));
+        // `fixtured` means *uniquely attributable*, and nothing weaker.
+        //
+        // Coverage is decided by matching a site's format string against the
+        // messages the corpus produced. Nothing ties an observed message back
+        // to the site that emitted it, so when several sites are worded
+        // identically, provoking any one of them makes all of them look
+        // covered. That is not a bug in the corpus, it is inherent to matching
+        // on text: the interpreter's three `divisio per nullum` arms are one
+        // string, and the message a user sees cannot tell you which fired.
+        //
+        // So a shared pattern that was observed marks *every* site sharing it
+        // `ambiguous`: the corpus proves at least one of them was reached and
+        // cannot say which. Only a pattern unique across the whole workspace
+        // earns `fixtured`, and a later reviewer can trust that word without
+        // checking anything else. A shared pattern nobody provoked is still
+        // plainly UNCOVERED — no site sharing it was reached.
+        //
+        // Adding a fixture never moves a site from `ambiguous` to `fixtured`:
+        // the ambiguity is in the wording, not in the coverage. Only rewording
+        // one of the sites, or attributing messages to sites some other way,
+        // could do that.
         let status = if s.pattern == "UNPARSED" {
             unparsed += 1;
-            "UNPARSED".to_string()
-        } else if observed.iter().any(|o| matches(&s.pattern, o)) {
-            covered += 1;
-            "fixtured".to_string()
-        } else {
+            "UNPARSED"
+        } else if !seen {
             uncovered += 1;
-            "UNCOVERED".to_string()
+            "UNCOVERED"
+        } else if counts[s.pattern.as_str()] > 1 {
+            ambiguous += 1;
+            "ambiguous"
+        } else {
+            covered += 1;
+            "fixtured"
         };
         lines.push(format!("{}:{}  {}  → {status}", s.file, s.line, s.pattern));
     }
 
     let report = format!(
-        "{} sites · {covered} fixtured · {uncovered} uncovered · {unparsed} unparsed\n\n{}",
+        "{} sites · {covered} fixtured · {ambiguous} ambiguous · {uncovered} uncovered \
+         · {unparsed} unparsed\n\n{}",
         sites.len(),
         lines.join("\n")
     );
