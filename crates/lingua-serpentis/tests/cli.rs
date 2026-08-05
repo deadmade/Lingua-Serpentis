@@ -39,39 +39,53 @@ fn two_arguments_prints_usage_to_stderr() {
 }
 
 #[test]
-fn a_missing_file_reports_in_english_defect_d11() {
+fn a_missing_file_is_reported_in_latin() {
     let d = temp_dir("liss-cli");
     let missing = d.path().join("nusquam.liss");
     let o = run(&[missing.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    // D-11: English, in a language whose every other diagnostic is Latin.
-    // Prefix, not verbatim: the errno tail is OS-supplied. The prefix itself
-    // is the defect, and it is fully ours.
-    assert!(err.starts_with("Error reading file: "), "got: {err:?}");
+    // D-11. Verbatim now: with the errno tail gone the whole message is ours,
+    // so the Global Constraints' carve-out for an OS-supplied tail expires.
+    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
 }
 
 #[test]
-fn a_non_liss_extension_is_refused_in_english_defect_d11() {
+fn a_non_liss_extension_is_refused_in_latin() {
     let d = temp_dir("liss-cli");
     let p = d.write("notae.txt", "munus initium reddit ni { redde nullus; }");
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: file must have .liss extension\n");
+    assert_eq!(err, "Error: nomen scidae in '.liss' desinere debet\n");
 }
 
 #[test]
-fn a_nonexistent_directory_gets_the_extension_error_defect_d11() {
-    // The is_dir() check runs first, so a path that is neither file nor
-    // directory falls through to the extension branch and gets a message
-    // about extensions rather than about the missing path.
+fn a_nonexistent_path_is_reported_as_missing_not_as_a_bad_extension() {
+    // The assertion here inverts. `is_dir()` runs first, so a path that is
+    // neither file nor directory used to fall through to the extension branch
+    // and be told it needed a `.liss` extension — a message about extensions
+    // for a path that simply is not there. The register treats D-11 as two
+    // string literals to translate; its own note shows the control flow was
+    // wrong too, and translating alone would have kept the misfire in Latin.
     let d = temp_dir("liss-cli");
     let missing = d.path().join("nusquam");
     let o = run(&[missing.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: file must have .liss extension\n");
+    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
+}
+
+#[test]
+fn a_nonexistent_dot_liss_directory_is_also_reported_as_missing() {
+    // The other half of the same misfire: a missing `x.liss/` used to be told
+    // it could not be read as a file.
+    let d = temp_dir("liss-cli");
+    let missing = d.path().join("nusquam.liss");
+    let o = run(&[missing.to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 1);
+    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
 }
 
 #[test]
@@ -148,15 +162,70 @@ fn an_exit_status_that_already_fits_says_nothing() {
 }
 
 #[test]
-fn a_hidden_directory_containing_liss_kills_the_program_defect_d17() {
+fn a_hidden_directory_containing_liss_is_skipped() {
     let d = temp_dir("liss-cli");
-    d.write("prog/principale.liss", "munus initium reddit ni { redde nullus; }");
+    d.write("prog/principale.liss",
+            "munus initium reddit ni { scribe(\"salve\"); redde nullus; }");
     d.write("prog/.git/vestigium.liss", "munus x reddit ni { redde °I; }");
     let o = run(&[d.path().join("prog").to_str().unwrap()]);
+    let (code, out, err) = exited(&o);
+    // D-17. Running a program folder that happens to be a git checkout used to
+    // fail with `nomen fasciculi '.git' non validum est` — `.git` does not lex
+    // as a package name — even though the program beside it was perfectly
+    // good. The failure had nothing to do with the program.
+    assert_eq!(code, 0);
+    assert_eq!(out, "salve\n");
+    assert_eq!(err, "");
+}
+
+// The three D-22 sites, all reached through `program::load_dir` rather than
+// main.rs. Each needs a file mode or a byte sequence the corpus cannot carry
+// in git, which is why none of them is fixture-shaped and all three live here.
+
+#[test]
+#[cfg(unix)]
+fn an_unreadable_file_inside_a_program_folder_is_reported_in_latin() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = temp_dir("liss-cli");
+    let p = d.write("prog/principale.liss", "munus initium reddit ni { redde nullus; }");
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let o = run(&[d.path().join("prog").to_str().unwrap()]);
     let (code, _, err) = exited(&o);
-    // D-17: hidden directories are not skipped by load_dir.
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: nomen fasciculi '.git' non validum est\n");
+    // Relative to the program root, not an absolute path — which is the other
+    // half of D-22 and the part that was leaking a filesystem path.
+    assert_eq!(err, "Error: scida 'principale.liss' legi non potest\n");
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn an_unreadable_subdirectory_is_reported_by_its_relative_name() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = temp_dir("liss-cli");
+    d.write("prog/principale.liss", "munus initium reddit ni { redde nullus; }");
+    let sub = d.write("prog/mathematica/summa.liss", "munus s reddit ni { redde °I; }");
+    let subdir = sub.parent().unwrap().to_path_buf();
+    std::fs::set_permissions(&subdir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let o = run(&[d.path().join("prog").to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 1);
+    // This one used to print an absolute path, alone among every diagnostic in
+    // the language.
+    assert_eq!(err, "Error: directorium 'mathematica' legi non potest\n");
+    std::fs::set_permissions(&subdir, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn a_non_utf8_file_inside_a_program_folder_is_reported_in_latin() {
+    let d = temp_dir("liss-cli");
+    d.write("prog/principale.liss", "munus initium reddit ni { redde nullus; }");
+    let p = d.path().join("prog").join("alia.liss");
+    std::fs::write(&p, [0xff, 0xfe, 0x00, 0x62]).unwrap();
+    let o = run(&[d.path().join("prog").to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 1);
+    assert_eq!(err, "Error: scida 'alia.liss' signis incognitis scripta est\n");
 }
 
 #[test]
@@ -183,10 +252,10 @@ fn an_unreadable_file_is_reported_not_panicked() {
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    // Prefix, not verbatim: the OS supplies the errno tail ("Permission denied
-    // (os error 13)"), which is not portable. The only carve-out the Global
-    // Constraints allow.
-    assert!(err.starts_with("Error reading file: "), "got: {err:?}");
+    // Verbatim. D-22 classified the failure instead of forwarding the OS
+    // string, so there is no longer an unportable errno tail to allow for —
+    // the Global Constraints' carve-out for this site expires with it.
+    assert_eq!(err, format!("Error: scida '{}' legi non potest\n", p.display()));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -202,7 +271,13 @@ fn a_non_utf8_source_file_is_reported_not_panicked() {
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error reading file: stream did not contain valid UTF-8\n");
+    // "not valid UTF-8" cannot be said in this language: UTF-8 carries a digit
+    // and no message may. `signis incognitis scripta est` says the same thing
+    // and chimes with the lexer's own `signum ignotum`.
+    assert_eq!(
+        err,
+        format!("Error: scida '{}' signis incognitis scripta est\n", p.display())
+    );
 }
 
 #[test]

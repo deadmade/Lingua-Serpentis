@@ -69,20 +69,74 @@ pub fn load_dir(dir: &Path) -> Result<Program, ProgramError> {
     assemble(files)
 }
 
+/// Why a `.liss` file could not be read, in Latin.
+///
+/// Defectus D-22. These messages used to be built as a Latin frame with
+/// `std::io::Error`'s English `Display` interpolated onto the end — `scida
+/// 'principale.liss' legi non potest: Permission denied (os error 13)`. The
+/// frame was right and the tail was a foreign string the library did not
+/// author, so every embedder inherited the one rule the language has being
+/// broken. The fix is to classify the failure rather than forward it.
+///
+/// One whole literal per cause, rather than a shared frame plus an
+/// interpolated reason: the diagnostic catalogue matches sites by their format
+/// string, and a single `scida '{}' {}` would collapse all four into one
+/// unattributable pattern.
+///
+/// "not valid UTF-8" cannot be named as such — `UTF-8` carries a digit, and no
+/// message in this language may. `signis incognitis scripta est`, "written in
+/// unknown signs", says the same thing and chimes with the lexer's own
+/// `signum ignotum`.
+/// Each arm constructs its own error rather than sharing one constructor over
+/// a computed string. The catalogue finds sites by their constructor and reads
+/// the first literal after it, so wrapping a single constructor around the
+/// match would show up as one site owning the first arm's wording, hiding the
+/// other three entirely.
+pub fn scida_legi_non_potest(rel: &str, e: &std::io::Error) -> ProgramError {
+    use std::io::ErrorKind::*;
+    match e.kind() {
+        NotFound => ProgramError::structural(format!("scida '{}' non inventa est", rel)),
+        PermissionDenied => ProgramError::structural(format!("scida '{}' legi non potest", rel)),
+        InvalidData => {
+            ProgramError::structural(format!("scida '{}' signis incognitis scripta est", rel))
+        }
+        _ => ProgramError::structural(format!("scida '{}' aperiri non potest", rel)),
+    }
+}
+
 fn collect_liss(dir: &Path, prefix: &str, out: &mut Vec<SourceFile>) -> Result<(), ProgramError> {
-    let entries = std::fs::read_dir(dir).map_err(|e| ProgramError::structural(
-        format!("directorium '{}' legi non potest: {}", dir.display(), e)))?;
+    // Never `dir.display()`: that is an absolute filesystem path, where every
+    // other diagnostic in the language names a path relative to the program
+    // root. `prefix` already carries the relative name (D-22).
+    let entries = std::fs::read_dir(dir).map_err(|_| ProgramError::structural(
+        if prefix.is_empty() {
+            "directorium programmatis legi non potest".to_string()
+        } else {
+            format!("directorium '{}' legi non potest", prefix)
+        }))?;
     for entry in entries {
-        let entry = entry.map_err(|e| ProgramError::structural(
-            format!("directorium legi non potest: {}", e)))?;
+        // A distinct sentence from the one above: two sites, two conditions.
+        let entry = entry.map_err(|_| ProgramError::structural(
+            "directorium percurri non potest".to_string()))?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         let rel = if prefix.is_empty() { name.clone() } else { format!("{}/{}", prefix, name) };
         if path.is_dir() {
+            // Defectus D-17. Every directory entry was recursed into, so a
+            // program folder that happened to be a git checkout died on
+            // `.git` failing to lex as a package name — a failure with
+            // nothing to do with the program. The packages design §4.1
+            // already ignores folders holding no `.liss`; this extends that
+            // to the case where one does, which is what a `.git` looks like.
+            // Skipping hidden directories is what every tool that walks a
+            // source tree does.
+            if name.starts_with('.') {
+                continue;
+            }
             collect_liss(&path, &rel, out)?;
         } else if name.ends_with(".liss") {
-            let src = std::fs::read_to_string(&path).map_err(|e| ProgramError::structural(
-                format!("scida '{}' legi non potest: {}", rel, e)))?;
+            let src = std::fs::read_to_string(&path)
+                .map_err(|e| scida_legi_non_potest(&rel, &e))?;
             out.push(SourceFile { path: rel, src });
         }
     }

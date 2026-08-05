@@ -139,6 +139,16 @@ fn extract_sites() -> Vec<Site> {
                 let skip = marker.len() - usize::from(marker.ends_with('"'));
                 let pattern = literal_after(&src, abs + skip, 300)
                     .unwrap_or_else(|| "UNPARSED".to_string());
+                // A pattern that is nothing but holes has no text of its own,
+                // so it cannot identify anything: `eprintln!("{}", e)` prints
+                // an error built elsewhere, and matching it against observed
+                // messages would match every one of them. Same reasoning that
+                // keeps `ProgramError::in_file` out of MARKERS — forwarding a
+                // diagnostic is not raising one.
+                if pattern.replace("{}", "").trim().is_empty() && pattern != "UNPARSED" {
+                    at = abs + marker.len();
+                    continue;
+                }
                 sites.push(Site { file: rel.clone(), line, pattern });
                 at = abs + marker.len();
             }

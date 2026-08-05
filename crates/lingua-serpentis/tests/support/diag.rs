@@ -69,13 +69,17 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 /// any OTHER rule is a new finding and fails the test that saw it. Shrinking
 /// this array is how progress gets measured — never add to it without adding
 /// a register entry too.
-pub const RECORDED_RULES: [&str; 3] = [
+pub const RECORDED_RULES: [&str; 2] = [
     "terminates", // D-20
     "no panic",   // D-06
-    "Latin only", // D-11, D-22
 ];
 
-// Three entries have been retired, and none by weakening its rule:
+// Four entries have been retired, and none by weakening its rule:
+//
+// `Latin only` (D-11, D-22) — main.rs's two hand-written English strings are
+// Latin now, and the library classifies an io::Error into a Latin cause
+// instead of interpolating its English Display. Both had to go together: one
+// rule covered them both.
 //
 // `no abort` (D-04, D-05) — the parser and the interpreter each carry a depth
 // limit now, so neither unbounded recursion nor deep nesting can overflow the
