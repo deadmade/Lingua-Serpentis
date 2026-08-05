@@ -7,6 +7,26 @@ use std::collections::HashMap;
 
 enum Flow { Normal, Break, Continue, Return(Value) }
 
+/// A name used at run time that is bound in no enclosing scope.
+///
+/// One site rather than the three that spelled this out (`assign`, the `Ident`
+/// arm of `eval`, and `IndexAssign`). Identical literals at several sites are
+/// invisible to the diagnostic catalogue, which can only tell that *some* site
+/// produced the message — see D-24.
+fn unknown_variable(name: &str, line: usize) -> LinguaError {
+    LinguaError { message: format!("variabilis ignota: '{}'", name), line }
+}
+
+/// A list subscript outside `I..=longitudo`. Shared by the reading form
+/// (`xs[i]`) and the assigning form (`xs[i] = v`), which used to carry the
+/// same sentence twice.
+fn index_error(idx: &Roman, len: usize, line: usize) -> LinguaError {
+    LinguaError {
+        message: format!("index extra fines: {} (longitudo {})", idx.display(), len),
+        line,
+    }
+}
+
 struct Interp {
     scopes: Vec<HashMap<String, Value>>,
     funcs: HashMap<String, (FuncDecl, String)>, // qualified name -> (decl, source path)
@@ -48,7 +68,7 @@ impl Interp {
                 return Ok(());
             }
         }
-        Err(LinguaError { message: format!("variabilis ignota: '{}'", name), line })
+        Err(unknown_variable(name, line))
     }
 
     fn eval(&mut self, e: &Expr, line: usize) -> LResult<Value> {
@@ -64,7 +84,7 @@ impl Interp {
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Ident(name) => self.get(name)
-                .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line }),
+                .ok_or_else(|| unknown_variable(name, line)),
             Expr::Unary { op, expr } => {
                 let v = self.eval(expr, line)?;
                 match (op, v) {
@@ -127,10 +147,7 @@ impl Interp {
                     (Value::List(items), Value::Int(idx)) => {
                         match idx.to_usize() {
                             Some(i) if i >= 1 && i <= items.len() => Ok(items[i - 1].clone()),
-                            _ => Err(LinguaError {
-                                message: format!("index extra fines: {} (longitudo {})", idx.display(), items.len()),
-                                line,
-                            }),
+                            _ => Err(index_error(&idx, items.len(), line)),
                         }
                     }
                     _ => Err(LinguaError { message: "subscriptio invalida".into(), line }),
@@ -203,16 +220,13 @@ impl Interp {
                                     items[i - 1] = v;
                                     Ok(Flow::Normal)
                                 }
-                                _ => Err(LinguaError {
-                                    message: format!("index extra fines: {} (longitudo {})", idx.display(), items.len()),
-                                    line: s.line,
-                                }),
+                                _ => Err(index_error(&idx, items.len(), s.line)),
                             },
                             _ => Err(LinguaError { message: format!("'{}' non est series", name), line: s.line }),
                         };
                     }
                 }
-                Err(LinguaError { message: format!("variabilis ignota: '{}'", name), line: s.line })
+                Err(unknown_variable(name, s.line))
             }
             StmtKind::Print(e) => {
                 let v = self.eval(e, s.line)?;
@@ -293,6 +307,13 @@ impl Interp {
 fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
     use Value::*;
     let bad = || LinguaError { message: "operatio binaria invalida".into(), line };
+    // One literal across the three numeric types. The `ni`, `mnr` and `nr` arms
+    // used to carry the same sentence, so the catalogue could see only that
+    // *some* arm had been reached — and only the `ni` one ever had been (D-24).
+    // `modulus per nullum` keeps its own literal below: it is a different
+    // diagnostic, and folding the two into one interpolated pattern would cost
+    // the catalogue the ability to tell them apart.
+    let divisio_per_nullum = || LinguaError { message: "divisio per nullum".into(), line };
     match op {
         BinOp::Add => match (l, r) {
             (Int(a), Int(b)) => Ok(Int(a.add(&b))),
@@ -314,15 +335,15 @@ fn eval_binary(op: BinOp, l: Value, r: Value, line: usize) -> LResult<Value> {
             _ => Err(bad()),
         },
         BinOp::Div => match (l, r) {
-            (Int(_), Int(ref b)) if b.is_zero() => Err(LinguaError { message: "divisio per nullum".into(), line }),
+            (Int(_), Int(ref b)) if b.is_zero() => Err(divisio_per_nullum()),
             (Int(a), Int(b)) => Ok(Int(a.div_rem(&b).0)),
             (Float(a), Float(b)) => match fraction::div(&a, &b, &fraction::uncia_grain()) {
                 Some(q) => Ok(Float(q)),
-                None => Err(LinguaError { message: "divisio per nullum".into(), line }),
+                None => Err(divisio_per_nullum()),
             },
             (Double(a), Double(b)) => match fraction::div(&a, &b, &fraction::scripulum_grain()) {
                 Some(q) => Ok(Double(q)),
-                None => Err(LinguaError { message: "divisio per nullum".into(), line }),
+                None => Err(divisio_per_nullum()),
             },
             _ => Err(bad()),
         },

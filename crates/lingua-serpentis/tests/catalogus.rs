@@ -122,6 +122,17 @@ fn extract_sites() -> Vec<Site> {
             let mut at = 0;
             while let Some(i) = src[at..].find(marker) {
                 let abs = at + i;
+                // `-> LinguaError {` is a return type followed by the function
+                // body's brace, not a struct literal — a function that BUILDS a
+                // diagnostic is not itself a site that RAISES one, and the real
+                // site is the construction inside it, one line below. Without
+                // this, every helper introduced to collapse duplicated wording
+                // adds a phantom UNPARSED entry directly above the site it
+                // exists to consolidate.
+                if src[..abs].trim_end().ends_with("->") {
+                    at = abs + marker.len();
+                    continue;
+                }
                 let line = src[..abs].lines().count();
                 // A marker that ends in the literal's own opening quote must
                 // not consume it, or the scan starts inside the message.

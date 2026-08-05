@@ -233,6 +233,12 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
     if literal == "nullus" {
         return Ok(RomanNumber::Int(Roman::zero()));
     }
+    // An API-only guard. The lexer, this function's only caller in the
+    // workspace, builds `literal` from a slice that starts at the '°' it just
+    // matched, so the prefix is there by construction and this arm cannot fire
+    // through the language. It is kept because `parse_roman` is `pub` and a
+    // direct caller has no such guarantee; the catalogue records it UNCOVERED,
+    // which is the honest label. See D-25.
     let body = literal
         .strip_prefix('°')
         .ok_or_else(|| format!("numerus sine '°': '{}'", literal))?;
@@ -245,13 +251,22 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
         None => Ok(RomanNumber::Int(int_val)),
         Some(frac) => {
             let mut fp = frac.splitn(2, '/');
-            let num_str = fp.next().ok_or("fractio sine numeratore")?;
+            // `splitn` always yields at least one item, for every input
+            // including "" — so the numerator is always present, exactly as
+            // for `int_str` above. The arm that used to raise "fractio sine
+            // numeratore" here was not merely unreached but impossible, and is
+            // gone (D-25).
+            let num_str = fp.next().unwrap();
             let den_str = fp.next().ok_or("fractio sine denominatore")?;
             let num = convert_int_roman(num_str)?;
             let den = convert_int_roman(den_str)?;
-            if den.is_zero() {
-                return Err("denominator est nullus".into());
-            }
+            // No zero check: `convert_int_roman` cannot return zero. Every
+            // numeral it accepts is a sum of products of `convert_single`
+            // values, and `convert_single` is at least 1 for every string it
+            // accepts — pinned exhaustively by `convert_single_is_never_zero`
+            // below. An empty or malformed denominator dies earlier, in
+            // `convert_single`. The "denominator est nullus" guard that stood
+            // here was unreachable (D-25).
             let numer = int_val.mul(&den).add(&num);
             Ok(RomanNumber::Frac { numer, den })
         }
@@ -527,6 +542,54 @@ mod tests {
             assert_eq!(q.to_i64(), Some(a / b), "{a}/{b} quotient");
             assert_eq!(rem.to_i64(), Some(a % b), "{a}%{b} remainder");
         }
+    }
+
+    #[test]
+    fn convert_single_is_never_zero_or_negative() {
+        // The evidence for deleting `parse_roman`'s "denominator est nullus"
+        // guard (D-25). That guard could only fire if `convert_int_roman`
+        // returned zero, and `convert_int_roman` is a sum of products of
+        // `convert_single` values — so it is enough that `convert_single` is
+        // always at least 1.
+        //
+        // The reason it holds: the final symbol is always added (there is no
+        // following symbol to be bigger than it), and a symbol is only ever
+        // subtracted when a strictly larger one follows. Rather than rest on
+        // that argument, enumerate every string the function accepts up to
+        // length 6 — 137_256 of them — and check.
+        const SYMS: [char; 7] = ['I', 'V', 'X', 'L', 'C', 'D', 'M'];
+        let zero = Roman::zero();
+        let mut words: Vec<String> = SYMS.iter().map(|c| c.to_string()).collect();
+        let mut checked = 0usize;
+        for _ in 1..6 {
+            let mut next = Vec::with_capacity(words.len() * SYMS.len());
+            for w in &words {
+                let v = convert_single(w).expect("every string over the symbols parses");
+                assert!(v > zero, "convert_single({w:?}) = {} is not >= 1", v.display());
+                checked += 1;
+                for c in SYMS {
+                    next.push(format!("{w}{c}"));
+                }
+            }
+            words = next;
+        }
+        for w in &words {
+            let v = convert_single(w).expect("every string over the symbols parses");
+            assert!(v > zero, "convert_single({w:?}) = {} is not >= 1", v.display());
+            checked += 1;
+        }
+        assert_eq!(checked, 137_256, "every string of length 1..=6 over the seven symbols");
+    }
+
+    #[test]
+    fn parse_roman_rejects_a_literal_without_its_degree_sign() {
+        // `parse_roman` is `pub`, so this guard is reachable from outside the
+        // crate even though the lexer can never trip it. Covering it here is
+        // what makes keeping it honest rather than dead (D-25).
+        assert_eq!(
+            parse_roman("V"),
+            Err("numerus sine '°': 'V'".to_string())
+        );
     }
 
     #[test]

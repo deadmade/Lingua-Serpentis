@@ -35,6 +35,18 @@ impl Checker {
     fn lookup(&self, name: &str) -> Option<Type> {
         self.scopes.iter().rev().find_map(|s| s.get(name).cloned())
     }
+    /// `lookup`, raising the out-of-scope diagnostic when the name is unknown.
+    ///
+    /// One site rather than the three that used to spell this message out
+    /// (the `Ident` expression, `Assign` and `IndexAssign`). Three identical
+    /// literals meant the catalogue could not tell which one a message came
+    /// from, and only the expression form was ever provoked — see D-24.
+    fn lookup_or_err(&self, name: &str, line: usize) -> LResult<Type> {
+        self.lookup(name).ok_or_else(|| LinguaError {
+            message: format!("variabilis ignota: '{}'", name),
+            line,
+        })
+    }
     fn declare(&mut self, name: String, ty: Type) {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
@@ -85,9 +97,7 @@ impl Checker {
             Expr::Text(_) => Ok(InferTy::Known(Type::Text)),
             Expr::Char(_) => Ok(InferTy::Known(Type::Char)),
             Expr::Bool(_) => Ok(InferTy::Known(Type::Bool)),
-            Expr::Ident(name) => self.lookup(name)
-                .map(InferTy::Known)
-                .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line }),
+            Expr::Ident(name) => self.lookup_or_err(name, line).map(InferTy::Known),
             Expr::Unary { op, expr } => {
                 let t = self.check_expr(expr, line)?;
                 match op {
@@ -362,8 +372,7 @@ impl Checker {
                 Ok(())
             }
             StmtKind::Assign { name, value } => {
-                let target = self.lookup(name)
-                    .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line })?;
+                let target = self.lookup_or_err(name, line)?;
                 let vt = self.resolve_expr(value, Some(target.clone()), line)?;
                 if vt != target {
                     return Err(LinguaError {
@@ -423,8 +432,7 @@ impl Checker {
                 Ok(())
             }
             StmtKind::IndexAssign { name, index, value } => {
-                let target = self.lookup(name)
-                    .ok_or_else(|| LinguaError { message: format!("variabilis ignota: '{}'", name), line })?;
+                let target = self.lookup_or_err(name, line)?;
                 let elem = match target {
                     Type::List(inner) => *inner,
                     other => return Err(LinguaError {
@@ -450,25 +458,20 @@ impl Checker {
         }
     }
 
+    /// A block that opens a scope of its own: a `si`, `aut`, `indem` or `dum`
+    /// body. It is `check_block_inner` between a push and a pop, and the pop
+    /// happens on every path — which is what the two hand-written error exits
+    /// it replaced were doing. Delegating also leaves one nested-function
+    /// guard instead of two identical ones (D-24).
     fn check_block(&mut self, body: &mut [Stmt]) -> LResult<()> {
         self.scopes.push(HashMap::new());
-        for s in body.iter_mut() {
-            if let StmtKind::Func(f) = &s.kind {
-                self.scopes.pop();
-                return Err(LinguaError {
-                    message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
-                    line: s.line,
-                });
-            }
-            if let Err(e) = self.check_stmt(s) {
-                self.scopes.pop();
-                return Err(e);
-            }
-        }
+        let r = self.check_block_inner(body);
         self.scopes.pop();
-        Ok(())
+        r
     }
 
+    /// A block that runs in a scope the caller already pushed — a function
+    /// body, whose scope is the parameter frame.
     fn check_block_inner(&mut self, body: &mut [Stmt]) -> LResult<()> {
         for s in body.iter_mut() {
             if let StmtKind::Func(f) = &s.kind {
@@ -516,15 +519,23 @@ fn resolve_floatlit(e: &mut Expr, ty: Type) {
     }
 }
 
+/// The names the language keeps for its own builtins, and the diagnostic for
+/// taking one. Both entry points enforce this rule; they used to do it from
+/// byte-identical copies, which is two implementations of one rule that can
+/// drift apart, and only one of which a user ever runs (D-24).
+fn reserved_name_error(name: &str, line: usize) -> Option<LinguaError> {
+    matches!(name, "longitudo" | "adde").then(|| LinguaError {
+        message: format!("nomen '{}' reservatum est", name),
+        line,
+    })
+}
+
 pub fn check(program: &mut [Stmt]) -> LResult<()> {
     let mut c = Checker::new();
     for s in program.iter() {
         if let StmtKind::Func(f) = &s.kind {
-            if f.name == "longitudo" || f.name == "adde" {
-                return Err(LinguaError {
-                    message: format!("nomen '{}' reservatum est", f.name),
-                    line: s.line,
-                });
+            if let Some(e) = reserved_name_error(&f.name, s.line) {
+                return Err(e);
             }
             let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
             c.funcs.insert(f.name.clone(), (ptypes, f.ret.clone()));
@@ -544,11 +555,8 @@ fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramErr
     for file in files {
         for s in &file.ast.funcs {
             let StmtKind::Func(f) = &s.kind else { continue };
-            if f.name == "longitudo" || f.name == "adde" {
-                return Err(ProgramError::in_file(&file.path, LinguaError {
-                    message: format!("nomen '{}' reservatum est", f.name),
-                    line: s.line,
-                }));
+            if let Some(e) = reserved_name_error(&f.name, s.line) {
+                return Err(ProgramError::in_file(&file.path, e));
             }
             if sigs.contains_key(&f.name) {
                 return Err(ProgramError::in_file(&file.path, LinguaError {
