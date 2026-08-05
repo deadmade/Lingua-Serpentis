@@ -16,6 +16,7 @@ path = "src/main.rs"
 latinitas = { path = "../latinitas" }
 
 [dev-dependencies]
+insta = "1"
 libtest-mimic = "0.8"
 proptest = "1"
 

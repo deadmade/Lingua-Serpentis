@@ -1,0 +1,7 @@
+munus initium reddit ni {
+  scribe(computa("a"));
+  redde nullus;
+}
+munus computa capit (ni n) reddit ni {
+  redde n;
+}
