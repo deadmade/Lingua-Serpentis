@@ -122,27 +122,25 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             Some("no Arabic digits"), // D-12 — `longitudo 1` is Arabic
         ),
         (
-            // Verified 2026-08-03, not as the brief predicted. The brief's
-            // intent (per its comment, preserved below) was to show D-03's wrong
-            // line number staying inside the file, undetectable by `line in
-            // range`. But this literal source is missing the semicolon after
-            // `ni x = °I`, which is itself a parse error before any D-03-style
-            // runtime lookup happens: `Error in linea 4: expectatum: Semicolon`.
-            // That trips D-02 (`no Rust type names`), not a clean run. It still
-            // incidentally corroborates D-03: the missing semicolon is on source
-            // line 5, immediately before `redde` on line 6, but the reported
-            // line is 4 — a 2-line drift matching the string's 2 embedded
-            // newlines. D-03's own repro (conformance/defectus/D-03-linea-post-
-            // chordam) remains the fixture for the line-drift-alone case.
+            // This source is missing the semicolon after `ni x = °I`, so it is
+            // a parse error before any runtime lookup happens. Until D-02 was
+            // fixed that error read `expectatum: Semicolon` and tripped the
+            // `no Rust type names` rule; it now reads `expectatum: ';'` and is
+            // an ordinary well-formed diagnostic, so this case satisfies the
+            // invariant.
             //
-            // D-03 is NOT detectable by this invariant: the reported line is
-            // wrong but still inside the file, so `line in range` passes. It is
-            // caught by conformance/defectus/D-03-linea-post-chordam instead.
-            // Kept here to prove the input at least stays inside the error model.
+            // It still incidentally corroborates D-03: the missing semicolon
+            // is on source line 5, immediately before `redde` on line 6, but
+            // the reported line is 4 — a two-line drift matching the string's
+            // two embedded newlines. D-03 is NOT detectable by this invariant,
+            // because a wrong line that is still inside the file passes `line
+            // in range`; conformance/defectus/D-03-linea-post-chordam is its
+            // fixture. Kept here to prove the input stays inside the error
+            // model, and as the place the drift is visible while it lasts.
             "chorda multilinea",
             "munus initium reddit ni {\n  voc s = \"prima\nsecunda\ntertia\";\n  ni x = °I\n  redde nullus;\n}"
                 .to_string(),
-            Some("no Rust type names"), // D-02, plus D-03's line drift visible in "linea 4"
+            None,
         ),
     ]
 }

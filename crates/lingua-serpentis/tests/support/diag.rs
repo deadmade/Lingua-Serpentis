@@ -69,14 +69,18 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 /// any OTHER rule is a new finding and fails the test that saw it. Shrinking
 /// this array is how progress gets measured — never add to it without adding
 /// a register entry too.
-pub const RECORDED_RULES: [&str; 6] = [
-    "no abort",           // D-04, D-05
-    "terminates",         // D-20
-    "no panic",           // D-06
-    "no Arabic digits",   // D-12
-    "no Rust type names", // D-02
-    "Latin only",         // D-11
+pub const RECORDED_RULES: [&str; 5] = [
+    "no abort",         // D-04, D-05
+    "terminates",       // D-20
+    "no panic",         // D-06
+    "no Arabic digits", // D-12
+    "Latin only",       // D-11, D-22
 ];
+
+// `no Rust type names` was here for D-02, and is gone: `parser.rs`'s `eat` was
+// the only site in the workspace that formatted a `TokenKind` with `{:?}`, and
+// it now names the token through `TokenKind::name`. The RUST_TYPE_NAMES rule
+// itself stays — it is the assertion that keeps it that way.
 
 /// A run either satisfies the invariant or names the rule it broke. The
 /// mapping from rule to recorded defect lives in

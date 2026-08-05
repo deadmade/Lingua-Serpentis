@@ -268,4 +268,28 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn every_keyword_is_named_by_the_word_that_produces_it() {
+        // The round trip that keeps D-02's fix honest: when the parser reports
+        // an expected keyword, the word it prints must be the word the user
+        // would have had to type. Adding a keyword to `word_to_kind` without
+        // naming it in `TokenKind::name` breaks this.
+        //
+        // `nullus` is excluded deliberately: it lexes to a *value*,
+        // `Int(zero)`, not to a keyword kind of its own.
+        let keywords = [
+            "verus", "falsus", "si", "aut", "indem", "dum", "munus", "redde",
+            "abrumpe", "continua", "scribe", "affer", "capit", "reddit",
+            "lista", "ni", "mnr", "nr", "voc", "lit", "veritas", "et", "vel",
+            "non", "par_est", "par_non_est", "maior_est", "minor_est",
+        ];
+        for w in keywords {
+            assert_eq!(
+                word_to_kind(w.to_string()).name(),
+                w,
+                "the keyword {w:?} is not named after itself"
+            );
+        }
+    }
 }

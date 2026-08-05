@@ -25,7 +25,10 @@ impl<'a> Parser<'a> {
             self.pos += 1;
             Ok(())
         } else {
-            Err(self.err(&format!("expectatum: {:?}", kind)))
+            // Quoted, and the quotes are load-bearing: the robustness suite
+            // strips quoted spans before its lexical checks, so a glyph like
+            // '{' cannot be mistaken for stray punctuation in the message.
+            Err(self.err(&format!("expectatum: '{}'", kind.name())))
         }
     }
     fn err(&self, msg: &str) -> LinguaError {
