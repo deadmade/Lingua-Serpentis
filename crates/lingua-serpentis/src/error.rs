@@ -31,25 +31,58 @@ impl std::fmt::Display for Warning {
 /// An error at program (multi-file) level: optionally attributed to a source
 /// file (path relative to the program root) and a line. Structural errors —
 /// about the program's shape rather than any source text — carry neither.
+///
+/// A failed run is not only its message. Two things the program had already
+/// produced by the time it failed used to be thrown away with it, and they
+/// travel here instead:
+///
+/// - `stdout`, everything `scribe` printed before the error (D-08). Output the
+///   program provably produced is not the error's to discard.
+/// - `warnings`, the Latinity notes computed before it (D-09). A program with
+///   two problems should report both, not whichever one halts it first.
+///
+/// Both are empty for an error raised before there was anything to collect —
+/// a lex, parse or structural failure, where no source has run and there is no
+/// `ParsedProgram` to lint.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProgramError {
     pub file: Option<String>,
     pub line: Option<usize>,
     pub message: String,
+    pub stdout: String,
+    pub warnings: Vec<Warning>,
 }
 
 impl ProgramError {
     pub fn structural(message: impl Into<String>) -> Self {
-        ProgramError { file: None, line: None, message: message.into() }
+        ProgramError {
+            file: None,
+            line: None,
+            message: message.into(),
+            stdout: String::new(),
+            warnings: Vec::new(),
+        }
     }
     pub fn in_file(file: &str, e: LinguaError) -> Self {
-        ProgramError { file: Some(file.to_string()), line: Some(e.line), message: e.message }
+        ProgramError {
+            file: Some(file.to_string()),
+            line: Some(e.line),
+            message: e.message,
+            stdout: String::new(),
+            warnings: Vec::new(),
+        }
     }
 }
 
 impl From<LinguaError> for ProgramError {
     fn from(e: LinguaError) -> Self {
-        ProgramError { file: None, line: Some(e.line), message: e.message }
+        ProgramError {
+            file: None,
+            line: Some(e.line),
+            message: e.message,
+            stdout: String::new(),
+            warnings: Vec::new(),
+        }
     }
 }
 
@@ -84,6 +117,7 @@ mod tests {
     fn program_error_formats_all_three_shapes() {
         let both = ProgramError {
             file: Some("mathematica/summa.liss".into()), line: Some(5), message: "res mala".into(),
+            stdout: String::new(), warnings: Vec::new(),
         };
         assert_eq!(both.to_string(), "Error in 'mathematica/summa.liss', linea 5: res mala");
         let line_only: ProgramError = LinguaError { message: "res mala".into(), line: 5 }.into();

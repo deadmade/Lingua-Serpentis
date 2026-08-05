@@ -1,8 +1,11 @@
-use lingua_serpentis::{render, run_dir_with_warnings, run_file_with_warnings, Warning};
+use lingua_serpentis::{render, run_dir_with_warnings, run_file_with_warnings, ProgramError, Warning};
 use std::path::Path;
 use std::process::exit;
 
-fn finish<E: std::fmt::Display>(result: Result<(String, u8, Vec<Warning>), E>) -> ! {
+// Concrete now that both entry points return the same error: `render` needs the
+// failure's own partial output and warnings, which a bare `Display` bound
+// cannot reach.
+fn finish(result: Result<(String, u8, Vec<Warning>), ProgramError>) -> ! {
     let r = render(result);
     // Warnings and errors go to stderr so they never contaminate program output.
     eprint!("{}", r.stderr);

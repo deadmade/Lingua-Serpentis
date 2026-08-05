@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::error::{LinguaError, LResult, ProgramError};
+use crate::error::{LinguaError, LResult, ProgramError, Warning};
 use crate::fraction;
 use crate::roman::Roman;
 use crate::value::Value;
@@ -409,16 +409,34 @@ pub fn execute(program: &[Stmt]) -> LResult<String> {
 
 /// Unix keeps an exit status's low 8 bits: the value mod CCLVI, shifted
 /// non-negative (a negative remainder gains one modulus).
-fn exit_status(r: &Roman) -> u8 {
+///
+/// The truncation is deliberate and specified (packages design §4.3), so it
+/// stays. What was missing is any sign that it happened — `redde °CCC` exited
+/// 44 in silence, and `redde °CCLVI` exited 0, which reads as success. The
+/// second return value is that sign (D-10): `Some(warning)` exactly when the
+/// returned value did not already fit in 0..=CCLV.
+fn exit_status(r: &Roman) -> (u8, Option<Warning>) {
     let rem = r.div_rem(&Roman::from_u64(256)).1;
     let x = rem.to_i64().expect("|rem| < 256 fits i64");
-    ((x + 256) % 256) as u8
+    let code = ((x + 256) % 256) as u8;
+    let truncated = *r != Roman::from_u64(code as u64);
+    let warning = truncated.then(|| Warning {
+        message: format!(
+            "reditus 'initium' extra fines status exitus est; ad {} redactus",
+            Roman::from_u64(code as u64).display()
+        ),
+        file: None,
+        line: None,
+    });
+    (code, warning)
 }
 
 /// Run a checked program (§4.3 of the design): register every function under
 /// its qualified name, call the root's `initium`, and turn its returned ni
 /// into the process exit status.
-pub fn execute_program(prog: &ParsedProgram) -> Result<(String, u8), ProgramError> {
+pub fn execute_program(
+    prog: &ParsedProgram,
+) -> Result<(String, u8, Vec<Warning>), ProgramError> {
     let mut it = Interp::new();
     for file in &prog.root {
         for s in &file.ast.funcs {
@@ -438,16 +456,20 @@ pub fn execute_program(prog: &ParsedProgram) -> Result<(String, u8), ProgramErro
     }
     match it.call("initium", Vec::new(), 0) {
         Ok(v) => {
-            let code = match v {
+            let (code, warning) = match v {
                 Value::Int(r) => exit_status(&r),
-                _ => 0, // checker guarantees Int; defensive only
+                _ => (0, None), // checker guarantees Int; defensive only
             };
-            Ok((it.out, code))
+            Ok((it.out, code, warning.into_iter().collect()))
         }
         Err(e) => Err(ProgramError {
             file: it.err_file.take(),
             line: Some(e.line),
             message: e.message,
+            // Everything the program printed before it failed. Discarding this
+            // was D-08; `lib.rs` fills in the warnings alongside it.
+            stdout: std::mem::take(&mut it.out),
+            warnings: Vec::new(),
         }),
     }
 }
@@ -611,7 +633,10 @@ mod tests {
             root: root.iter().map(|(p, s)| pfile(p, s)).collect(),
             packages,
         };
-        execute_program(&prog)
+        // Warnings are dropped here so the assertions below stay about output
+        // and exit status; the truncated-status warning (D-10) is asserted
+        // end-to-end in lib.rs, where it reaches a user.
+        execute_program(&prog).map(|(out, code, _)| (out, code))
     }
 
     #[test]

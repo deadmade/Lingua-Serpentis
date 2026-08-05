@@ -106,18 +106,45 @@ fn the_process_exit_status_comes_from_initium() {
 }
 
 #[test]
-fn an_out_of_range_exit_status_is_silently_truncated_defect_d10() {
+fn an_out_of_range_exit_status_is_truncated_and_says_so() {
     let d = temp_dir("liss-cli");
+    // `°C.C.C` is C*C + C = 10_100, not a million: convert_int_roman splits on
+    // '.' and multiplies pairwise, adding an odd trailing term. 10_100 mod 256
+    // is 116.
     let p = d.write("fons.liss", "munus initium reddit ni { redde °C.C.C; }");
-    // D-10: 300 does not fit in a process exit status and is wrapped, not refused.
-    assert_eq!(exited(&run(&[p.to_str().unwrap()])).0, 116);
+    let o = run(&[p.to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    // The truncation is specified (packages design §4.3) and stays. D-10 was
+    // that it happened in silence — a program's own status could become 0 with
+    // nothing said.
+    assert_eq!(code, 116);
+    assert_eq!(
+        err,
+        "Monitum: reditus 'initium' extra fines status exitus est; ad CXVI redactus\n"
+    );
 }
 
 #[test]
-fn a_negative_exit_status_is_silently_wrapped_defect_d10() {
+fn a_negative_exit_status_is_wrapped_and_says_so() {
     let d = temp_dir("liss-cli");
     let p = d.write("fons.liss", "munus initium reddit ni { redde -°I; }");
-    assert_eq!(exited(&run(&[p.to_str().unwrap()])).0, 255);
+    let o = run(&[p.to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 255);
+    assert_eq!(
+        err,
+        "Monitum: reditus 'initium' extra fines status exitus est; ad CCLV redactus\n"
+    );
+}
+
+#[test]
+fn an_exit_status_that_already_fits_says_nothing() {
+    let d = temp_dir("liss-cli");
+    let p = d.write("fons.liss", "munus initium reddit ni { redde °III; }");
+    let o = run(&[p.to_str().unwrap()]);
+    let (code, _, err) = exited(&o);
+    assert_eq!(code, 3);
+    assert_eq!(err, "");
 }
 
 #[test]

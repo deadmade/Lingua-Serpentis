@@ -76,9 +76,26 @@ fn latin_program_produces_no_warnings() {
 }
 
 #[test]
-fn type_errors_still_halt_before_any_linting() {
-    // A type error aborts the pipeline, so no warnings are produced at all.
+fn type_errors_halt_but_their_warnings_survive() {
+    // A type error still halts the pipeline. What changed with D-09 is that
+    // the Latinity warnings computed along the way are no longer thrown away
+    // with it: a program with two problems reports both.
+    //
+    // The old name and comment here claimed "no warnings are produced at all",
+    // which the register read as this test pinning D-09's behaviour as
+    // correct. It never did — the assertion was only `is_err()`, and it passes
+    // unchanged. It was the prose that was wrong.
     assert!(run_with_warnings("munus initium reddit ni { ni x = \"salve\"; redde nullus; }").is_err());
+
+    let e = lingua_serpentis::run_program_with_warnings(&[(
+        "principale.liss",
+        "munus initium reddit ni { ni counter = \"salve\"; redde nullus; }",
+    )])
+    .expect_err("assigning a voc to a ni is a type error");
+    assert_eq!(
+        e.warnings.iter().map(|w| w.message.as_str()).collect::<Vec<_>>(),
+        vec!["nomen 'counter' fortasse non Latinum est"]
+    );
 }
 
 #[test]
