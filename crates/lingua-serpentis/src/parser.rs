@@ -305,6 +305,17 @@ impl<'a> Parser<'a> {
                 let ty = self.type_keyword()
                     .ok_or_else(|| self.err("typus parametri expectatus"))?;
                 let pname = self.ident()?;
+                // Defectus D-16. Duplicates used to be accepted and the last
+                // binding won at every layer — the parser pushed both, the
+                // checker and the interpreter each `insert`ed into a map — so
+                // the body saw only the last one and the earlier argument
+                // could not be named at all. Rejecting here is enough: neither
+                // of the other two layers can then see a duplicate, and
+                // guarding them as well would manufacture two more
+                // unreachable diagnostics.
+                if params.iter().any(|(_, existing)| *existing == pname) {
+                    return Err(self.err(&format!("parametrum '{}' bis nominatum", pname)));
+                }
                 params.push((ty, pname));
                 if self.peek() == Some(&TokenKind::Comma) { self.advance(); } else { break; }
             }
@@ -473,6 +484,23 @@ mod tests {
         parse(&tokenize(src).unwrap())
             .expect_err("expected a parse error")
             .message
+    }
+
+    #[test]
+    fn a_parameter_name_cannot_repeat() {
+        // Defectus D-16. `munus f capit (ni a, voc a)` was accepted, and the
+        // last binding won at every layer — so the body saw the `voc` and the
+        // `ni` argument could not be named at all. Silently wrong, and an
+        // argument became unreachable.
+        assert_eq!(
+            parse_err("munus f capit (ni a, voc a) reddit voc { redde a; }"),
+            "parametrum 'a' bis nominatum"
+        );
+    }
+
+    #[test]
+    fn distinct_parameter_names_are_still_fine() {
+        assert!(!parse_all("munus f capit (ni a, voc b) reddit voc { redde b; }").is_empty());
     }
 
     #[test]

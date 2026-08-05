@@ -19,6 +19,7 @@ struct Checker {
     packages: HashMap<String, HashMap<String, Sig>>,   // program-wide package signatures
     imports: HashSet<String>,                          // current file's affer set
     current_ret: Option<Type>, // Some(_) while checking a function body
+    loop_depth: usize,         // how many `indem`/`dum` bodies enclose the current statement
 }
 
 impl Checker {
@@ -29,7 +30,16 @@ impl Checker {
             packages: HashMap::new(),
             imports: HashSet::new(),
             current_ret: None,
+            loop_depth: 0,
         }
+    }
+
+    /// Check a loop body with `abrumpe`/`continua` enabled inside it.
+    fn check_loop_body(&mut self, body: &mut [Stmt]) -> LResult<()> {
+        self.loop_depth += 1;
+        let r = self.check_block(body);
+        self.loop_depth -= 1;
+        r
     }
 
     fn lookup(&self, name: &str) -> Option<Type> {
@@ -395,15 +405,17 @@ impl Checker {
             }
             StmtKind::While { cond, body } => {
                 self.expect_bool(cond, line)?;
-                self.check_block(body)
+                self.check_loop_body(body)
             }
             StmtKind::For { init, cond, step, body } => {
                 self.scopes.push(HashMap::new());
                 let r = (|| {
+                    // `init`, `cond` and `step` are the loop's header, not its
+                    // body: an `abrumpe` there is as loose as one outside.
                     self.check_stmt(init)?;
                     self.expect_bool(cond, line)?;
                     self.check_stmt(step)?;
-                    self.check_block(body)
+                    self.check_loop_body(body)
                 })();
                 self.scopes.pop();
                 r
@@ -413,7 +425,13 @@ impl Checker {
                 for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
                 let saved = self.current_ret.clone();
                 self.current_ret = Some(f.ret.clone());
+                // A function body is not inside any loop, whatever encloses
+                // the declaration. Nested functions are rejected, so this can
+                // only matter for the legacy top-level entry point — but the
+                // invariant is worth stating rather than relying on.
+                let saved_depth = std::mem::take(&mut self.loop_depth);
                 let r = self.check_block_inner(&mut f.body);
+                self.loop_depth = saved_depth;
                 self.current_ret = saved;
                 self.scopes.pop();
                 r
@@ -453,6 +471,16 @@ impl Checker {
                     });
                 }
                 Ok(())
+            }
+            // Defectus D-07: these were accepted unconditionally. Outside a
+            // loop the interpreter yields Flow::Break, and the function-body
+            // loop matches only Flow::Return — so it was dropped on the floor
+            // and execution carried on, with no diagnostic and no clue.
+            StmtKind::Break if self.loop_depth == 0 => {
+                Err(LinguaError { message: "'abrumpe' extra iterationem".into(), line })
+            }
+            StmtKind::Continue if self.loop_depth == 0 => {
+                Err(LinguaError { message: "'continua' extra iterationem".into(), line })
             }
             StmtKind::Break | StmtKind::Continue => Ok(()),
         }
@@ -653,6 +681,44 @@ mod tests {
     #[test]
     fn well_typed_program_passes() {
         assert!(check_src("ni x = °V; x = x + °I; scribe(x);").is_ok());
+    }
+
+    #[test]
+    fn break_outside_a_loop_is_rejected() {
+        // Defectus D-07. The checker accepted `abrumpe` anywhere, and the
+        // interpreter's function-body loop matches only Flow::Return — so the
+        // Break was dropped on the floor and execution simply carried on.
+        // Silently wrong behaviour with no diagnostic at all.
+        let e = check_src("scribe(°I); abrumpe; scribe(°II);").unwrap_err();
+        assert_eq!(e.message, "'abrumpe' extra iterationem");
+    }
+
+    #[test]
+    fn continue_outside_a_loop_is_rejected() {
+        let e = check_src("scribe(°I); continua; scribe(°II);").unwrap_err();
+        assert_eq!(e.message, "'continua' extra iterationem");
+    }
+
+    #[test]
+    fn break_and_continue_inside_a_loop_are_fine() {
+        assert!(check_src("ni i = °I; indem (i minor_est °X) { i = i + °I; abrumpe; }").is_ok());
+        assert!(check_src("ni i = °I; indem (i minor_est °X) { i = i + °I; continua; }").is_ok());
+        // Nested one level deeper, inside an `si` within the loop body.
+        assert!(check_src(
+            "ni i = °I; indem (i minor_est °X) { si (i par_est °II) { abrumpe; } i = i + °I; }"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn a_loop_does_not_license_a_break_after_it() {
+        // The depth must come back down: a loop earlier in the same block
+        // must not make a later top-level `abrumpe` legal.
+        let e = check_src(
+            "ni i = °I; indem (i minor_est °X) { i = i + °I; } abrumpe;"
+        )
+        .unwrap_err();
+        assert_eq!(e.message, "'abrumpe' extra iterationem");
     }
 
     #[test]
