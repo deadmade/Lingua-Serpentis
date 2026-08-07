@@ -106,15 +106,51 @@ fn codex(ty: &Ty) -> u32 {
     }
 }
 
+/// The grain denominators, **read out of the shared table** rather than written
+/// again here.
+///
+/// A second `Grain → 12 | 288` in this file would have been the kind-code
+/// duplication one function lower down, and a worse one: the reader is
+/// `liss_abi::numeri::exige_granum`, which accepts XII or CCLXXXVIII and rejects
+/// everything else — so emitting `12` for an `nr` **passes that gate** and
+/// silently produces wrong arithmetic (`°II:I/II * °I:I/XXIV` is 30/288 with the
+/// right grain and 720/288 with the wrong one). A wrong answer, not a crash.
+///
+/// `liss_runtime::genus::granum` returns an `Option` because it is total over
+/// every kind code, and these two are the kinds that have a grain. The `Option`
+/// is discharged **at compile time**: a `const` initialiser that panics is a
+/// build failure, not a runtime one, so this costs neither a branch nor a
+/// `Defectus` sentence that could never be raised.
+const GRANUM_UNCIAE: i64 = match liss_runtime::genus::granum(KIND_FRAC_UNCIA) {
+    Some(g) => g as i64,
+    None => panic!("KIND_FRAC_UNCIA is a fractional kind and has a grain"),
+};
+const GRANUM_SCRIPULI: i64 = match liss_runtime::genus::granum(KIND_FRAC_SCRIPULUM) {
+    Some(g) => g as i64,
+    None => panic!("KIND_FRAC_SCRIPULUM is a fractional kind and has a grain"),
+};
+
 /// The grain denominator a fraction counts in: XII for `mnr`, CCLXXXVIII for
 /// `nr` (spec §5.1). It travels as an argument rather than in the value, because
 /// the grain is a property of the *type* — which is what lets `ni`, `mnr` and
 /// `nr` share `add`, `sub`, `neg` and `cmp` outright.
-fn granum(g: Grain) -> i64 {
+const fn granum(g: Grain) -> i64 {
     match g {
-        Grain::Uncia => 12,
-        Grain::Scripulum => 288,
+        Grain::Uncia => GRANUM_UNCIAE,
+        Grain::Scripulum => GRANUM_SCRIPULI,
     }
+}
+
+/// A slot index outside the function's `slots` table — from a `SlotId` or from
+/// `Func::params`.
+///
+/// One helper for two call sites, which is the pattern `liss_abi::defectus`
+/// already uses and the one D-24 established: where two sites raise the same
+/// sentence they share a function, so the literal stays unique in the workspace
+/// and stays uniquely attributable when Task 19 puts `Defectus::novus(` in the
+/// catalogue's markers.
+fn sedes_ignota() -> Defectus {
+    Defectus::novus("defectus internus: sedes ignota")
 }
 
 /// Compile a whole program to one relocatable ELF object for `machina`.
@@ -282,10 +318,15 @@ impl Emissor {
 
     fn declara(&mut self, func: &Func) -> Result<(), Defectus> {
         let ptr = self.module.target_config().pointer_type();
-        let params: Vec<_> = func.slots[..func.params as usize]
-            .iter()
-            .map(|t| genus(ptr, t))
-            .collect();
+        // `get(..n)` rather than an index: parameters are slots `0..params`
+        // (spec §4.2), so a `params` beyond the slot table is the checker and
+        // codegen disagreeing about a function's frame — the same defect
+        // `Corpus::sedem` names, and the last slot access in this file that was
+        // still a panic.
+        let Some(parametri) = func.slots.get(..func.params as usize) else {
+            return Err(sedes_ignota());
+        };
+        let params: Vec<_> = parametri.iter().map(|t| genus(ptr, t)).collect();
         let sig = signum(&self.module, &params, Some(genus(ptr, &func.ret)));
         let id = self
             .module
@@ -494,7 +535,7 @@ impl<'a> Corpus<'a> {
         let sedes: &'a [Ty] = self.sedes;
         match (self.variabiles.get(slot.0 as usize), sedes.get(slot.0 as usize)) {
             (Some(var), Some(ty)) => Ok((*var, ty)),
-            _ => Err(Defectus::novus("defectus internus: sedes ignota")),
+            _ => Err(sedes_ignota()),
         }
     }
 
@@ -663,6 +704,25 @@ impl<'a> Corpus<'a> {
     fn blocus(&mut self, block: &Block) -> Result<(), Defectus> {
         self.ambitus.push(block.declares.clone());
         for stmt in &block.stmts {
+            // **Stop at the first terminator**, because the checker admits a
+            // statement after one. Its all-paths analysis asks whether *any*
+            // statement returns, not whether the last does (`checker.rs:128-131`
+            // — "a `redde` followed by unreachable code still returns, and this
+            // language has no dead-code lint to disagree with"), so
+            // `redde nullus; scribe("numquam");` is a legal program that the
+            // interpreter runs to an empty stdout and exit 0.
+            //
+            // Without this the `redde` fills the Cranelift block and the next
+            // statement adds an instruction to a filled one: a panic in debug,
+            // and in release a `Defectus` claiming an internal compiler failure
+            // over a program that is simply valid.
+            //
+            // **Task 13 needs this and not only here.** `abrumpe` and
+            // `continua` fill a block the same way, so every arm that walks
+            // statements owes the same guard.
+            if self.terminatus() {
+                break;
+            }
             self.sententia(stmt)?;
         }
         // Scope exit (spec §7.3.2) — unless the block already ended in a
@@ -1199,14 +1259,26 @@ mod tests {
     }
 
     /// The call convention is the target's own, never a literal (spec §9.3).
+    ///
+    /// **Asserted on the `Signature` [`signum`] builds, not on the ISA.** The
+    /// earlier form compared `isa.default_call_conv()` with
+    /// `CallConv::triple_default(isa.triple())`, which is a property of
+    /// Cranelift and holds no matter what this crate does — it would have passed
+    /// unchanged over a `signum` that wrote `CallConv::SystemV`. What the rule
+    /// is about is the signature, so that is what is inspected.
     #[test]
-    fn each_target_uses_its_own_default_call_convention() {
+    fn each_signature_carries_its_target_s_own_call_convention() {
         for machina in Target::OMNES {
-            let isa = machina_isa(machina).unwrap();
+            let emissor = Emissor::novus(machina).unwrap();
+            let ptr = emissor.module.target_config().pointer_type();
+            let sig = signum(&emissor.module, &[ptr], Some(ptr));
             assert_eq!(
-                isa.default_call_conv(),
-                cranelift_codegen::isa::CallConv::triple_default(isa.triple()),
-                "{}",
+                sig.call_conv,
+                cranelift_codegen::isa::CallConv::triple_default(
+                    emissor.module.isa().triple()
+                ),
+                "{}: a literal call convention works on both targets today and \
+                 makes the Windows port a rewrite",
                 machina.triple(),
             );
         }

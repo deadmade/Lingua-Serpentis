@@ -392,3 +392,52 @@ fn error_in_programmate_scidam_nominat() {
     assert_eq!(stderr, "Error in 'principale.liss', linea 2: divisio per nullum\n");
     assert_eq!(code, Some(1));
 }
+
+/// **A statement after `redde` is legal and must compile.**
+///
+/// The checker's all-paths analysis asks whether *any* statement returns, not
+/// whether the last one does — `checker.rs:128-131` says so outright: "`any`,
+/// not 'the last statement': a `redde` followed by unreachable code still
+/// returns, and this language has no dead-code lint to disagree with." So this
+/// program type-checks, and the interpreter runs it to an empty stdout and
+/// exit 0.
+///
+/// Codegen used to walk every statement in a block unconditionally, so `redde`
+/// filled the Cranelift block and the next statement tried to add an
+/// instruction to a filled one: a panic in debug, and in release a `Defectus`
+/// telling the user their valid program had triggered an internal compiler
+/// failure. Nothing in `conformance/` or `examples/` had this shape, so neither
+/// this task's checkpoint nor Task 17's whole-corpus differential would have
+/// caught it.
+///
+/// `conformance/currunt/sententia-post-redditum` is the corpus's copy, which is
+/// what matters after Task 19 leaves the corpus as the only oracle.
+#[test]
+fn sententia_post_redditum_neglegitur() {
+    par_est(
+        r#"munus initium reddit ni {
+    redde nullus;
+    scribe("numquam");
+}
+"#,
+        "post-redditum",
+    );
+}
+
+/// The same shape with **owned** slots either side of the `redde`, which is
+/// where getting it wrong would be a leak rather than a crash: the teardown
+/// after a terminator must not run, and the `redde`'s own walk must already
+/// have freed everything — including the slot whose `Let` never executed, which
+/// is exactly what spec §5.4's "freeing null is a no-op" buys.
+#[test]
+fn sedes_post_redditum_semel_liberantur() {
+    par_est(
+        r#"munus initium reddit ni {
+    voc nomen = "salve";
+    redde °VII;
+    voc numquam = nomen;
+}
+"#,
+        "post-redditum-sedes",
+    );
+}
