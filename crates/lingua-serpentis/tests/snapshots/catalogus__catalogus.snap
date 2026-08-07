@@ -1,6 +1,6 @@
 ---
 source: crates/lingua-serpentis/tests/catalogus.rs
-assertion_line: 307
+assertion_line: 357
 expression: report
 ---
 103 sites · 70 fixtured · 0 ambiguous · 26 uncovered · 7 unparsed
@@ -104,7 +104,7 @@ crates/lingua-serpentis/src/program.rs:111  directorium programmatis legi non po
 crates/lingua-serpentis/src/program.rs:119  directorium percurri non potest  → UNCOVERED
 crates/liss-runtime/src/exitus.rs:13  UNPARSED  → UNPARSED
 crates/liss-runtime/src/exitus.rs:30  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
-crates/liss-runtime/src/roman.rs:205  numerus Romanus vacuus  → fixtured
-crates/liss-runtime/src/roman.rs:217  numerus Romanus invalidus: '{}'  → fixtured
-crates/liss-runtime/src/roman.rs:256  numerus sine '°': '{}'  → UNCOVERED
-crates/liss-runtime/src/roman.rs:272  fractio sine denominatore  → fixtured
+crates/liss-runtime/src/roman.rs:219  numerus Romanus vacuus  → fixtured
+crates/liss-runtime/src/roman.rs:231  numerus Romanus invalidus: '{}'  → fixtured
+crates/liss-runtime/src/roman.rs:270  numerus sine '°': '{}'  → UNCOVERED
+crates/liss-runtime/src/roman.rs:286  fractio sine denominatore  → fixtured

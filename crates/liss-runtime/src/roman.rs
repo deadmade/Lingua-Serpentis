@@ -141,6 +141,20 @@ impl Roman {
         &self.tiers
     }
 
+    /// Whether this `Roman` is negative. Never true for zero — [`make`]
+    /// clears the sign when the magnitude is empty, which is what makes
+    /// structural equality numeric equality.
+    ///
+    /// The exact inverse of [`Roman::from_digits`]'s first argument, and it
+    /// exists for the same reason [`Roman::digits`] does: `liss_int_new(kind,
+    /// neg, digiti, len)` takes the sign and the digits as two separate
+    /// arguments, so codegen must be able to read back both halves of what
+    /// `from_digits` consumes. `digits()` alone would silently compile every
+    /// negative literal as its magnitude.
+    pub fn negative(&self) -> bool {
+        self.negative
+    }
+
     /// Build a canonical `Roman` from a sign and little-endian digits,
     /// stripping trailing zeros and clearing the sign if the magnitude is
     /// zero. `None` if any digit is out of range (each must be `0..=9`) —
