@@ -1,6 +1,6 @@
 ---
 source: crates/lingua-serpentis/tests/ir.rs
-assertion_line: 334
+assertion_line: 339
 expression: dump(&lower1(LOOPS))
 ---
 #0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
@@ -19,7 +19,8 @@ expression: dump(&lower1(LOOPS))
           declares []
           L6   abrumpe
   L8   dum
-    init
+    caput
+      declares [s1]
       L8   let s1 = (const I):ni
     cond (Lt<ni> (load s1):ni (const V):ni):veritas
     step
@@ -28,9 +29,13 @@ expression: dump(&lower1(LOOPS))
       declares [s2]
       L9   let s2 = (Mul<ni> (load s1):ni (const II):ni):ni
       L10  scribe (load s2):ni
-      L11  si (Gt<ni> (load s2):ni (const VI):ni):veritas
+      L14  si (Eq<ni> (load s2):ni (const VIII):ni):veritas
         then
           declares []
-          L11  abrumpe
-      L12  continua
-  L14  redde (const nullus):ni
+          L14  redde (load s2):ni
+      L15  si (Gt<ni> (load s2):ni (const VI):ni):veritas
+        then
+          declares []
+          L15  abrumpe
+      L16  continua
+  L18  redde (const nullus):ni

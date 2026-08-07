@@ -1,6 +1,6 @@
 ---
 source: crates/lingua-serpentis/tests/ir.rs
-assertion_line: 329
+assertion_line: 334
 expression: dump(&lower1(CONDITIONALS))
 ---
 #0 liss_0__10_classifica  file=principale.liss  entry=false  params=1  reddit voc
@@ -24,8 +24,9 @@ expression: dump(&lower1(CONDITIONALS))
   slots 
   declares []
   L7   scribe (call #0 (const I):ni):voc
-  L8   si (const verus):veritas
+  L8   eval (call #0 (const II):ni):voc
+  L9   si (const verus):veritas
     then
       declares []
-      L8   scribe (const 'a'):lit
-  L9   redde (const nullus):ni
+      L9   scribe (const 'a'):lit
+  L10  redde (const nullus):ni

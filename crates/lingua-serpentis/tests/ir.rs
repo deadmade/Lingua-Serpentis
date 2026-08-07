@@ -127,10 +127,10 @@ fn stmt(out: &mut String, s: &ir::Stmt, ind: usize) {
             let _ = writeln!(out, "{head} indem {}", expr(cond));
             block(out, body, ind + 4);
         }
-        ir::StmtKind::For { init, cond, step, body } => {
+        ir::StmtKind::For { header, cond, step, body } => {
             let _ = writeln!(out, "{head} dum");
-            let _ = writeln!(out, "{pad}  init");
-            stmt(out, init, ind + 4);
+            let _ = writeln!(out, "{pad}  caput");
+            block(out, header, ind + 4);
             let _ = writeln!(out, "{pad}  cond {}", expr(cond));
             let _ = writeln!(out, "{pad}  step");
             stmt(out, step, ind + 4);
@@ -214,8 +214,8 @@ fn walk_exprs(b: &ir::Block, f: &mut impl FnMut(&ir::Expr)) {
                 ex(cond, f);
                 blk(body, f);
             }
-            ir::StmtKind::For { init, cond, step, body } => {
-                st(init, f);
+            ir::StmtKind::For { header, cond, step, body } => {
+                blk(header, f);
                 ex(cond, f);
                 st(step, f);
                 blk(body, f);
@@ -262,6 +262,7 @@ munus classifica capit (ni n) reddit voc {
 }
 munus initium reddit ni {
   scribe(classifica(°I));
+  classifica(°II);
   si (verus) { scribe('a'); }
   redde nullus;
 }";
@@ -277,6 +278,10 @@ munus initium reddit ni {
   dum (ni j = °I; j minor_est °V; j = j + °I) {
     ni k = j * °II;
     scribe(k);
+    // A `redde` inside a `dum` leaves without ever reaching the exit block
+    // where §7.3.5 emits the header teardown, so `j` is freed only because
+    // `header.declares` is a block `redde` walks like any other.
+    si (k par_est °VIII) { redde k; }
     si (k maior_est °VI) { abrumpe; }
     continua;
   }
@@ -464,14 +469,96 @@ fn dum_is_not_desugared_into_indem() {
     let p = lower1(LOOPS);
     let f = func(&p, "initium");
     assert!(matches!(f.body.stmts[1].kind, ir::StmtKind::While { .. }), "the `indem`");
-    let ir::StmtKind::For { init, step, body, .. } = &f.body.stmts[2].kind else {
+    let ir::StmtKind::For { header, step, body, .. } = &f.body.stmts[2].kind else {
         panic!("the `dum` stays a For, got {:?}", f.body.stmts[2].kind);
     };
-    assert!(matches!(init.kind, ir::StmtKind::Let { .. }));
+    assert!(matches!(header.stmts[0].kind, ir::StmtKind::Let { .. }));
     assert!(matches!(step.kind, ir::StmtKind::Assign { .. }));
     assert!(body.stmts.iter().any(|s| matches!(s.kind, ir::StmtKind::Continue)));
     assert!(!f.body.stmts.iter().any(|s| matches!(s.kind, ir::StmtKind::While { .. })
         && matches!(s.kind, ir::StmtKind::For { .. })));
+}
+
+#[test]
+fn a_dum_header_declares_its_own_slot() {
+    // The header is a scope, so it is a `Block`, so its slot is in a
+    // `declares` — which is the only reason a `redde` inside the loop frees
+    // the `dum` variable at all. §7.3.5 emits the header teardown after the
+    // exit block, and a `redde` never reaches it.
+    let p = lower1(LOOPS);
+    let f = func(&p, "initium");
+    let ir::StmtKind::For { header, body, .. } = &f.body.stmts[2].kind else {
+        panic!("the `dum`")
+    };
+    let ir::StmtKind::Let { slot, .. } = header.stmts[0].kind else { panic!("the init `let`") };
+    assert_eq!(header.declares, vec![slot], "the header declares exactly `j`");
+    assert!(!body.declares.contains(&slot), "and the body does not");
+    assert!(!f.body.declares.contains(&slot), "nor does the function body");
+    // Every owned slot of the function is in exactly one `declares`. That is
+    // the invariant a codegen walking blocks relies on, and the one a header
+    // outside the `Block` tree used to break.
+    let mut seen: Vec<ir::SlotId> = Vec::new();
+    collect_declares(&f.body, &mut seen);
+    seen.sort_by_key(|s| s.0);
+    assert_eq!(seen, (0..f.slots.len() as u32).map(ir::SlotId).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_redde_out_of_a_dum_still_reaches_the_header_slot() {
+    // The regression in the shape it was found: a heap `voc` declared in a
+    // `dum` header, and the only exit is a `redde` from the body. §7.3.5's
+    // "the header teardown is emitted after the exit block" never fires, so
+    // the slot is freed only if `redde`'s walk of every enclosing *block*
+    // finds it. Before the header became a `Block`, it found nothing, and
+    // §7.5's live-allocation counter turned this legal program into
+    // `Error: memoria non liberata est`.
+    let p = lower1(
+        "munus initium reddit ni {\n  dum (voc s = \"salve\"; verus; s = s) {\n    redde nullus;\n  }\n}",
+    );
+    let f = func(&p, "initium");
+    let ir::StmtKind::For { header, body, .. } = &f.body.stmts[0].kind else { panic!("the `dum`") };
+    let ir::StmtKind::Let { slot, .. } = header.stmts[0].kind else { panic!("the init `let`") };
+    assert_eq!(f.slots[slot.0 as usize], ir::Ty::Text, "a heap value");
+    assert_eq!(header.declares, vec![slot]);
+    assert!(matches!(body.stmts[0].kind, ir::StmtKind::Return(_)));
+    let mut seen = Vec::new();
+    collect_declares(&f.body, &mut seen);
+    assert_eq!(seen, vec![slot], "the header is where the only slot lives");
+}
+
+/// Every slot declared anywhere under `b`, including loop headers.
+fn collect_declares(b: &ir::Block, out: &mut Vec<ir::SlotId>) {
+    out.extend(b.declares.iter().copied());
+    for s in &b.stmts {
+        match &s.kind {
+            ir::StmtKind::If { then, else_, .. } => {
+                collect_declares(then, out);
+                if let Some(eb) = else_ {
+                    collect_declares(eb, out);
+                }
+            }
+            ir::StmtKind::While { body, .. } => collect_declares(body, out),
+            ir::StmtKind::For { header, body, .. } => {
+                collect_declares(header, out);
+                collect_declares(body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn an_expression_statement_keeps_the_value_nothing_consumed() {
+    // §7.3.1: the statement root is freed if nothing consumed it, and an
+    // `ExprStmt` is the only form where that is the whole rule. Its `voc`
+    // result is the thing codegen must not drop on the floor.
+    let p = lower1(CONDITIONALS);
+    let f = func(&p, "initium");
+    let ir::StmtKind::ExprStmt(e) = &f.body.stmts[1].kind else {
+        panic!("got {:?}", f.body.stmts[1].kind)
+    };
+    assert_eq!(e.ty, ir::Ty::Text);
+    assert!(matches!(e.kind, ir::ExprKind::Call { .. }));
 }
 
 #[test]

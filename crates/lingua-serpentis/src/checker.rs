@@ -132,9 +132,11 @@ fn block_returns(body: &[Stmt]) -> bool {
 }
 
 /// A statement that evaluates nothing and owns nothing: a `veritas` constant
-/// dropped on the floor. It stands in for a `dum` header clause that lowered
-/// to no statement at all, which only a `munus` declaration in the header can
-/// do — see the `For` arm of `check_stmt`.
+/// dropped on the floor. It stands in for a `dum` step clause that lowered to
+/// no statement at all — the init clause needs no stand-in, its `Block` simply
+/// holds no statements. `assign_no_semi` makes the step an `Assign` and nothing
+/// else, so this is unreachable; it is here because `StmtKind::For` needs a
+/// `Stmt` and an unreachable panic is still a panic.
 fn nop(line: usize) -> ir::Stmt {
     ir::Stmt {
         line,
@@ -712,14 +714,16 @@ impl Checker {
                     let body_ir = self.check_loop_body(body)?;
                     Ok((init_ir, cond_ir, step_ir, body_ir))
                 })();
-                // The header's own slot — the `dum` variable — is in no
-                // `declares`: §7.3.5 frees it once after the exit block rather
-                // than on scope exit, and codegen reads it off `init`, which is
-                // the only statement that can declare one.
-                let _header = self.pop_scope();
+                // The header is a scope, so it is a `Block`: the `dum`
+                // variable belongs in a `declares` like every other owned
+                // slot. §7.3.5 still emits its teardown once after the exit
+                // block rather than on the back edge — but `redde` never
+                // reaches that block, and §7.3.4 frees every enclosing
+                // *block*, so a header outside the `Block` tree would leak.
+                let declares = self.pop_scope();
                 let (init_ir, cond_ir, step_ir, body_ir) = r?;
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::For {
-                    init: Box::new(init_ir.unwrap_or_else(|| nop(line))),
+                    header: ir::Block { stmts: init_ir.into_iter().collect(), declares },
                     cond: cond_ir,
                     step: Box::new(step_ir.unwrap_or_else(|| nop(line))),
                     body: body_ir,
@@ -930,6 +934,14 @@ fn resolve_floatlit(e: &mut Expr, ty: Type) {
 fn resolve_floatlit_ir(e: &mut ir::Expr, g: ir::Grain) {
     let narrowed = match &mut e.kind {
         ir::ExprKind::Const(ir::Const::Frac(had, count)) => {
+            // The composition below is exact only in one direction — going
+            // the other way violates it for the great majority of rationals.
+            // Nothing textual protects this: `resolve_floatlit` recomputes
+            // from the original numerator and denominator and so is
+            // direction-free, which means the two can stay perfectly
+            // parallel while this one silently goes wrong.
+            debug_assert!(*had == ir::Grain::Scripulum || *had == g,
+                "resolve_floatlit_ir is exact only narrowing from nr's grain");
             *count = crate::fraction::from_rational(count, &grain_denom(*had), &grain_denom(g));
             *had = g;
             true

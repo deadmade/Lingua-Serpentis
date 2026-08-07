@@ -139,10 +139,27 @@ pub enum StmtKind {
     /// `dum` -- a C-style init/cond/step loop. Not desugared: `continua`
     /// must still run the step, so codegen builds the CFG directly rather
     /// than lowering to a statement tree (§4.4).
-    For { init: Box<Stmt>, cond: Expr, step: Box<Stmt>, body: Block },
+    ///
+    /// `header` is the init clause and, decisively, the scope it opens: the
+    /// `dum` variable is declared there and appears in `header.declares`.
+    /// It is a `Block` rather than a bare `Stmt` so that **every owned slot
+    /// in a function lives in some `Block::declares`**, with no exception
+    /// codegen has to remember. A header slot outside that invariant leaks
+    /// on `redde`, which leaves the function without ever reaching the exit
+    /// block where §7.3.5 emits the header teardown -- and §7.3.4's "every
+    /// enclosing block" would then find nothing to free.
+    ///
+    /// The header's own teardown is still emitted once, after the exit
+    /// block, rather than on the loop's back edge: `abrumpe` and `continua`
+    /// do *not* free `header.declares` (§7.3.5, §7.3.6). `redde` does,
+    /// along with every other enclosing block.
+    For { header: Block, cond: Expr, step: Box<Stmt>, body: Block },
     /// `redde`. Evaluates, then frees every slot of every enclosing block
-    /// of the function, innermost first, including the parameter frame; the
-    /// returned temporary itself is never among them (§7.3.4).
+    /// of the function, innermost first; the returned temporary itself is
+    /// never among them (§7.3.4). "Every enclosing block" is exhaustive and
+    /// needs no supplement: the parameter frame is the body `Block` and a
+    /// `dum` header is a `Block`, so walking the block stack reaches every
+    /// owned slot exactly once.
     Return(Expr),
     /// `abrumpe`.
     Break,
@@ -156,6 +173,11 @@ pub enum StmtKind {
 /// `declares` comes from the checker's scope stack, not from codegen
 /// re-deriving scopes -- it is the ownership machinery (§7.3), and
 /// re-deriving it would be the same mistake as re-deriving types.
+///
+/// Every scope the checker opens is one of these -- a `si`/`aut` arm, a
+/// loop body, a `dum` header, and a function body, which is the parameter
+/// frame. That is the invariant codegen leans on: **an owned slot that is
+/// in no `Block::declares` is a slot nothing frees.**
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
@@ -174,6 +196,16 @@ pub struct Func {
     /// Whether this is the root `initium`, the program's entry point.
     pub is_entry: bool,
     /// Slots `0..params` are the parameters; `slots[params..]` are locals.
+    ///
+    /// This exists for the signature and the ABI -- how many incoming
+    /// values there are and which slots to store them into on entry. It is
+    /// **not** a free list. The parameter frame *is* the body's scope, so
+    /// the parameter slots are already the first entries of
+    /// `body.declares`, and the ordinary scope-exit teardown (§7.3.2) and
+    /// `Return`'s walk of every enclosing block (§7.3.4) each free them
+    /// exactly once. Freeing `0..params` again off this field, on the
+    /// strength of §7.3.4's "including the parameter frame", double-frees
+    /// every heap parameter on every `redde`.
     pub params: u32,
     /// The function's locals, flat and indexed by `SlotId` -- exactly the
     /// shape `cranelift_frontend::Variable` wants (§4.2).
