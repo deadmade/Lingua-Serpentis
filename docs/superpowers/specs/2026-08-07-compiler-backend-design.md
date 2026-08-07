@@ -219,6 +219,19 @@ Four properties earn their keep:
   `Error in linea N:` rather than `Error in 'x.liss', linea N:`. `None` lowers
   to a zero-length file name at the ABI.
 
+  **The checker cannot set this, and the strip must happen before codegen.**
+  `check_program_typed` has no single-file signal — the driver builds an ordinary
+  one-file program with a synthetic path and strips `ProgramError::file` *after*
+  the pipeline. So whoever constructs the `Programma` must clear `Func::file` in
+  single-file mode, exactly as the driver already clears the error's.
+
+  This cannot be deferred to a post-hoc fix-up of output, because §9.5 has `liss
+  run` spawn the child with **inherited** stdio: the parent never sees the
+  child's stderr and cannot rewrite it. The file name is baked into the binary at
+  codegen time. Getting this wrong makes every single-file diagnostic read
+  `Error in 'fons.liss', linea N:` where the corpus expects `Error in linea N:`.
+  Owned by the CLI task, which introduces the file-versus-directory dispatch.
+
 `Type::Float` and `Type::Double` collapse into `Frac(Grain)`. Every operation on
 them is identical modulo one constant (12 or 288), so keeping them apart would
 double every arm in codegen for no gain. The *checker* keeps them distinct,
@@ -450,12 +463,31 @@ That is what keeps `adde` in a loop linear in words rather than in deep copies.
    `x = x + °I` must read `x` before the old value dies, and if evaluation
    panics the slot must still hold a valid pointer.
 4. **`Return`** evaluates, then frees every slot of every enclosing block of the
-   function, innermost first, including the parameter frame. The returned
-   temporary is never one of them — it is a fresh copy if it came from a `Load`.
+   function, innermost first. The returned temporary is never one of them — it is
+   a fresh copy if it came from a `Load`.
+
+   **The function body block's `declares` *is* the parameter frame** — the
+   parameter slots are already its first entries. So this rule is one uniform
+   walk over `Block::declares` with no special case, and `Func::params` exists
+   for the signature and the ABI only. Do not free `0..params` as a separate
+   step: that double-frees every heap parameter on every `redde`.
 5. **`Break`** frees from the current block up to and including the loop body,
    then jumps to the exit block. It does *not* free a `dum` header scope; that
    teardown is emitted once, after the exit block, so the loop variable is freed
    exactly once on every path.
+
+   **`Return` is the exception, and it is the one that bites.** `abrumpe` and
+   `continua` both reach the exit block, so deferring header teardown there is
+   sound for them. `redde` leaves the function without ever reaching it. A
+   `dum` header is therefore an ordinary enclosing scope as far as `Return` is
+   concerned, and its slots must appear in a `Block::declares` like any other —
+   which is why `StmtKind::For` carries its header as a `Block` rather than a
+   bare statement. Otherwise
+   `dum (voc s = "salve"; verus; s = s) { redde nullus; }` leaks `s`, and §7.5
+   turns a legal program into `Error: memoria non liberata est`, exit 1.
+
+   The invariant that makes this tractable: **every owned slot lives in some
+   `Block::declares`**, with no exceptions codegen has to remember.
 6. **`Continue`** frees the same set, then jumps to the step block (`dum`) or the
    condition block (`indem`).
 
