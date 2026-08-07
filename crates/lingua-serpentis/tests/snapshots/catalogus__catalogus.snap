@@ -1,6 +1,5 @@
 ---
 source: crates/lingua-serpentis/tests/catalogus.rs
-assertion_line: 303
 expression: report
 ---
 101 sites · 70 fixtured · 0 ambiguous · 26 uncovered · 5 unparsed
@@ -102,7 +101,7 @@ crates/lingua-serpentis/src/program.rs:101  scida '{}' signis incognitis scripta
 crates/lingua-serpentis/src/program.rs:103  scida '{}' aperiri non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:111  directorium programmatis legi non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:119  directorium percurri non potest  → UNCOVERED
-crates/lingua-serpentis/src/roman.rs:199  numerus Romanus vacuus  → fixtured
-crates/lingua-serpentis/src/roman.rs:211  numerus Romanus invalidus: '{}'  → fixtured
-crates/lingua-serpentis/src/roman.rs:250  numerus sine '°': '{}'  → UNCOVERED
-crates/lingua-serpentis/src/roman.rs:266  fractio sine denominatore  → fixtured
+crates/lingua-serpentis/src/roman.rs:205  numerus Romanus vacuus  → fixtured
+crates/lingua-serpentis/src/roman.rs:217  numerus Romanus invalidus: '{}'  → fixtured
+crates/lingua-serpentis/src/roman.rs:256  numerus sine '°': '{}'  → UNCOVERED
+crates/lingua-serpentis/src/roman.rs:272  fractio sine denominatore  → fixtured

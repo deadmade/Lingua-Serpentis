@@ -141,11 +141,17 @@ impl Roman {
         &self.tiers
     }
 
-    /// Build a canonical `Roman` from a sign and little-endian digits (each
-    /// `0..=9`), stripping trailing zeros and clearing the sign if the
-    /// magnitude is zero.
-    pub fn from_digits(negative: bool, digits: &[u8]) -> Roman {
-        make(negative, digits.to_vec())
+    /// Build a canonical `Roman` from a sign and little-endian digits,
+    /// stripping trailing zeros and clearing the sign if the magnitude is
+    /// zero. `None` if any digit is out of range (each must be `0..=9`) —
+    /// this is the checked boundary for digit vectors arriving from outside
+    /// the type's own invariant, such as a `LissInt` payload crossing the
+    /// ABI by `memcpy`.
+    pub fn from_digits(negative: bool, digits: &[u8]) -> Option<Roman> {
+        if digits.iter().any(|&d| d > 9) {
+            return None;
+        }
+        Some(make(negative, digits.to_vec()))
     }
 
     pub fn from_i64(n: i64) -> Roman {
@@ -623,15 +629,26 @@ mod tests {
     fn from_digits_round_trips_through_display() {
         for n in [0u64, 1, 9, 10, 4999, 1_000_000] {
             let r = Roman::from_u64(n);
-            let back = Roman::from_digits(false, r.digits());
+            let back = Roman::from_digits(false, r.digits()).expect("digits from from_u64 are in range");
             assert_eq!(r.display(), back.display());
         }
     }
 
     #[test]
     fn from_digits_strips_trailing_zeros_to_stay_canonical() {
-        assert_eq!(Roman::from_digits(false, &[1, 0, 0]).digits(), &[1]);
-        assert!(Roman::from_digits(true, &[0, 0]).is_zero());
+        assert_eq!(Roman::from_digits(false, &[1, 0, 0]).unwrap().digits(), &[1]);
+        assert!(Roman::from_digits(true, &[0, 0]).unwrap().is_zero());
+    }
+
+    #[test]
+    fn from_digits_rejects_a_digit_out_of_range() {
+        // The checked boundary: a digit beyond 9 must not become a `Roman`.
+        // Left unchecked, it panics inside `display` (`render_digit`'s
+        // `unreachable!`) or overflows the `u8` addition in `mag_add`,
+        // silently wrapping in release — see the review that added this.
+        assert_eq!(Roman::from_digits(false, &[12]), None);
+        assert_eq!(Roman::from_digits(false, &[200]), None);
+        assert_eq!(Roman::from_digits(false, &[9]), Some(Roman::from_u64(9)));
     }
 
     #[test]
