@@ -19,6 +19,8 @@ Float	Float(Roman { negative: false, tiers: [2, 1] })	I
 Float	Float(Roman { negative: false, tiers: [6, 1] })	I et triens
 Double	Double(Roman { negative: false, tiers: [0, 0, 3] })	I et semuncia
 Double	Double(Roman { negative: false, tiers: [1, 4] })	uncia et semuncia et sextula et scripulum
+Double	Double(Roman { negative: false, tiers: [6] })	sicilicus
+Double	Double(Roman { negative: false, tiers: [2] })	dimidia sextula
 Float	Float(Roman { negative: true, tiers: [6, 1] })	-I et triens
 Double	Double(Roman { negative: true, tiers: [2, 1] })	-semuncia
 Bool	Bool(true)	verus

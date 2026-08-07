@@ -14,6 +14,7 @@
 pub mod exitus;
 pub mod fraction;
 pub mod roman;
+pub mod scriptio;
 
 pub use exitus::{exit_status, Warning};
 pub use roman::Roman;
@@ -43,3 +44,12 @@ pub enum UnOp {
     Not,
     Neg,
 }
+
+/// `#[cfg(test)]`-only: a second, independent formatter kept purely as a
+/// randomised oracle for `scriptio`'s tests. Spec §10.4 rules on why this
+/// duplication is accepted rather than a defect — see the module doc.
+#[cfg(test)]
+mod speculum;
+
+#[cfg(test)]
+mod proptests;

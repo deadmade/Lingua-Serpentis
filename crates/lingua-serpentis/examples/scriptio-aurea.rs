@@ -78,6 +78,15 @@ fn main() {
     // every sub-uncia name appears exactly once, greedily, in one value.
     cases.push(nr(41)); // "uncia et semuncia et sextula et scripulum"
 
+    // -- nr: the two sub-uncia denominations `nr(41)` cannot reach --
+    // The greedy stack subtracts largest-first from a 0..=23 remainder, and
+    // XII+VI+IV+II+I = XXV > XXIII, so no single value can carry all five —
+    // `sicilicus` and `dimidia sextula` need their own cases. Closes a gap
+    // Task 4's review found: the golden vectors reached only three of the
+    // five `SUBUNCIA` names (`fraction.rs:51-57`).
+    cases.push(nr(6));  // "sicilicus" (1/48 as)
+    cases.push(nr(2));  // "dimidia sextula" (1/144 as)
+
     // -- negative fractions, both types --
     cases.push(mnr(-16)); // "-I et triens"
     cases.push(nr(-12)); // "-semuncia"
