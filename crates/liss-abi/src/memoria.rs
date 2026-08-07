@@ -78,8 +78,13 @@ pub unsafe fn liberare(p: *mut u8) {
 
 /// Refuse to go on unless `h` still looks like a live Lingua Serpentis object.
 ///
+/// This is the **read** guard, and null is fatal here: nothing in a compiled
+/// program can read a value it does not have. Freeing is the other case, and
+/// [`abolere`] treats null as a no-op — see the rule stated there.
+///
 /// # Safety
-/// `h` must be null or readable for `size_of::<LissHdr>()` bytes.
+/// `h` must be readable for `size_of::<LissHdr>()` bytes, or null (which ends
+/// the process).
 pub unsafe fn verifica(h: *const LissHdr) {
     if h.is_null() || unsafe { (*h).magic } != LISS_MAGIC {
         crate::defectus::memoria_violata();
@@ -89,6 +94,33 @@ pub unsafe fn verifica(h: *const LissHdr) {
 /// Check the magic, clear it, and free — the only way a header ever reaches
 /// the allocator.
 ///
+/// **A null pointer is a no-op**, exactly as C's `free` is, and this is a
+/// contract of the ABI rather than defensive padding.
+///
+/// The reason is §7.3's teardown rule meeting how the checker builds
+/// `Block::declares`: `pop_scope` yields every slot bound *anywhere* in the
+/// block, wherever the `Let` sits. So in
+///
+/// ```text
+/// munus initium reddit ni {
+///   si (verus) { redde nullus; }
+///   voc s = "salve";
+///   redde nullus;
+/// }
+/// ```
+///
+/// `body.declares` holds `s`, and the `redde` inside the `si` frees a slot
+/// whose `Let` never ran. Cranelift requires a `Variable` be defined on every
+/// path reaching a use, so codegen defines every slot to zero on entry — and
+/// that free sees null. Refusing it would turn a legal program that prints
+/// nothing and exits 0 into exit 1 with a corruption diagnostic, and the
+/// robustness harness would report an invariant violation.
+///
+/// The alternative is codegen proving per-slot, per-path initialisation, which
+/// is precisely the bookkeeping §5.4 exists to abolish. One branch here keeps
+/// §7.3.4's "one uniform walk over `Block::declares`, with no special case"
+/// literally true.
+///
 /// Clearing the magic *before* the free is what makes an immediate double free
 /// deterministic rather than probabilistic: the block still reads as
 /// not-a-`LISS`-object until `malloc` hands it out again and something
@@ -97,6 +129,9 @@ pub unsafe fn verifica(h: *const LissHdr) {
 /// # Safety
 /// `h` must be null, or a header from [`allocare`] that has not been freed.
 pub unsafe fn abolere(h: *mut LissHdr) {
+    if h.is_null() {
+        return;
+    }
     unsafe {
         verifica(h);
         (*h).magic = 0;

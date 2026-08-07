@@ -85,18 +85,30 @@ pub unsafe extern "C" fn liss_text_new(bytes: *const u8, len: u64) -> *mut LissT
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_text_copy(p: *const LissText) -> *mut LissText {
     unsafe { verifica_textum(p) };
-    let quantum = ONUS + unsafe { (*p).len } as usize;
+    // Checked for the same reason as `liss_int_copy`: the magic vouches for
+    // the object, not for its length field.
+    let Ok(len) = usize::try_from(unsafe { (*p).len }) else {
+        memoria_violata()
+    };
+    let Some(quantum) = ONUS.checked_add(len) else {
+        memoria_violata()
+    };
     let q = unsafe { allocare(quantum) };
     unsafe { ptr::copy_nonoverlapping(p.cast::<u8>(), q, quantum) };
     q.cast()
 }
 
-/// Free. Checks the magic first — every free does.
+/// Free. Checks the magic first — every free does. **Null is a no-op**; see
+/// [`crate::memoria::abolere`] for why that is a contract rather than padding.
 ///
 /// # Safety
-/// `p` must be a live `LissText` the caller owns, and must not be freed twice.
+/// `p` must be null, or a live `LissText` the caller owns that has not been
+/// freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_text_free(p: *mut LissText) {
+    if p.is_null() {
+        return;
+    }
     unsafe { verifica_textum(p) };
     unsafe { abolere(p.cast()) };
 }

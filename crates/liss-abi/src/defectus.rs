@@ -22,8 +22,13 @@ use crate::numeri::roman_of;
 /// `index extra fines: {} (longitudo {})` be one literal at one site rather
 /// than a message assembled somewhere the diagnostic catalogue cannot see.
 ///
-/// `file` is the source path (null or empty for single-file mode) and `line`
-/// the statement's line, both supplied by codegen: a signal handler has no line
+/// `file` is the source path and `line` the statement's line, both supplied by
+/// codegen. **Null and empty both mean "no file"**: spec §4.1 lowers
+/// `Func::file: None` to a zero-length name, and a codegen that emits a null
+/// pointer instead means the same thing, so accepting both costs one comparison
+/// and removes a way for the two halves of the contract to disagree. `line` of
+/// 0 likewise means "no line". Codegen supplies them because a signal handler
+/// has no line
 /// table and this design emits no debug information (spec §8.4), so there is no
 /// ambient location for the runtime to consult. The four shapes reproduce
 /// `ProgramError`'s `Display` exactly:
@@ -40,6 +45,19 @@ use crate::numeri::roman_of;
 /// arguments null. That inner call converts nothing, so the recursion is
 /// bounded at depth two by construction rather than by a flag.
 ///
+/// **The argument-free path allocates nothing.** It is written as direct
+/// `write(2)` calls over borrowed byte slices and one stack buffer for the line
+/// number, rather than as one assembled `String`. That is not tidiness:
+/// [`memoria_exhausta`] is raised from `allocare` at the moment `malloc`
+/// returned null, and a `String` here would then reach `handle_alloc_error`,
+/// which **aborts** — `SIGABRT` and exit 134, D-04's shape, produced inside the
+/// one function whose whole job is to prevent it. Only the two-argument path
+/// allocates, in `Roman::display`, and it is reached only from
+/// `index extra fines` where the heap is healthy by construction.
+///
+/// Several writes rather than one is harmless: stderr is unbuffered, writes
+/// append in order, and stream *interleaving* is not observable (spec §6).
+///
 /// # Safety
 /// `file` and `fmt` must be null or NUL-terminated; `arg0`/`arg1` must be null
 /// or live `LissInt`s.
@@ -51,41 +69,108 @@ pub unsafe extern "C" fn liss_panic(
     arg0: *const LissInt,
     arg1: *const LissInt,
 ) -> ! {
+    let nomen = unsafe { chorda(file) };
+    let forma = unsafe { chorda(fmt) };
+
+    // Validate before writing a single byte. A hole with no argument used to
+    // render as a literal `{}`, which produces a *plausible* exit-1 Latin
+    // diagnostic — braces are not digits, English or Rust type names, so
+    // `judge` accepts it and a codegen bug that forgot an argument goes
+    // unnoticed. Refusing up front turns it into the internal defect it is,
+    // and refusing before any output means the sentence is never half-written.
+    if lacunae(forma) != usize::from(!arg0.is_null()) + usize::from(!arg1.is_null()) {
+        memoria_violata();
+    }
+
     // D-08: everything `scribe` produced before the failure still reaches
     // stdout. The interpreter used to discard it with the error.
     unsafe { crate::scriptio::liss_flush() };
 
-    let mut nuntius = String::new();
-    match (unsafe { scida(file) }, line) {
-        (Some(p), 0) => nuntius.push_str(&format!("Error in '{p}': ")),
-        (Some(p), n) => nuntius.push_str(&format!("Error in '{p}', linea {n}: ")),
-        (None, 0) => nuntius.push_str("Error: "),
-        (None, n) => nuntius.push_str(&format!("Error in linea {n}: ")),
+    let mut cifrae = [0u8; 20];
+    erratum(b"Error");
+    match (nomen.is_empty(), line) {
+        (false, 0) => {
+            erratum(b" in '");
+            erratum(nomen);
+            erratum(b"'");
+        }
+        (false, n) => {
+            erratum(b" in '");
+            erratum(nomen);
+            erratum(b"', linea ");
+            erratum(decimales(n, &mut cifrae));
+        }
+        (true, 0) => {}
+        (true, n) => {
+            erratum(b" in linea ");
+            erratum(decimales(n, &mut cifrae));
+        }
     }
+    erratum(b": ");
 
-    let forma = if fmt.is_null() {
-        String::new()
-    } else {
-        String::from_utf8_lossy(unsafe { CStr::from_ptr(fmt) }.to_bytes()).into_owned()
-    };
-    let mut argumenta = [arg0, arg1].into_iter();
-    let mut reliquum = forma.as_str();
-    while let Some(i) = reliquum.find("{}") {
-        nuntius.push_str(&reliquum[..i]);
+    let mut argumenta = [arg0, arg1].into_iter().filter(|p| !p.is_null());
+    let mut reliquum = forma;
+    while let Some(i) = positio(reliquum) {
+        erratum(&reliquum[..i]);
         match argumenta.next() {
-            Some(p) if !p.is_null() => nuntius.push_str(&unsafe { roman_of(p) }.display()),
-            // A hole with no argument is a bug in the caller, not something a
-            // user should see garbage for. Leaving it verbatim keeps the
-            // sentence recognisably the one the catalogue records.
-            _ => nuntius.push_str("{}"),
+            Some(p) => erratum(unsafe { roman_of(p) }.display().as_bytes()),
+            None => memoria_violata(),
         }
         reliquum = &reliquum[i + 2..];
     }
-    nuntius.push_str(reliquum);
-    nuntius.push('\n');
+    erratum(reliquum);
+    erratum(b"\n");
 
-    unsafe { crate::scriptio::liss_scribe_erratum(nuntius.as_ptr(), nuntius.len() as u64) };
     unsafe { libc::_exit(1) }
+}
+
+/// One unbuffered write to stderr.
+fn erratum(bytes: &[u8]) {
+    unsafe { crate::scriptio::liss_scribe_erratum(bytes.as_ptr(), bytes.len() as u64) };
+}
+
+/// A C string's bytes, borrowed; empty for null.
+///
+/// # Safety
+/// `p` must be null or NUL-terminated.
+unsafe fn chorda<'a>(p: *const c_char) -> &'a [u8] {
+    if p.is_null() {
+        b""
+    } else {
+        unsafe { CStr::from_ptr(p) }.to_bytes()
+    }
+}
+
+/// Byte offset of the next `{}`.
+fn positio(forma: &[u8]) -> Option<usize> {
+    forma.windows(2).position(|par| par == b"{}")
+}
+
+/// How many `{}` holes a format string has.
+fn lacunae(mut forma: &[u8]) -> usize {
+    let mut n = 0;
+    while let Some(i) = positio(forma) {
+        n += 1;
+        forma = &forma[i + 2..];
+    }
+    n
+}
+
+/// `n` in decimal, rendered into a caller-supplied buffer — the one number this
+/// crate formats without going through `Roman`, because `linea 3` is the one
+/// place spec §8's diagnostic grammar admits an Arabic numeral.
+fn decimales(mut n: u64, buf: &mut [u8; 20]) -> &[u8] {
+    if n == 0 {
+        buf[19] = b'0';
+        return &buf[19..];
+    }
+    let mut i = 20;
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    &buf[i..]
 }
 
 /// End the program: flush, check the live-allocation count, exit.
@@ -211,20 +296,3 @@ pub(crate) fn memoria_exhausta() -> ! {
     }
 }
 
-/// The source path a diagnostic is attributed to, or `None`.
-///
-/// Both null and empty mean "no file": spec §4.1 lowers `Func::file: None` to a
-/// zero-length name, and a codegen that emits a null pointer instead means the
-/// same thing. Accepting both costs one comparison and removes a way for the
-/// two halves of the contract to disagree.
-unsafe fn scida(file: *const c_char) -> Option<String> {
-    if file.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(file) }.to_bytes();
-    if bytes.is_empty() {
-        None
-    } else {
-        Some(String::from_utf8_lossy(bytes).into_owned())
-    }
-}

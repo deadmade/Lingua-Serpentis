@@ -157,6 +157,97 @@ fn a_nested_list_builds_reads_appends_and_frees_to_zero() {
 }
 
 #[test]
+fn freeing_a_null_is_a_no_op() {
+    solus(|| unsafe {
+        assert_eq!(liss_live_count(), 0);
+        // §7.3.2 frees `Block::declares` on scope exit, and `pop_scope` yields
+        // every slot bound *anywhere* in the block — including one whose `Let`
+        // never ran, because a `redde` above it left first. Cranelift needs
+        // every `Variable` defined on every path reaching a use, so codegen
+        // defines each slot to zero on entry and that free arrives here as
+        // null. Refusing it would turn a legal program into exit 1 with a
+        // corruption diagnostic.
+        liss_int_free(std::ptr::null_mut());
+        liss_text_free(std::ptr::null_mut());
+        liss_list_free(std::ptr::null_mut());
+        assert_eq!(liss_live_count(), 0, "a no-op allocates and frees nothing");
+
+        // The same rule one level down: a list caught part-built holds zero
+        // words, and freeing it must walk past them rather than into them.
+        let xs = liss_list_new(u64::from(KIND_TEXT), 3);
+        pone(xs, 1, liss_text_new(b"duo".as_ptr(), 3) as u64);
+        assert_eq!(liss_live_count(), 2);
+        liss_list_free(xs);
+        assert_eq!(liss_live_count(), 0);
+        // Reaching this line at all is the assertion: none of the above exited.
+    });
+}
+
+/// Every Latin sentence this crate can put in front of a user, read out of its
+/// own source.
+///
+/// The diagnostic catalogue cannot see these yet: `liss-abi`'s marker,
+/// `liss_panic(`, waits for Task 19, because adding it while `interp.rs` still
+/// raises the same three sentences would turn six sites `ambiguous` and drop
+/// the fixtured count by three. That leaves this crate's own wording unwatched
+/// for eleven tasks — during which Task 9 adds `acervus vocationum exhaustus
+/// est`. This is the stand-in: it counts no sites and touches no snapshot, but
+/// it makes "a new Latin sentence appeared" a diff someone has to justify.
+fn sententiae() -> Vec<String> {
+    let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
+    let mut inventa = Vec::new();
+    for intrans in std::fs::read_dir(dir).expect("src/ is readable") {
+        let via = intrans.expect("a directory entry").path();
+        if via.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        for linea in std::fs::read_to_string(&via)
+            .expect("utf-8 source")
+            .lines()
+        {
+            // Comment lines mention `c"…"` when they explain the convention.
+            // The crate uses no block comments, so this is exact.
+            if linea.trim_start().starts_with("//") {
+                continue;
+            }
+            let mut reliquum = linea;
+            while let Some(i) = reliquum.find("c\"") {
+                let rest = &reliquum[i + 2..];
+                let finis = rest
+                    .find('"')
+                    .expect("a diagnostic literal closes on its own line");
+                inventa.push(rest[..finis].to_string());
+                reliquum = &rest[finis + 1..];
+            }
+        }
+    }
+    inventa.sort();
+    inventa.dedup();
+    inventa
+}
+
+#[test]
+fn every_latin_sentence_this_crate_can_say_is_listed_here() {
+    let omnes = sententiae();
+    let inventa: Vec<&str> = omnes.iter().map(String::as_str).collect();
+    assert_eq!(
+        inventa,
+        [
+            // Reborn from `interp.rs`; fixtured there today, and the reason
+            // the `liss_panic(` marker waits for the interpreter's deletion.
+            "defectus internus: memoria violata est",
+            "divisio per nullum",
+            "index extra fines: {} (longitudo {})",
+            // New here, and permanently UNCOVERED by design.
+            "memoria exhausta est",
+            "memoria non liberata est",
+            "modulus per nullum",
+        ],
+        "a Latin sentence appeared or changed; justify it, then update this list",
+    );
+}
+
+#[test]
 fn every_copy_and_free_pair_balances() {
     solus(|| unsafe {
         assert_eq!(liss_live_count(), 0);
@@ -545,6 +636,21 @@ fn scaena() {
                 liss_int_free(p);
                 liss_int_free(p);
             }
+            "usus-post-liberationem" => {
+                // Clearing the magic *before* the free is what makes this
+                // deterministic: neither musl nor glibc writes `'LISS'` back
+                // into the first four bytes of a just-freed small chunk, so
+                // the header still reads as not-an-object.
+                let p = ni(1);
+                liss_int_free(p);
+                liss_int_add(p, ni(2));
+            }
+            "numerus-pro-serie" => {
+                // Kind confusion in the direction `genus-alienum` does not
+                // cover: a `LissInt` handed to a list entry point. The magic
+                // is good; only the depth of the kind says otherwise.
+                liss_list_free(ni(1).cast());
+            }
             "genus-alienum" => {
                 // A `LissText` handed to an integer entry point: the magic is
                 // perfectly good and only the kind says otherwise.
@@ -671,7 +777,9 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
     for scaena in [
         "digitus-corruptus",
         "duplex-liberatio",
+        "usus-post-liberationem",
         "genus-alienum",
+        "numerus-pro-serie",
         "granum-alienum",
     ] {
         let (code, stderr) = erratum(scaena);

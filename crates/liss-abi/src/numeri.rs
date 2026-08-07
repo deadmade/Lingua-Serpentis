@@ -139,18 +139,32 @@ pub unsafe extern "C" fn liss_int_new(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_int_copy(p: *const LissInt) -> *mut LissInt {
     unsafe { verifica_numerum(p) };
-    let bytes = ONUS + unsafe { (*p).len } as usize;
+    // `len` has passed the magic check but is not thereby trustworthy — the
+    // magic says "a Lingua Serpentis object was here", not "its length field
+    // is sane". Unchecked, a corrupt `len` near `usize::MAX` wraps to a small
+    // allocation carrying a huge length, and the next read walks off it.
+    let Ok(len) = usize::try_from(unsafe { (*p).len }) else {
+        memoria_violata()
+    };
+    let Some(bytes) = ONUS.checked_add(len) else {
+        memoria_violata()
+    };
     let q = unsafe { allocare(bytes) };
     unsafe { ptr::copy_nonoverlapping(p.cast::<u8>(), q, bytes) };
     q.cast()
 }
 
-/// Free. Checks the magic first — every free does.
+/// Free. Checks the magic first — every free does. **Null is a no-op**; see
+/// [`crate::memoria::abolere`] for why that is a contract rather than padding.
 ///
 /// # Safety
-/// `p` must be a live `LissInt` the caller owns, and must not be freed twice.
+/// `p` must be null, or a live `LissInt` the caller owns that has not been
+/// freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_int_free(p: *mut LissInt) {
+    if p.is_null() {
+        return;
+    }
     unsafe { verifica_numerum(p) };
     unsafe { abolere(p.cast()) };
 }

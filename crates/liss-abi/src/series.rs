@@ -29,7 +29,14 @@ use crate::{GRADUS, LISS_MAGIC, LissHdr, LissInt, LissList, LissText, ONUS, basi
 pub(crate) unsafe fn verifica_seriem(p: *const LissList) {
     unsafe { verifica(p.cast()) };
     let kind = unsafe { (*p).h.kind };
-    if profunditas(kind) == 0 || kind as u64 != unsafe { (*p).ekind } + GRADUS as u64 {
+    // `checked_add`, because `ekind` is a field of an object the magic vouches
+    // for but whose contents it does not: an `ekind` within eight of
+    // `u64::MAX` overflows, which is a debug panic across an `extern "C"`
+    // boundary and therefore an abort — the same class as the two defects
+    // this crate already fixed.
+    if profunditas(kind) == 0
+        || unsafe { (*p).ekind }.checked_add(u64::from(GRADUS)) != Some(u64::from(kind))
+    {
         memoria_violata();
     }
 }
@@ -89,11 +96,10 @@ pub unsafe extern "C" fn liss_list_new(ekind: u64, len: u64) -> *mut LissList {
 
 /// Free one element word according to its kind.
 ///
-/// A zero word is skipped: `Bool` and `Char` own nothing, and for the three
-/// pointer kinds a null can only be an element of a list caught part-built —
-/// which nothing frees, because a raise never unwinds. Skipping is what keeps
-/// that case from becoming a null dereference on a path Task 9's handler may
-/// yet take.
+/// A zero word is skipped, which is the same rule the three `liss_*_free`
+/// entry points now state outright: null is a no-op. Here it costs one branch
+/// instead of a call, and it covers the two immediate kinds, for which a zero
+/// word is a *value* (`falsus`, `U+0000`) rather than an absent one.
 ///
 /// # Safety
 /// `word` must be a live value of kind `ekind` the caller owns.
@@ -197,12 +203,18 @@ pub unsafe extern "C" fn liss_list_copy(p: *const LissList) -> *mut LissList {
     q
 }
 
-/// Free, recursively. Checks the magic of every header it reaches.
+/// Free, recursively. Checks the magic of every header it reaches. **Null is a
+/// no-op**; see [`crate::memoria::abolere`] for why that is a contract rather
+/// than padding.
 ///
 /// # Safety
-/// `p` must be a live `LissList` the caller owns, and must not be freed twice.
+/// `p` must be null, or a live `LissList` the caller owns that has not been
+/// freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_list_free(p: *mut LissList) {
+    if p.is_null() {
+        return;
+    }
     unsafe { verifica_seriem(p) };
     let (len, ekind) = unsafe { ((*p).len, (*p).ekind as u32) };
     for i in 0..len as usize {
