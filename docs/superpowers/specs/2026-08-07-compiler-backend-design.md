@@ -247,9 +247,17 @@ mangling needs a real escape rather than a passthrough:
 liss_<n>_<ns>_<m>_<name>
 ```
 
-where `n` and `m` are the byte lengths of the *escaped* components and any byte
-outside `[A-Za-z0-9_]` becomes `_uXXXX_`. Length-prefixing the escaped form
-keeps the mapping injective.
+where `n` and `m` are the byte lengths of the *escaped* components, and any
+**character** — not byte — outside `[A-Za-z0-9_]` becomes `_uXXXX_`, `XXXX`
+being its Unicode scalar value in lowercase hex. Length-prefixing the escaped
+form keeps the mapping injective.
+
+Escaping per character rather than per byte is the only reading consistent with
+both worked examples above, and it is the one that matters: identifiers here are
+Unicode-alphabetic (`lexer.rs` uses `is_alphabetic()`), so a per-byte escape
+would turn one multi-byte character into several `_uXXXX_` groups and lose the
+round-trip. An earlier draft of this paragraph said "byte" in one clause and
+"scalar value" in the next; per-character is the rule.
 
 - root `initium` → `liss_0__7_initium`
 - `mathematica.duplum` → `liss_11_mathematica_6_duplum`
