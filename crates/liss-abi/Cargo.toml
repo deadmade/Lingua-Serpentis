@@ -1,0 +1,32 @@
+[package]
+name = "liss-abi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+
+# Its own workspace, deliberately (spec §9.1). Task 10's `build.rs` invokes
+# cargo on this crate while the outer build is already running; a member of the
+# root workspace would contend for the outer `.cargo-lock` and deadlock.
+[workspace]
+
+# `staticlib` is what the musl cross-build embeds (Task 10) — every
+# `#[unsafe(no_mangle)]` symbol here is garbage-collected out of an rlib.
+# `rlib` is what the host test binary links against, which is how this task
+# tests the ABI before musl enters the picture.
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+# The one dependency the whole workspace is permitted (spec §11): `write`,
+# `_exit`, `malloc`, `free`, and — from Task 9 — `sigaltstack`/`sigaction`,
+# none of which std exposes. `liss-runtime`, `liss-ir` and `lingua-serpentis`
+# stay at zero.
+libc = "0.2"
+liss-runtime = { path = "../liss-runtime" }
+
+[dev-dependencies]
+# `tests/abi.rs` redirects fd 1 through a pipe to read back what the output
+# buffer flushed, and re-executes itself to observe `liss_panic`, which does
+# not return. An integration test sees only the crate under test and its own
+# dev-dependencies, so `libc` is named twice.
+libc = "0.2"
