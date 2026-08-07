@@ -16,7 +16,8 @@
 //!
 //! - `crt1.o`, `crti.o`, `crtn.o`, copied verbatim;
 //! - **one prelinked object** — `ld -r` of the staticlib, `libc.a` and
-//!   `libunwind.a` — so every program link is three CRT objects plus one
+//!   `libunwind.a`, then stripped of bitcode and debug information
+//!   ([`exonera`]) — so every program link is three CRT objects plus one
 //!   program object plus one runtime object, with no archive-member resolution
 //!   on a path that runs once per compiling fixture.
 //!
@@ -37,13 +38,17 @@
 //!    script already requires, and does the same job; `LISS_LD` overrides it.
 //! 2. **`-u __libc_start_main` is load-bearing.** The prelink names the symbols
 //!    it must keep rather than using `--whole-archive` (18.5 MB against
-//!    22.1 MB, and the difference is dead Rust codegen units). Selecting only
-//!    the `liss_*` entry points leaves `crt1.o`'s own undefined symbols
-//!    unresolved, so the undefined set of `crt1.o` is read out of the object
-//!    and added to the list rather than written down here.
-//! 3. **The blobs are much bigger than §9.2 predicted** — 18.5 MB and 19.1 MB
-//!    against a predicted 8–15 MB for *both*. See `src/target.rs`, which
-//!    reports the measured figures as a test.
+//!    22.1 MB before stripping, and the difference is dead Rust codegen units).
+//!    Selecting only the `liss_*` entry points leaves `crt1.o`'s own undefined
+//!    symbols unresolved, so the undefined set of `crt1.o` is read out of the
+//!    object and added to the list rather than written down here.
+//! 3. **Four fifths of the prelinked object is dead**, and neither
+//!    `--whole-archive` nor `lto` touches it: embedded LLVM bitcode for an LTO
+//!    that never runs, and DWARF for a design that emits none (spec §2, §8.4).
+//!    [`exonera`] removes both, taking the two blobs from 18.5 MB and 19.1 MB
+//!    to **3.4 MB and 3.5 MB** — under §9.2's 8–15 MB prediction rather than
+//!    two and a half times over it — and a linked program from 4.6 MB to
+//!    **513 KB**. `src/target.rs` reports the figures as a test.
 //!
 //! # The four traps
 //!
@@ -52,11 +57,14 @@
 //!   contends on a `.cargo-lock`.
 //! - **Inherited environment.** Outer `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`,
 //!   `RUSTC_WRAPPER`, `CARGO_BUILD_TARGET` and the make jobserver variables all
-//!   break a cross-build; each is removed explicitly. See [`cargo_mundum`].
+//!   break a cross-build; each is removed explicitly, and rustflags are *set
+//!   empty* rather than removed, because removal leaves a `.cargo/config.toml`
+//!   in charge. See [`cargo_mundum`].
 //! - **Building outside the nix shell fails**, unavoidably: musl std must
 //!   exist. [`bibliotheca`] detects that and says which target and which flake.
-//! - **Staleness.** `rerun-if-changed` on both crates' sources, and
-//!   `rerun-if-env-changed` on the two variables that change the answer.
+//! - **Staleness.** `rerun-if-changed` on both crates' sources and on each
+//!   `LISS_RUNTIME_DIR` blob by name, and `rerun-if-env-changed` on every
+//!   variable that changes the answer — including `RUSTC`, which is kept.
 
 use std::collections::BTreeSet;
 use std::env;
@@ -86,6 +94,11 @@ fn main() {
     }
     println!("cargo::rerun-if-env-changed=LISS_RUNTIME_DIR");
     println!("cargo::rerun-if-env-changed=LISS_LD");
+    println!("cargo::rerun-if-env-changed=LISS_OBJCOPY");
+    // `RUSTC` is kept rather than removed (see `cargo_mundum`), so it is an
+    // *input*: switching toolchains changes the runtime, and without this the
+    // blobs from the old one survive the switch.
+    println!("cargo::rerun-if-env-changed=RUSTC");
 
     let horreum = env::var_os("LISS_RUNTIME_DIR").map(PathBuf::from);
     let out = PathBuf::from(opus("OUT_DIR"));
@@ -115,9 +128,13 @@ fn opus(nomen: &str) -> OsString {
 /// `src/target.rs`'s tests are the check, and they run against whatever landed
 /// here — a wrong blob fails them exactly as a wrong cross-build would.
 fn ex_horreo(horreum: &Path, meta: &str, sedes: &Path) {
-    println!("cargo::rerun-if-changed={}", horreum.display());
     for nomen in CRT.iter().chain([RUNTIME].iter()) {
         let fons = horreum.join(meta).join(nomen);
+        // **Each blob, not the directory.** `rerun-if-changed` on a directory
+        // watches its listing; replacing a `runtime.o` in place changes no
+        // listing, and the stale bytes would survive every rebuild until
+        // somebody added or removed a file.
+        println!("cargo::rerun-if-changed={}", fons.display());
         transfer(&fons, &sedes.join(nomen)).unwrap_or_else(|e| {
             panic!(
                 "LISS_RUNTIME_DIR is set, so {} must exist and be readable: {e}",
@@ -272,15 +289,40 @@ fn aedifica(meta: &str, out: &Path) -> PathBuf {
 /// - `RUSTDOCFLAGS` / `CARGO_ENCODED_RUSTDOCFLAGS` — same reasoning as
 ///   `RUSTFLAGS`, for completeness rather than from an observed failure.
 ///
+/// - `CARGO_BUILD_RUSTFLAGS` / `CARGO_BUILD_RUSTDOCFLAGS` — the environment
+///   spellings of the `[build]` config keys, and the exact siblings of the
+///   `CARGO_BUILD_TARGET` above.
+///
 /// `RUSTC` is deliberately **kept**: it names the toolchain the outer build is
-/// using, and the runtime should be built by the same one.
+/// using, and the runtime should be built by the same one. That makes it an
+/// input, so `main` declares `rerun-if-env-changed` for it.
+///
+/// # `env_remove` is not enough for rustflags, and only for rustflags
+///
+/// `--target` and `--target-dir` are on the command line, and a command-line
+/// argument beats `~/.cargo/config.toml`. **`rustflags` has no command-line
+/// form**, so `[build] rustflags` and `[target.<musl triple>] rustflags` in a
+/// user's or a packager's config apply to this inner build after every removal
+/// above — with host `-C target-cpu` or a `linker` that cannot see the musl
+/// sysroot, which is the failure this function exists to prevent.
+///
+/// Setting `CARGO_ENCODED_RUSTFLAGS` to the **empty string** is what closes it:
+/// cargo takes the environment in preference to the config file, and an empty
+/// encoded value is a well-formed "no flags" rather than an absence. Removing
+/// the variable hands the decision back to the config; setting it takes the
+/// decision away.
+///
+/// Nothing in this repository is affected — there is no `.cargo/config.toml`
+/// here — and that is precisely why it had to be reasoned about rather than
+/// observed.
 fn cargo_mundum() -> Command {
     let mut cmd = Command::new(env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo")));
     for nomen in [
         "RUSTFLAGS",
-        "CARGO_ENCODED_RUSTFLAGS",
         "RUSTDOCFLAGS",
         "CARGO_ENCODED_RUSTDOCFLAGS",
+        "CARGO_BUILD_RUSTFLAGS",
+        "CARGO_BUILD_RUSTDOCFLAGS",
         "RUSTC_WRAPPER",
         "RUSTC_WORKSPACE_WRAPPER",
         "CARGO_BUILD_TARGET",
@@ -292,6 +334,9 @@ fn cargo_mundum() -> Command {
     ] {
         cmd.env_remove(nomen);
     }
+    // Set, not removed. See above: this is the one that has to beat a config
+    // file rather than merely not be inherited.
+    cmd.env("CARGO_ENCODED_RUSTFLAGS", "");
     cmd
 }
 
@@ -315,13 +360,21 @@ fn cargo_mundum() -> Command {
 /// says it needs of us.
 fn praeliga(archivum: &Path, contentum: &Path, opus: &Path) {
     let mut nomina = signa_archivi(archivum);
-    nomina.extend(desiderata_crt(&contentum.join("crt1.o")));
+    // **Before the `extend`, and that is the whole point.** `crt1.o`'s strong
+    // undefined set is exactly `{__libc_start_main, main}` on both targets, so
+    // after merging it in, `nomina` contains `"main"` whether or not the archive
+    // defines one. This assertion was written after the merge and was therefore
+    // vacuous: dropping `--features ingressus` still passed it, still prelinked,
+    // and still embedded a runtime with no entry point — caught only later, by
+    // the symbol tests. Asked against `signa_archivi` alone it means what it
+    // says.
     assert!(
         nomina.contains("main"),
-        "{}: no `main`. The `ingressus` feature adds it and the cross-build \
-         must pass `--features ingressus`",
+        "{}: the archive defines no `main`. The `ingressus` feature adds it and \
+         the cross-build must pass `--features ingressus`",
         archivum.display()
     );
+    nomina.extend(desiderata_crt(&contentum.join("crt1.o")));
 
     let mut cmd = Command::new(ligator());
     cmd.args(["-flavor", "gnu", "-r", "-o"]).arg(opus);
@@ -348,6 +401,54 @@ fn praeliga(archivum: &Path, contentum: &Path, opus: &Path) {
          multi-target linker",
         opus.display()
     );
+
+    exonera(opus);
+}
+
+/// Remove the two things in the prelinked object that nothing downstream will
+/// ever read: embedded LLVM bitcode, and debug information.
+///
+/// **This is 82 % of the object.** Measured on the x86_64 prelink before it was
+/// applied: `.llvmbc` 7,602,988 B, `.rela.debug_info` 1,964,832 B, `.debug_str`
+/// 1,900,280 B, `.debug_info` 1,119,257 B, `.rela.debug_ranges` 1,054,848 B and
+/// about 1.2 MB of other `.debug_*` — out of 18,538,608.
+///
+/// Both are dead by construction rather than by guess:
+///
+/// - **`.llvmbc`/`.llvmcmd`** exist so a later LTO can re-optimise the object.
+///   No LTO runs here and none runs in the shipped compiler, which links with
+///   libwild (spec §9.3) and never invokes LLVM at all.
+/// - **`.debug_*`** are dead **by spec**: §2 lists "no debug information" as a
+///   non-goal and §8.4 turns it into a design consequence — the stack-exhaustion
+///   diagnostic has no line number precisely because none of this is emitted.
+///   Carrying DWARF for the runtime while emitting none for the program is
+///   paying for half a feature.
+///
+/// The knock-on is larger than the compiler. Before this, a linked Lingua
+/// Serpentis program was 4,627,048 B and roughly nine-tenths of it was debug
+/// info and bitcode that `--gc-sections` cannot touch, because they are not
+/// reachability-analysed. After, it is **512,912 B**. The "4.6 MB floor" this
+/// task first reported was not a floor; it was ballast.
+///
+/// `rust-objcopy` ships in the same `bin/` as `rust-lld`, from the same rustc
+/// this script already requires, and is likewise multi-target. `LISS_OBJCOPY`
+/// overrides it. Neither the symbol table nor a single relocation is touched:
+/// `main`'s relocations keep their offsets, `liss_initium` stays the sole strong
+/// undefined, and the stripped runtime links, runs and still faults into the
+/// Latin stack-exhaustion diagnostic.
+fn exonera(opus: &Path) {
+    let status = Command::new(instrumentum("LISS_OBJCOPY", "rust-objcopy"))
+        .arg("--remove-section=.llvmbc")
+        .arg("--remove-section=.llvmcmd")
+        .arg("--strip-debug")
+        .arg(opus)
+        .status()
+        .unwrap_or_else(|e| panic!("strip {}: {e}", opus.display()));
+    assert!(
+        status.success(),
+        "strip {} failed: {status}",
+        opus.display()
+    );
 }
 
 /// The relocatable linker: `LISS_LD`, else the `rust-lld` beside the toolchain.
@@ -359,7 +460,19 @@ fn praeliga(archivum: &Path, contentum: &Path, opus: &Path) {
 /// LLVM's linker, is multi-target, and is installed by every rustc that can
 /// cross-compile at all, which this script already requires.
 fn ligator() -> PathBuf {
-    if let Some(via) = env::var_os("LISS_LD") {
+    instrumentum("LISS_LD", "rust-lld")
+}
+
+/// A cross-capable binutil out of the rustc sysroot, overridable by an
+/// environment variable.
+///
+/// `$(rustc --print sysroot)/lib/rustlib/<host>/bin/` holds `rust-lld` and
+/// `rust-objcopy`, both LLVM's, both multi-target. That last word is the whole
+/// reason they are used in preference to whatever is on `PATH`: the host
+/// binutils cannot read the other architecture's relocations, and this script
+/// has to handle both.
+fn instrumentum(clavis: &str, nomen: &str) -> PathBuf {
+    if let Some(via) = env::var_os(clavis) {
         return PathBuf::from(via);
     }
     let rustc = env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
@@ -377,12 +490,12 @@ fn ligator() -> PathBuf {
         .join("rustlib")
         .join(String::from_utf8_lossy(opus("HOST").as_encoded_bytes()).as_ref())
         .join("bin")
-        .join("rust-lld");
+        .join(nomen);
     assert!(
         via.is_file(),
-        "no relocatable linker: {} is absent. Set LISS_LD to a multi-target \
-         `ld` — the host binutils will not do, it cannot read the other \
-         architecture's relocations",
+        "{} is absent. Set {clavis} to a multi-target replacement — the host \
+         binutils will not do, it cannot read the other architecture's \
+         relocations",
         via.display(),
     );
     via

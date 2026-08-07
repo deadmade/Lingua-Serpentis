@@ -284,6 +284,40 @@ mod tests {
         }
     }
 
+    /// The CRT objects are copied verbatim out of the toolchain and never
+    /// inspected by `build.rs`, so this is the only thing that looks at their
+    /// *contents*. Architecture and non-emptiness are not enough: a truncated
+    /// `crt1.o` of the right machine passes both and fails at the first program
+    /// link with an undefined `_start`.
+    ///
+    /// `crt1.o` is the one with symbols. `crti.o` and `crtn.o` carry only the
+    /// prologue and epilogue halves of `.init`/`.fini` and define no global
+    /// symbol at all, so the assertion for them is that those sections are
+    /// present — which is exactly what would be missing from a truncated copy.
+    #[test]
+    fn the_crt_objects_are_whole() {
+        for meta in Target::OMNES {
+            let r = meta.runtime();
+            let crt1 = object::File::parse(r.crt1).expect("crt1.o is an object file");
+            assert!(
+                definita(&crt1).iter().any(|d| d == "_start"),
+                "{}: crt1.o defines no `_start`",
+                meta.triple(),
+            );
+
+            for (nomen, octeti) in [("crti.o", r.crti), ("crtn.o", r.crtn)] {
+                let fasciculus = object::File::parse(octeti).expect("an object file");
+                for sectio in [".init", ".fini"] {
+                    assert!(
+                        fasciculus.section_by_name(sectio).is_some(),
+                        "{}: {nomen} has no {sectio}",
+                        meta.triple(),
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn the_runtime_defines_the_abi_and_leaves_liss_initium_to_compiled_code() {
         for meta in Target::OMNES {
@@ -385,6 +419,18 @@ mod tests {
     /// own relocations must name `liss_custos_institue`, and must name it at a
     /// **lower offset** than `liss_initium` — the installer is called, from
     /// `main`, first.
+    ///
+    /// # What this test assumes, for whoever it breaks on
+    ///
+    /// It reads *positional* order — the byte offset of the relocation, not a
+    /// proof about execution — and it requires both calls to be in `main`'s own
+    /// body. Three legitimate changes would therefore fail it: inlining
+    /// `liss_custos_institue` into `main` (its relocation disappears), moving
+    /// the call into a helper that `main` calls (likewise), and any
+    /// transformation that reorders the two call sites. All three are fail-safe
+    /// — the test goes red, nothing ships broken — but none of them is a bug,
+    /// so a failure here is a prompt to re-establish the property some other
+    /// way, not to delete the call.
     #[test]
     fn main_installs_the_guard_before_it_calls_the_program() {
         for meta in Target::OMNES {
@@ -420,13 +466,27 @@ mod tests {
     }
 
     /// Spec §9.2 predicted "roughly 8–15 MB of embedded blobs for two targets".
-    /// It is **two and a half times that**, and the number should be true
-    /// rather than reassuring, so it is asserted rather than described.
+    /// Measured: **3,396,800 B** and **3,524,880 B**, 6.6 MiB together — inside
+    /// the prediction, with room.
     ///
-    /// The band is wide on purpose: it is a tripwire for a change of *kind* —
-    /// a `--whole-archive` prelink that stopped selecting symbols, a debug
-    /// runtime, an empty blob — not a size ratchet. A real reduction should
-    /// change the numbers below in the same commit that earns it.
+    /// It was not, at first. The unstripped prelink was 18.5 MB and 19.1 MB,
+    /// and four fifths of that was two things nothing downstream reads:
+    /// `.llvmbc` (7.6 MB on x86_64) for an LTO that never runs, and `.debug_*`
+    /// (7.2 MB) for a design that emits no debug information at all (spec §2,
+    /// §8.4). `build.rs::exonera` removes both. Neither `--whole-archive` nor
+    /// `lto = true` touches either, which is why two earlier attempts at this
+    /// number moved it by nothing and 3.6 MB the wrong way respectively.
+    ///
+    /// **The knock-on is larger than the compiler.** `--gc-sections` cannot
+    /// reach debug sections or bitcode — they are not reachability-analysed —
+    /// so every byte of it was being carried into every user's binary. A linked
+    /// program went from 4,627,048 B to **512,912 B**. The "4.6 MB floor" this
+    /// task first reported was not a floor.
+    ///
+    /// The band is wide on purpose: it is a tripwire for a change of *kind* — a
+    /// `--whole-archive` prelink, a strip that silently stopped running, an
+    /// empty blob — not a size ratchet. Its **upper** bound is what fails if
+    /// `exonera` is removed, and that is the bound that matters now.
     #[test]
     fn the_embedded_runtime_costs_what_it_costs() {
         let mut summa = 0;
@@ -441,8 +501,11 @@ mod tests {
                 mensura as f64 / (1024.0 * 1024.0),
             );
             assert!(
-                (8 << 20..48 << 20).contains(&mensura),
-                "{}: {mensura} bytes is outside the measured band",
+                (1 << 20..6 << 20).contains(&mensura),
+                "{}: {mensura} bytes is outside the measured band. Above it \
+                 usually means `exonera` stopped stripping the bitcode and the \
+                 DWARF, which costs every compiled program four megabytes it \
+                 cannot use",
                 meta.triple(),
             );
             summa += mensura;
@@ -450,6 +513,11 @@ mod tests {
         println!(
             "both targets: {summa} B ({:.1} MiB)",
             summa as f64 / (1024.0 * 1024.0)
+        );
+        assert!(
+            summa < 15 << 20,
+            "{summa} bytes is outside spec §9.2's 8–15 MB prediction for both \
+             targets"
         );
     }
 

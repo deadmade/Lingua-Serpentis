@@ -29,6 +29,14 @@
 //!    i.e. that the installer is called, from `main`, first. Against
 //!    `.init_array` the strongest available statement is "some pointer is in the
 //!    section", which is where the Task 9 tripwire already was.
+//! 4. **A constructor would have to survive `--gc-sections`.** The program link
+//!    runs it (it is worth 0.9 MB on the image), and an `.init_array` entry is
+//!    reachable only from the linker's own root set, not from `main` — so the
+//!    guard's liveness would depend on the linker keeping a section nothing
+//!    references. Linkers do treat `.init_array` as a root, and libwild
+//!    presumably does too, but "presumably" is a poor foundation for the one
+//!    mechanism standing between deep recursion and signal death. A call from
+//!    `main` is live because `main` is live.
 //!
 //! So: one call, first line, and a test that reads the shipped object rather
 //! than the source it came from.
