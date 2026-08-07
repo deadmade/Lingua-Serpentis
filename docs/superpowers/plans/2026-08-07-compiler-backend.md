@@ -524,6 +524,22 @@ Straight-line code for all six scalar types: constants, load/store, every binop 
 
 **`et` and `vel` evaluate both operands.** They do not short-circuit today (`interp.rs:131-135`) and the corpus is blessed against that. Emitting a branch here is the easiest silent divergence in the project — spec §3.5.
 
+> **Three things carried from Task 11.**
+>
+> 1. **`Ty::Bool` and `Ty::Char` need `.uext()` at the ABI boundary.** `genus()`
+>    currently maps them to `I8`/`I32` with `ArgumentExtension::None`, which is
+>    self-consistent for liss→liss calls but wrong the moment `liss_print_bool` is
+>    emitted: Rust's `extern "C" fn(b: bool)` is `i8 zeroext`, and cranelift will
+>    not add the extension for you.
+> 2. **Move the kind codes into `liss-runtime`.** They are duplicated between
+>    `liss-abi` and `liss-codegen` with nothing tying them together. This needs no
+>    new crate and no spec change — `liss-runtime` is already a dependency of both,
+>    and spec §11 already carries the row. Re-export from `liss-abi`.
+> 3. **Negative `Const::Int` is currently unreachable**, because `-°V` parses to
+>    `Unary{Neg}` and nothing constant-folds it. If this task folds `Neg(Const)`,
+>    it becomes the first place `Roman::negative()` matters — and must be the first
+>    to test it.
+
 - [ ] Checkpoint: `exemplum-praecisio` and `numerus-sine-spatio` pass compiled; the interpreter suite is untouched.
 
 `feat(codegen): every scalar type and operator`
@@ -533,6 +549,19 @@ Straight-line code for all six scalar types: constants, load/store, every binop 
 ## Task 13: Control flow and ownership
 
 If / While / For / Break / Continue / Return, scope frees, the `Variable` and sealing discipline (spec §7.4).
+
+> **Carried from Task 11: do not guard `switch_to_block` with `terminatus()` alone.**
+> Spec §7.4 names `FunctionBuilder::is_filled`, which is **private** in
+> cranelift-frontend 0.134 and takes a `Block` — the spec's method does not exist.
+> `Corpus::terminatus` is semantically equivalent to it, but that is only one leg:
+> `switch_to_block` accepts `position.is_none() || is_unreachable() || is_pristine ||
+> is_filled`. Asserting `terminatus()` before every switch **will fire on a
+> legitimately pristine block** — an empty `aliter` arm, a `dum` with no step. Use
+> the disjunction.
+>
+> The `memoria-*` fixture for `redde` inside `dum` only observes the header-slot
+> leak if the header variable is a **heap type** (`voc` or a list). With the natural
+> `dum (ni j = °I; …)` it is invisible.
 
 - [ ] **Step 1:** the six `memoria-*` fixtures — nested list build/read/free, `adde` in a loop, assignment in a loop, `redde` from inside `si` inside `dum` inside `indem`, `abrumpe`/`continua` from a nested `si`, overwriting an owned element.
 - [ ] Checkpoint: those six pass with the live count at zero, plus `exemplum-calc` and `exemplum-computatrum`.
