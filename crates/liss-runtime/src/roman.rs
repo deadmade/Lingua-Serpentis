@@ -145,12 +145,12 @@ impl Roman {
     /// clears the sign when the magnitude is empty, which is what makes
     /// structural equality numeric equality.
     ///
-    /// The exact inverse of [`Roman::from_digits`]'s first argument, and it
-    /// exists for the same reason [`Roman::digits`] does: `liss_int_new(kind,
-    /// neg, digiti, len)` takes the sign and the digits as two separate
-    /// arguments, so codegen must be able to read back both halves of what
-    /// `from_digits` consumes. `digits()` alone would silently compile every
-    /// negative literal as its magnitude.
+    /// The exact inverse of [`Roman::from_digits`]'s first argument, so that a
+    /// `Roman` can be read back **whole**: `digits()` alone left the round trip
+    /// lossy, and `liss_int_new(kind, neg, digiti, len)` wants both halves.
+    /// This closed a gap, not a live bug — no negative `Const` can be produced
+    /// today, the lexer building every literal through `from_u64` or `zero` and
+    /// `-°V` lowering to `ExprKind::Unary` with no constant folding.
     pub fn negative(&self) -> bool {
         self.negative
     }

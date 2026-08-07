@@ -30,6 +30,7 @@ use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{Context, isa};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{DataDescription, FuncId, Linkage, Module, default_libcall_names};
+use cranelift_object::object::write::Symbol;
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use liss_ir::{Block, Const, Expr, ExprKind, Func, Programma, Stmt, StmtKind, Ty};
 use std::collections::HashMap;
@@ -38,10 +39,12 @@ use crate::Defectus;
 use crate::target::Target;
 
 /// The symbol the runtime leaves undefined and compiled code supplies (spec
-/// §6). It is *not* the entry function's mangled name — `initium` mangles to
+/// §6).
+///
+/// It is *not* the entry function's mangled name — `initium` mangles to
 /// `liss_0__7_initium` like any other root function, because the user may call
-/// it recursively — so the entry point is emitted twice: once under its own
-/// symbol, and once as a one-call trampoline under this one.
+/// it recursively and needs a name to call. So the entry point carries **two**
+/// symbols at one address: its own, and this one. See [`Emissor::finge`].
 const INGRESSUS: &str = "liss_initium";
 
 /// `KIND_INT` from `liss_abi` (spec §5.3, `base: … 2 Int …`).
@@ -71,7 +74,6 @@ pub fn compila(prog: &Programma, machina: &Target) -> Result<Vec<u8>, Defectus> 
     for func in &prog.funcs {
         emissor.defini(func)?;
     }
-    emissor.ingressum()?;
     emissor.finge()
 }
 
@@ -270,52 +272,57 @@ impl Emissor {
         Ok(())
     }
 
-    /// The [`INGRESSUS`] trampoline: `liss_initium` calls the user's `initium`
-    /// and returns what it returns.
+    /// Serialise the object, giving the entry point its second name on the way
+    /// out.
     ///
-    /// A one-instruction forward rather than a second symbol on the same body,
-    /// because an alias would have to be an assembler-level `.set` that
-    /// `cranelift-object` has no way to emit, and defining the body twice would
-    /// double its size and break recursion into `initium` (two copies with two
-    /// identities). The cost is one `call` per program run.
-    fn ingressum(&mut self) -> Result<(), Defectus> {
-        let Some(symbolum) = self.principium.clone() else {
-            return Err(Defectus::novus(
-                "defectus internus: munus 'initium' in programmate non inventum",
-            ));
-        };
-        let interior = self.nostra[&symbolum];
-        let sig = self.module.declarations().get_function_decl(interior).signature.clone();
-        let id = self
-            .module
-            .declare_function(INGRESSUS, Linkage::Export, &sig)
-            .map_err(|_| Defectus::novus("defectus internus: munus declarari non potuit"))?;
-
-        self.ctx.clear();
-        self.ctx.func.signature = sig;
-        self.ctx.func.name = UserFuncName::user(0, id.as_u32());
-        {
-            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbctx);
-            let blocus = fb.create_block();
-            fb.append_block_params_for_function_params(blocus);
-            fb.switch_to_block(blocus);
-            fb.seal_block(blocus);
-            let vocatio = self.module.declare_func_in_func(interior, fb.func);
-            let args: Vec<_> = fb.block_params(blocus).to_vec();
-            let inst = fb.ins().call(vocatio, &args);
-            let reditus = fb.inst_results(inst).to_vec();
-            fb.ins().return_(&reditus);
-            fb.finalize(self.module.target_config());
-        }
-        self.module
-            .define_function(id, &mut self.ctx)
-            .map_err(|_| Defectus::novus("defectus internus: munus componi non potuit"))?;
-        Ok(())
-    }
-
+    /// # The alias, and why it is not a trampoline
+    ///
+    /// An ELF alias is not an assembler `.set`: it is a second symbol-table
+    /// entry pointing at the same `(section, offset)` with the same size and
+    /// kind. `cranelift-module` has no concept of one — a `FuncId` is a
+    /// declaration and a declaration is a name — but `cranelift-object` hands
+    /// back the [`object::write::Object`] it built, and `object` has supported
+    /// exactly this all along. So the entry point is emitted **once** and named
+    /// twice, which is what an alias should cost: nothing.
+    ///
+    /// `Symbol` is not `Clone`, hence the field-by-field copy. Every field
+    /// carried is `Copy`, and every one of them must be carried: a `value` or
+    /// `section` that drifted from the original would put `liss_initium`
+    /// somewhere that is not `initium`, and the link would still succeed.
     fn finge(self) -> Result<Vec<u8>, Defectus> {
-        self.module
-            .finish()
+        let interior = {
+            let Some(symbolum) = self.principium.as_deref() else {
+                return Err(Defectus::novus(
+                    "defectus internus: munus 'initium' in programmate non inventum",
+                ));
+            };
+            self.nostra[symbolum]
+        };
+
+        let mut productum = self.module.finish();
+        let principale = productum.object.symbol(productum.function_symbol(interior));
+        // Read out before the mutable borrow below. All `Copy`.
+        let (value, size, kind, scope, weak, section, flags) = (
+            principale.value,
+            principale.size,
+            principale.kind,
+            principale.scope,
+            principale.weak,
+            principale.section,
+            principale.flags,
+        );
+        productum.object.add_symbol(Symbol {
+            name: INGRESSUS.as_bytes().to_vec(),
+            value,
+            size,
+            kind,
+            scope,
+            weak,
+            section,
+            flags,
+        });
+
+        productum
             .emit()
             .map_err(|_| Defectus::novus("defectus internus: objectum scribi non potuit"))
     }
@@ -386,10 +393,14 @@ impl Corpus<'_> {
             let nullum = self.fb.ins().iconst(ptr, 0);
             return Ok((nullum, 0));
         }
+        // Declaring and defining are two failures and get two sentences, as
+        // `munus declarari`/`munus componi` already do for functions. One
+        // sentence for both would make the catalogue Task 19 builds report a
+        // single site for two unrelated ways of being broken.
         let id = self
             .module
             .declare_anonymous_data(false, false)
-            .map_err(|_| Defectus::novus("defectus internus: datum definiri non potuit"))?;
+            .map_err(|_| Defectus::novus("defectus internus: datum declarari non potuit"))?;
         let gv = self.module.declare_data_in_func(id, self.fb.func);
         self.data.push((id, octeti.to_vec()));
         Ok((self.fb.ins().symbol_value(ptr, gv), octeti.len()))
@@ -527,18 +538,37 @@ mod tests {
             let definita: Vec<_> = fasciculus
                 .symbols()
                 .filter(|s| s.is_global() && s.is_definition())
-                .filter_map(|s| s.name().ok())
                 .collect();
+            let nomina: Vec<_> = definita.iter().filter_map(|s| s.name().ok()).collect();
             assert!(
-                definita.contains(&INGRESSUS),
+                nomina.contains(&INGRESSUS),
                 "{}: the object must define {INGRESSUS} — it is the one symbol \
                  the prelinked runtime leaves undefined",
                 machina.triple(),
             );
             assert!(
-                definita.contains(&"liss_0__7_initium"),
+                nomina.contains(&"liss_0__7_initium"),
                 "{}: root `initium` must also keep its own mangled symbol, or a \
                  recursive call to it has nothing to name",
+                machina.triple(),
+            );
+
+            // **The alias is an alias.** Two names, one definition: same
+            // section, same offset, same size. A `liss_initium` that drifted to
+            // a different offset would still link, and would call whatever
+            // happened to be there.
+            let signum = |nomen: &str| {
+                definita
+                    .iter()
+                    .find(|s| s.name() == Ok(nomen))
+                    .map(|s| (s.section_index(), s.address(), s.size()))
+                    .expect("the symbol is defined")
+            };
+            assert_eq!(
+                signum(INGRESSUS),
+                signum("liss_0__7_initium"),
+                "{}: {INGRESSUS} must be a second name for `initium`, not a \
+                 second copy of it",
                 machina.triple(),
             );
 

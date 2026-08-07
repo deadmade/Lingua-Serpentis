@@ -17,12 +17,27 @@
 //! sequences to local-exec. If it cannot, either the link fails or the image
 //! faults at its first TLS access, and no amount of code generation helps.
 //!
-//! It was checked before any of this was written, and libwild does relax them:
-//! the x86_64 image contains zero TLS relocations, no dynamic section, and the
-//! canonical `data16 data16 data16 mov %fs:0x0,%rax` rewrite at every former GD
-//! site; the aarch64 image likewise, and it runs under `qemu-aarch64`. The one
-//! surviving `__tls_get_addr` in each image is musl's own, called from its
-//! static `dl_iterate_phdr` — hand-written code, not a relaxed relocation.
+//! It was checked before any of this was written, and libwild does relax them.
+//! Both images contain **zero TLS relocations and no dynamic section**, and no
+//! `@tlsgd` sequence survives anywhere; the aarch64 one runs under
+//! `qemu-aarch64`. Measured on the x86_64 image of `exemplum-salve`, 22
+//! `%fs:`-relative accesses remain, in the two forms the two relaxations
+//! produce — and they are **different instructions**, which matters to anyone
+//! reading a disassembly against this comment:
+//!
+//! - **LD→LE**, 7 sites: `data16 data16 data16 mov %fs:0x0,%rax`, then a direct
+//!   `-0xNN(%rax)` load. The prefixes are padding, where the linker overwrote a
+//!   longer local-dynamic sequence in place.
+//! - **GD→LE**, 3 sites (`0x426466`, `0x434365`, `0x44de47`): a *bare*
+//!   `mov %fs:0x0,%rax` followed by `lea -0xNN(%rax),%rax`. **No prefixes.**
+//!
+//! Three of the 36 general-dynamic sites rather than 36 because `--gc-sections`
+//! removed the rest — the sequences it did keep were all relaxed, which is the
+//! property in question.
+//!
+//! The one surviving `__tls_get_addr` in each image is musl's own, called from
+//! its static `dl_iterate_phdr` — hand-written code, not a relaxed relocation,
+//! and unreachable from compiled code.
 //!
 //! # Why libwild's own words never reach a user
 //!
@@ -65,11 +80,29 @@ pub trait Nexus: Send + Sync {
     fn iunge(&self, artefacta: &[(&str, &[u8])], nomen: &str) -> Result<Vec<u8>, Defectus>;
 }
 
+/// Name → bytes. Every file that exists, for the duration of one link.
+type Tabula = HashMap<PathBuf, Arc<Vec<u8>>>;
+
+/// Take the lock, **poisoned or not**.
+///
+/// libwild links on a Rayon pool. A worker that panics while holding this lock
+/// poisons it, and then every later `lock().unwrap()` panics too — so a link
+/// failure would kill the compiler instead of becoming
+/// `imago non coniuncta est`, which is the one thing this module promises.
+///
+/// Ignoring poison is safe here rather than merely convenient: the map has no
+/// invariant spanning two operations. Every use is one insert, one remove or
+/// one lookup, so whatever a panic interrupted, the contents are a consistent
+/// set of name→bytes pairs and there is nothing for poisoning to protect.
+fn aperi(tabula: &Mutex<Tabula>) -> std::sync::MutexGuard<'_, Tabula> {
+    tabula.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// The in-memory filesystem libwild reads its inputs from and writes its output
 /// to. A `HashMap` behind a `Mutex`, because libwild links in parallel.
 #[derive(Clone, Default)]
 struct MemoriaFs {
-    tabula: Arc<Mutex<HashMap<PathBuf, Arc<Vec<u8>>>>>,
+    tabula: Arc<Mutex<Tabula>>,
 }
 
 /// One input file, as libwild sees it.
@@ -86,7 +119,7 @@ impl InputFileData for Ingressus {
 struct Egressus {
     via: PathBuf,
     octeti: Vec<u8>,
-    tabula: Arc<Mutex<HashMap<PathBuf, Arc<Vec<u8>>>>>,
+    tabula: Arc<Mutex<Tabula>>,
 }
 
 impl OutputFileData for Egressus {
@@ -100,7 +133,7 @@ impl OutputFileData for Egressus {
     /// picks them up after the linker has been dropped.
     fn finish(mut self) -> libwild::error::Result {
         let octeti = std::mem::take(&mut self.octeti);
-        self.tabula.lock().unwrap().insert(self.via.clone(), Arc::new(octeti));
+        aperi(&self.tabula).insert(self.via.clone(), Arc::new(octeti));
         Ok(())
     }
 }
@@ -119,10 +152,7 @@ impl FileSystem for MemoriaFs {
         via: &Path,
         _prepopulate_maps: bool,
     ) -> libwild::error::Result<(Self::Input, Option<Arc<File>>)> {
-        let octeti = self
-            .tabula
-            .lock()
-            .unwrap()
+        let octeti = aperi(&self.tabula)
             .get(via)
             .cloned()
             .ok_or_else(|| libwild::error!("no in-memory file {}", via.display()))?;
@@ -132,7 +162,7 @@ impl FileSystem for MemoriaFs {
     }
 
     fn file_type(&self, via: &Path) -> libwild::error::Result<FileType> {
-        if self.tabula.lock().unwrap().contains_key(via) {
+        if aperi(&self.tabula).contains_key(via) {
             Ok(FileType::File)
         } else {
             Err(std::io::Error::new(std::io::ErrorKind::NotFound, "absent").into())
@@ -145,12 +175,12 @@ impl FileSystem for MemoriaFs {
     }
 
     fn remove_file(&self, via: &Path) -> libwild::error::Result<()> {
-        self.tabula.lock().unwrap().remove(via);
+        aperi(&self.tabula).remove(via);
         Ok(())
     }
 
     fn rename_file(&self, via: &Path, nova: &Path) -> libwild::error::Result<()> {
-        let mut tabula = self.tabula.lock().unwrap();
+        let mut tabula = aperi(&self.tabula);
         let Some(octeti) = tabula.remove(via) else {
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "absent").into());
         };
@@ -173,7 +203,7 @@ impl FileSystem for MemoriaFs {
     }
 
     fn write_auxiliary(&self, via: &Path, octeti: &[u8]) -> libwild::error::Result<()> {
-        self.tabula.lock().unwrap().insert(via.to_path_buf(), Arc::new(octeti.to_vec()));
+        aperi(&self.tabula).insert(via.to_path_buf(), Arc::new(octeti.to_vec()));
         Ok(())
     }
 }
@@ -187,7 +217,7 @@ impl Nexus for WildNexus {
 
         let fs = MemoriaFs::default();
         {
-            let mut tabula = fs.tabula.lock().unwrap();
+            let mut tabula = aperi(&fs.tabula);
             for (nomen, octeti) in artefacta {
                 tabula.insert(PathBuf::from(*nomen), Arc::new(octeti.to_vec()));
             }
@@ -227,10 +257,7 @@ impl Nexus for WildNexus {
         }
         drop(nexus);
 
-        let imago = fs
-            .tabula
-            .lock()
-            .unwrap()
+        let imago = aperi(&fs.tabula)
             .remove(Path::new(nomen))
             .ok_or_else(|| Defectus::novus("imago non coniuncta est"))?;
         // The linker is gone, so this `Arc` is the only handle and the bytes
