@@ -233,8 +233,18 @@ fn every_latin_sentence_this_crate_can_say_is_listed_here() {
     assert_eq!(
         inventa,
         [
+            // Task 9. The signal handler's stack-exhaustion branch (spec §8.2),
+            // and the successor to the interpreter's `vocatio nimis alte
+            // implicata` — which is why it keeps the `vocatio` root. It is not
+            // a `liss_panic` site and never will be: a handler with no stack
+            // left writes byte constants and `_exit`s.
+            "acervus vocationum exhaustus est",
             // Reborn from `interp.rs`; fixtured there today, and the reason
             // the `liss_panic(` marker waits for the interpreter's deletion.
+            // The handler's *other* branch says this too, out of its own
+            // `NUNTIUS_MEMORIA` — the same fact about the same program, and
+            // deduplicated here rather than shared in the source, because
+            // §10.3 wants the literal inline at the site.
             "defectus internus: memoria violata est",
             "divisio per nullum",
             "index extra fines: {} (longitudo {})",

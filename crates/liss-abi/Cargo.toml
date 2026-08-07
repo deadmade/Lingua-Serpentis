@@ -24,6 +24,16 @@ crate-type = ["rlib", "staticlib"]
 libc = "0.2"
 liss-runtime = { path = "../liss-runtime" }
 
+# `custos` owns its own `main`. Every bound spec §8.2 derives describes the
+# *main* thread's stack, and `libtest` spawns a thread per test even at
+# `--test-threads=1`; a recursion on a worker faults in an ordinary `mmap`
+# megabytes from the band and takes the handler's other branch. Owning `main`
+# is the only way to put the scenario on the thread the runtime runs on.
+[[test]]
+name = "custos"
+path = "tests/custos.rs"
+harness = false
+
 [dev-dependencies]
 # `tests/abi.rs` redirects fd 1 through a pipe to read back what the output
 # buffer flushed, and re-executes itself to observe `liss_panic`, which does
