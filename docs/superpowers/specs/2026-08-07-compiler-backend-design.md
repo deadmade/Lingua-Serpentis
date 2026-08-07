@@ -756,7 +756,7 @@ contending for the outer `.cargo-lock`.
 The locked decisions said "embed the musl staticlib". That is necessary and not
 sufficient. Producing a static ELF without rustc also requires, per target, from
 `$(rustc --print target-libdir --target=T)/self-contained/`: `crt1.o`, `crti.o`,
-`crtn.o`, and **`libc.a`**.
+`crtn.o`, **`libc.a`** and **`libunwind.a`**.
 
 **Measured: rustc does not bundle `libc.a` into `staticlib` output.** The
 archive holds Rust codegen units and `compiler-builtins` objects only — 329
@@ -764,14 +764,52 @@ members, not one of which defines `malloc`, `memcpy`, `write` or
 `__libc_start_main`. Embedding `libc.a` separately is therefore mandatory, not
 conditional.
 
-The archives are **prelinked once at compiler build time** with `ld -r`, so
-every program link is one program object plus one runtime object plus three CRT
-objects. This removes archive-member resolution from a path that now runs for
-every compiling fixture in the test suite.
+**`libunwind.a` is required too, and `panic = "abort"` does not avoid it.** The
+precompiled musl `libstd` references eighteen `_Unwind_*` symbols regardless of
+the crate's panic strategy. Setting `panic = "abort"` on `liss-abi` is still
+worth doing — it strips landing pads from our own code and is what makes
+"`liss_panic` never unwinds" (§6) true at the codegen level rather than by
+convention — but it cannot remove references that arrive precompiled.
 
-The compiler binary therefore carries roughly 8–15 MB of embedded blobs for two
+The archives are **prelinked once at compiler build time** by a relocatable link
+(`-r`), so every program link is one program object plus one runtime object plus
+three CRT objects. This removes archive-member resolution from a path that runs
+for every compiling fixture in the test suite.
+
+**The host `ld` will not do.** Distribution binutils is single-architecture: the
+foreign-target prelink fails with `Relocations in generic ELF (EM: 183)` and
+writes a **zero-byte object**. Use a multi-target linker — `rust-lld` from the
+toolchain's own sysroot, which is already present because building the compiler
+requires rustc anyway. This does not compromise "no rustc on the machine running
+the compiler": the shipped compiler holds four `include_bytes!` blobs and spawns
+nothing.
+
+#### Strip the prelinked objects
+
+`rust-objcopy --remove-section=.llvmbc --remove-section=.llvmcmd --strip-debug`,
+from the same sysroot as the linker.
+
+This is not an optimisation, it is removing weight that is dead **by this
+design's own rules**: `.llvmbc` is embedded LLVM bitcode for an LTO that never
+runs, and §8.4 states that this design emits no debug information at all. Left
+in, they are 7.6 MB of bitcode and ~7 MB of DWARF per target.
+
+| | unstripped | stripped |
+|---|---|---|
+| x86_64 blob | 18.5 MB | **3.39 MB** |
+| aarch64 blob | 19.1 MB | **3.52 MB** |
+| both, embedded in the compiler | 35.9 MiB | **6.6 MiB** |
+| **every shipped program** | 4.63 MB | **513 KB** |
+
+The last row is the one that matters. Nine-tenths of a compiled Lingua Serpentis
+binary is otherwise debug information and bitcode inherited from the runtime
+blob. Combine with `--gc-sections` at the program link, worth a further ~0.92 MB.
+
+The compiler binary therefore carries **6.6 MiB** of embedded blobs for two
 targets. That is the price of "no rustc on the machine" plus "standalone static
-binary", and given those two it is not negotiable.
+binary", and given those two it is not negotiable — but it is only that small
+because the blobs are stripped. Unstripped it is 36 MB, and the difference is
+entirely weight this design already declared dead.
 
 ### 9.3 Linking in-process
 
@@ -921,9 +959,14 @@ fork/exec/wait, a compiling fixture costs on the order of 25 ms. That is well
 under a second single-threaded for the whole corpus, and a fraction of it with
 the harness's default parallelism.
 
-The linked image for a trivial program is **4.6 MB**, which is the floor for any
-Lingua Serpentis binary and worth stating plainly: static musl plus Rust std is
-not small.
+The linked image for a trivial program is **513 KB** — the floor for any Lingua
+Serpentis binary, with the runtime blobs stripped and `--gc-sections` on.
+
+That number was 4.63 MB before the blobs were stripped, and the gap is worth
+recording: nine-tenths of a compiled binary was debug information and LLVM
+bitcode inherited from the runtime object, neither of which this design emits or
+uses. "Static musl plus Rust std is not small" turned out to be true of the
+build, not of the language.
 
 The earlier "~100× faster in-process" figure was measured against spawning the
 *interpreter* — a very different baseline from spawning a static binary that

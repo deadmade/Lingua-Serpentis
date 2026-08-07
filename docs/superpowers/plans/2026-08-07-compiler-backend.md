@@ -495,6 +495,19 @@ Parse the embedded blobs with `object` and assert `liss_panic`, `main` and the C
 
 - [ ] **Step 1: Write the failing test** — `currunt/exemplum-salve` compiles, links, runs, exits 0, stdout matches its `emissio`.
 
+> **Check this before writing anything else: does libwild relax TLS?** The
+> prelinked runtime carries general-dynamic TLS relocations — 36 `R_X86_64_TLSGD`,
+> 16 `TLSLD` and 28 `DTPOFF32` on x86_64; 53 `R_AARCH64_TLSDESC_CALL` and 53
+> `TLSDESC_LD64_LO12` on aarch64. A **static, non-dynamic** executable requires the
+> linker to perform GD→LE and TLSDESC→LE relaxation. If libwild does not, the link
+> fails or produces a binary that faults on first TLS access, and no amount of
+> codegen work will help. Measured in Task 10; `rust-lld` handles it, libwild is
+> untested against it.
+>
+> Ignore `_GLOBAL_OFFSET_TABLE_` appearing undefined — it has **zero relocations
+> naming it**, so it is an unreferenced symbol-table entry, not a link input.
+> `--gc-sections` is worth ~0.92 MB on the final image and should be on.
+
 - [ ] **Step 2–3: Implement**
 
 ISA with `is_pic=false`, `enable_probestack=true`, `probestack_strategy=inline`, `unwind_info(false)`. `MemoriaFS` implements `libwild::FileSystem` in memory. **`args.on_warning` must be installed** to swallow libwild's English, and `libwild::error::Error` is never forwarded — link failure is one structural Latin diagnostic.
