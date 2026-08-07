@@ -5,9 +5,11 @@
 //! Every `memoria-*` case below ends "exit 0 with the blessed stdout", and by
 //! spec §7.5 that is a real statement about memory: the runtime checks the
 //! live-allocation count on the success path and exits **1** with
-//! `memoria non liberata est` if anything is still alive, and `abolere` clears
-//! a header's magic before freeing so that a double free is
-//! `defectus internus: memoria violata est` rather than silent corruption.
+//! `memoria non liberata est` if anything is still alive. `abolere` clears a
+//! header's magic **volatilely** before freeing (D-27 — a plain store was
+//! dead-store-eliminated, and shipped that way until this task), so a double
+//! free or a read after one is `defectus internus: memoria violata est` rather
+//! than silent corruption.
 //!
 //! But a fixture proves the **sum** of §7.3's six rules, not any one of them:
 //! two compensating bugs — a missing free and a double free of a different
@@ -15,6 +17,14 @@
 //! that isolates it, and the doc comment on each says which rule it is for and
 //! what the failure looks like. The fixtures are the integration; those are the
 //! unit.
+//!
+//! **One thing none of them can prove, and it is a consequence of the fix this
+//! task made.** `Corpus::libera` leaves every slot it frees null, so a
+//! *redundant* free of a slot is a no-op and over-freeing is systematically
+//! unobservable. A mutation meant to test an over-free must free through a
+//! fresh `use_var`, the way a real `0..params` sweep would, not by calling
+//! `libera` twice — see `emissio.rs`'s module doc. "I added a redundant free and
+//! the suite stayed green" proves nothing here.
 
 mod support;
 
@@ -150,24 +160,18 @@ fn ambitus_ordine_averso_liberatur() {
 /// **§7.3.3 — `Assign` is evaluate → free old → store**, asserted **in the
 /// object**, because no program can see it.
 ///
-/// The obvious test is behavioural: `s = s + s` with the free first is a
-/// use-after-free, and `liss_text_copy` checks the magic, so it should be
-/// `defectus internus: memoria violata est`. It is not, and this is worth
-/// stating plainly because it also bounds what every other test here proves:
-/// **`abolere`'s `(*h).magic = 0` is dead-store-eliminated** in the release
-/// build of `liss-abi` that actually ships. LLVM knows `free` ends the object's
-/// lifetime and drops a store that precedes it, and the archive's
-/// `liss_text_free` disassembles to a null test, a magic test, a kind test,
-/// `call free`, `lock decq` — no write at all. So a read *immediately* after a
-/// free sees intact bytes and the right answer comes out. Detection returns
-/// only once something else has been allocated over the block, which is why the
-/// double free in `memoria-sedes-post-continua` — a whole iteration apart — is
-/// still caught.
+/// The behavioural form is [`assignatio_in_ansa_libratur`] below, and until
+/// D-27 was fixed it could not see the ordering at all: `abolere`'s
+/// `(*h).magic = 0` was dead-store-eliminated in every shipped build, so a read
+/// *immediately* after a free found the block intact and the right answer came
+/// out. That is fixed — the store is `write_volatile` now — and the mutation is
+/// caught both ways.
 ///
-/// Hence relocation order, which is not probabilistic. Both `liss_text_copy`s
-/// and the `liss_text_concat` that consumes them must precede the
-/// `liss_text_free` of the old value. The program is straight-line so that
-/// `.text` layout order is execution order; see [`support::vocationes`].
+/// **This assertion is kept, and is the stronger of the two.** Relocation order
+/// is not probabilistic and does not depend on the runtime noticing anything:
+/// both `liss_text_copy`s and the `liss_text_concat` that consumes them must
+/// precede the `liss_text_free` of the old value, on a straight-line program so
+/// that `.text` layout order is execution order. See [`support::vocationes`].
 #[test]
 fn assignatio_vetus_post_lectionem_liberatur() {
     let prog = support::ir_solum(
@@ -183,9 +187,16 @@ fn assignatio_vetus_post_lectionem_liberatur() {
         &prog,
         &["liss_text_copy", "liss_text_concat", "liss_text_free"],
     );
-    assert_eq!(
-        &ordo[..4],
-        ["liss_text_copy", "liss_text_copy", "liss_text_concat", "liss_text_free"],
+    // `starts_with` rather than `&ordo[..4]`: a regression that emits *fewer*
+    // calls must fail with the message below, not with an opaque slice-index
+    // panic that says nothing about what the test is for.
+    assert!(
+        ordo.starts_with(&[
+            "liss_text_copy".to_owned(),
+            "liss_text_copy".to_owned(),
+            "liss_text_concat".to_owned(),
+            "liss_text_free".to_owned(),
+        ]),
         "`Assign` is evaluate → free old → store: both reads of `s` and the \
          concatenation that consumes them must come before the old value dies \
          (got {ordo:?})",
@@ -195,11 +206,10 @@ fn assignatio_vetus_post_lectionem_liberatur() {
 /// The same rule again, behaviourally and across a back edge: the answer is
 /// still right when the slot is rewritten three times.
 ///
-/// This one *cannot* fail on ordering — see
-/// [`assignatio_vetus_post_lectionem_liberatur`] for why a use-after-free reads
-/// intact memory — but it can and does fail on **balance**: an `Assign` that
-/// frees nothing leaks three `LissText`s and exits 1 with
-/// `memoria non liberata est`.
+/// Since D-27 this **does** catch the wrong order — the use-after-free reaches
+/// a cleared magic and reports `defectus internus: memoria violata est`,
+/// exit 1 — as well as the missing free, which leaks three `LissText`s and
+/// reports `memoria non liberata est`. Both were checked by mutation.
 #[test]
 fn assignatio_in_ansa_libratur() {
     par_est(
@@ -424,6 +434,76 @@ fn sententia_post_abrumpe_neglegitur() {
 "#,
         "post-abrumpe",
     );
+}
+
+/// **A terminator in a `dum` init clause.** The header is a second statement
+/// walk and owes the same guard as a block; without it the compiler crashes on
+/// a program a user can write.
+///
+/// `parser.rs:315` reads the init clause with `self.statement()?` — *any*
+/// statement — and the checker admits a terminator there, so all three of these
+/// type-check. Before the guard, every one of them was
+/// `you cannot add an instruction to a block already filled` in debug and
+/// `defectus internus: munus componi non potuit` in release: the `jump caput`
+/// that starts the loop is the instruction that lands in the filled block, so
+/// breaking out of the walk is not enough and `dum_intus` must return.
+///
+/// **These are compile-and-run, not a differential**, and that is the point of
+/// D-26 in `docs/defectus/2026-08-03-index.md`: `interp.rs:325` discards the
+/// `Flow` from `self.exec(init)`, so the interpreter loops forever on the first
+/// program and ignores the `abrumpe` outright in the second. The two backends
+/// genuinely disagree, the language has not decided which is right, and
+/// codegen's duty in the meantime is only to not crash. Task 17's whole-corpus
+/// differential must exclude these until it does — which is why they are here
+/// and **not** in `conformance/`.
+#[test]
+fn caput_dum_terminatum_componitur() {
+    // `redde` — control leaves the function from the init clause.
+    let (code, out, err) = support::curre(
+        r#"munus initium reddit ni {
+    ni k = nullus;
+    dum (redde nullus; verus; k = k + °I) { scribe("numquam"); }
+}
+"#,
+        "caput-redde",
+    );
+    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
+
+    // `abrumpe` — binds to the *enclosing* loop, which is the checker's own
+    // rule: "`init`, `cond` and `step` are the loop's header, not its body: an
+    // `abrumpe` there is as loose as one outside." So the outer loop is left on
+    // its first iteration and nothing is printed.
+    let (code, out, err) = support::curre(
+        r#"munus initium reddit ni {
+    ni t = nullus;
+    dum (ni a = nullus; a minor_est °II; a = a + °I) {
+        dum (abrumpe; t minor_est °III; t = t + °I) { scribe("intus"); }
+        scribe("extra");
+    }
+    redde nullus;
+}
+"#,
+        "caput-abrumpe",
+    );
+    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
+
+    // `continua` — the same, to the enclosing loop's step, so the outer loop
+    // runs its two iterations and prints nothing. A `voc` in the enclosing body
+    // makes it a memory assertion too: exit 0 is the live count at zero.
+    let (code, out, err) = support::curre(
+        r#"munus initium reddit ni {
+    ni t = nullus;
+    dum (ni a = nullus; a minor_est °II; a = a + °I) {
+        voc nota = "n";
+        dum (continua; t minor_est °III; t = t + °I) { scribe(nota); }
+        scribe("extra");
+    }
+    redde nullus;
+}
+"#,
+        "caput-continua",
+    );
+    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
 }
 
 /// The whole of control flow compiles for **both** targets.

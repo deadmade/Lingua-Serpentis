@@ -71,6 +71,28 @@
 //! because §5.4 says so; [`Corpus::libera`] stores null back into every slot it
 //! frees for the same reason, and without it a loop double-frees a slot whose
 //! `Let` one iteration skipped. See that function.
+//!
+//! # What the null store costs you as a test author, and it is not small
+//!
+//! **A redundant free of a *slot* is now benign, so over-freeing is
+//! systematically unobservable.** [`Corpus::libera`] leaves null behind, and
+//! freeing null is a no-op, so a second teardown of the same scope — an
+//! `abrumpe` that also swept a `dum` header, a `redde` that walked a scope
+//! twice — does nothing at all and every test still passes.
+//!
+//! What remains detectable is **under-freeing** (the live-allocation count of
+//! §7.5), **a slot read after its scope died** (`verifica` treats null as fatal
+//! on a *read*, deliberately), and **a wrong jump target** (an answer, or a
+//! hang). What is *not* detectable is a duplicated free of a slot, and — see
+//! `docs/defectus/2026-08-03-index.md` D-27 — a duplicated free of a *temporary*
+//! is not caught by the runtime either, because `liss_*_free` never writes the
+//! magic it clears.
+//!
+//! So: **"I added a redundant free and the suite stayed green" proves nothing.**
+//! A mutation meant to test an over-free must free through a fresh `use_var`,
+//! the way a real `0..params` sweep would, rather than by calling
+//! [`Corpus::libera`] twice. Written here rather than in a report because
+//! Task 15 will meet it while adding `liss_list_put`.
 
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{AbiParam, InstBuilder, Signature, UserFuncName, Value, types};
@@ -191,15 +213,35 @@ fn saltus_extra_ansam() -> Defectus {
     Defectus::novus("defectus internus: saltus extra ansam")
 }
 
-/// Whether a value of this type owns heap memory — that is, whether [`liber`]
-/// has anything to do and whether the slot holding it must be left null
-/// afterwards.
+/// **The one place that decides whether a type owns heap memory, and which
+/// entry points manage it.** `None` is an immediate — spec §5.1's `veritas` and
+/// `lit`, which are values and nothing more. `Some((free, copy))` is one pointer
+/// to one header.
 ///
-/// [`liber`]: Corpus::liber
+/// A single table rather than three `match`es, because the three questions
+/// ("does the teardown free it", "must the slot be left null", "what does
+/// `Load` copy it with") have to be answered the same way by construction. Three
+/// independent enumerations tied together by a comment is how a seventh `Ty`
+/// gets added to two of them: the leak or the missing null store would be
+/// silent, and the compiler would report nothing, because each `match` is
+/// exhaustive on its own.
+///
+/// `ni`, `mnr` and `nr` are all one `*mut LissInt`; the grain is a property of
+/// the type and never travels in the value, which is what lets them share these
+/// entry points outright.
+fn possessio(ty: &Ty) -> Option<(&'static str, &'static str)> {
+    match ty {
+        Ty::Bool | Ty::Char => None,
+        Ty::Int | Ty::Frac(_) => Some(("liss_int_free", "liss_int_copy")),
+        Ty::Text => Some(("liss_text_free", "liss_text_copy")),
+        Ty::List(_) => Some(("liss_list_free", "liss_list_copy")),
+    }
+}
+
+/// Whether a value of this type owns heap memory: [`possessio`] asked without a
+/// name.
 fn possidet(ty: &Ty) -> bool {
-    // Spec §5.1: `veritas` and `lit` are immediates and nothing more. Every
-    // other type is one pointer to one header.
-    !matches!(ty, Ty::Bool | Ty::Char)
+    possessio(ty).is_some()
 }
 
 /// Compile a whole program to one relocatable ELF object for `machina`.
@@ -790,15 +832,7 @@ impl<'a> Corpus<'a> {
     /// one uniform loop with no special case for a slot whose `Let` did not run.
     fn liber(&mut self, ty: &Ty, v: Value) -> Result<(), Defectus> {
         let ptr = self.ptr();
-        let nomen = match ty {
-            // `possidet` is the same question asked without a name to free.
-            Ty::Bool | Ty::Char => return Ok(()),
-            // `ni`, `mnr` and `nr` are all one `*mut LissInt`; the grain is a
-            // property of the type and never travels in the value.
-            Ty::Int | Ty::Frac(_) => "liss_int_free",
-            Ty::Text => "liss_text_free",
-            Ty::List(_) => "liss_list_free",
-        };
+        let Some((nomen, _)) = possessio(ty) else { return Ok(()) };
         self.voca(nomen, &[ptr], &[v])
     }
 
@@ -811,12 +845,7 @@ impl<'a> Corpus<'a> {
     /// make every later `Load` of that variable a use-after-free.
     fn exemplar(&mut self, ty: &Ty, v: Value) -> Result<Value, Defectus> {
         let ptr = self.ptr();
-        let nomen = match ty {
-            Ty::Bool | Ty::Char => return Ok(v),
-            Ty::Int | Ty::Frac(_) => "liss_int_copy",
-            Ty::Text => "liss_text_copy",
-            Ty::List(_) => "liss_list_copy",
-        };
+        let Some((_, nomen)) = possessio(ty) else { return Ok(v) };
         self.voca_unum(nomen, &[ptr], ptr, &[v])
     }
 
@@ -893,7 +922,19 @@ impl<'a> Corpus<'a> {
     /// **Not the `dum` header**, which is a `Block` whose scope outlives its
     /// statement list — see [`Corpus::dum`].
     fn blocus(&mut self, block: &Block) -> Result<(), Defectus> {
+        // Pushed and popped on **every** path, the error one included, exactly
+        // as [`Corpus::dum`] does for a header — the two are the only pushers of
+        // this stack and they must agree about it. A `Defectus` abandons the
+        // whole function today, so an unbalanced stack is invisible; that is an
+        // argument about the caller, not about this function, and the next
+        // caller may be a different one.
         self.ambitus.push(block.declares.clone());
+        let r = self.blocus_intus(block);
+        self.ambitus.pop();
+        r
+    }
+
+    fn blocus_intus(&mut self, block: &Block) -> Result<(), Defectus> {
         for stmt in &block.stmts {
             // **Stop at the first terminator**, because the checker admits a
             // statement after one. Its all-paths analysis asks whether *any*
@@ -908,11 +949,18 @@ impl<'a> Corpus<'a> {
             // and in release a `Defectus` claiming an internal compiler failure
             // over a program that is simply valid.
             //
-            // **This is also the guard `abrumpe` and `continua` need**, and it
-            // is the only one they need: both fill the block with a `jump`
-            // exactly as `redde` fills it with a `return`, so `terminatus()`
-            // answers for all three. `sententia_post_abrumpe_neglegitur`
-            // exercises both spellings.
+            // **`abrumpe` and `continua` need the same guard**, because both
+            // fill the block with a `jump` exactly as `redde` fills it with a
+            // `return`. `sententia_post_abrumpe_neglegitur` exercises both
+            // spellings.
+            //
+            // **It is not the only place that owes it.** Every walk over a
+            // statement list does, and [`Corpus::dum_intus`]'s walk over a
+            // header is the second one — a `dum` init clause is any statement,
+            // terminators included. An earlier draft of this comment claimed
+            // this guard was the only one needed and was wrong; the header
+            // crashed the compiler on `dum (redde nullus; …)`. Whoever adds a
+            // third statement walk owes it too.
             if self.terminatus() {
                 break;
             }
@@ -925,7 +973,6 @@ impl<'a> Corpus<'a> {
         if !self.terminatus() {
             self.libera(&block.declares)?;
         }
-        self.ambitus.pop();
         Ok(())
     }
 
@@ -1192,8 +1239,43 @@ impl<'a> Corpus<'a> {
         step: &Stmt,
         body: &Block,
     ) -> Result<(), Defectus> {
+        // **The header is a second statement walk and owes the same terminator
+        // guard as [`Corpus::blocus`].** A `dum` init clause is
+        // `self.statement()` (`parser.rs:315`) — *any* statement, terminators
+        // included — and the checker admits one, so
+        // `dum (redde nullus; verus; k = k + °I) { … }` is a program a user can
+        // write. Without this, the `jump caput` below adds an instruction to a
+        // block the `redde` already filled: the debug panic of `8f94ed7` again,
+        // and in release a `Defectus` claiming an internal compiler failure over
+        // a valid program.
+        //
+        // **Breaking is not enough; this must return.** The instruction that
+        // panics is not a later header statement — a header has at most one —
+        // it is the `jump caput` that starts the loop. So the whole loop is
+        // abandoned, which is also what the program means: control has left.
+        //
+        // Nothing leaks. `redde` freed every open scope including this header's
+        // (`libera_usque(0)`); `abrumpe`/`continua` freed every scope from the
+        // *enclosing* loop's body outwards, and this header's frame — pushed by
+        // [`Corpus::dum`] before this call — is inside that range. That the
+        // jump binds to the enclosing loop is the checker's own rule, not an
+        // accident: "`init`, `cond` and `step` are the loop's header, not its
+        // body: an `abrumpe` there is as loose as one outside."
+        //
+        // The **interpreter** disagrees with all of this: `interp.rs:325`
+        // discards the `Flow` from `self.exec(init)`, so a `redde` there loops
+        // forever and an `abrumpe` there is ignored outright. That divergence is
+        // **D-26** in `docs/defectus/2026-08-03-index.md`, deferred pending a
+        // language decision; it is not codegen's to resolve, and codegen's only
+        // duty is not to crash.
         for stmt in &header.stmts {
+            if self.terminatus() {
+                break;
+            }
             self.sententia(stmt)?;
+        }
+        if self.terminatus() {
+            return Ok(());
         }
 
         let caput = self.fb.create_block();

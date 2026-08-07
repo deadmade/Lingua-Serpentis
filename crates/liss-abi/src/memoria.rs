@@ -121,10 +121,34 @@ pub unsafe fn verifica(h: *const LissHdr) {
 /// §7.3.4's "one uniform walk over `Block::declares`, with no special case"
 /// literally true.
 ///
-/// Clearing the magic *before* the free is what makes an immediate double free
-/// deterministic rather than probabilistic: the block still reads as
-/// not-a-`LISS`-object until `malloc` hands it out again and something
-/// overwrites the first four bytes.
+/// # The magic is cleared with a **volatile** write, and that is not decoration
+///
+/// Clearing it before the free is what makes an immediate double free — or a
+/// read after one — deterministic rather than probabilistic: the block reads as
+/// not-a-`LISS`-object from the moment it is handed back, instead of only once
+/// `malloc` has given it out again and something has overwritten the first four
+/// bytes.
+///
+/// A plain `(*h).magic = 0` **does not do that in a release build, and did not**
+/// (D-27). `free` ends the object's lifetime, so LLVM's dead-store elimination
+/// removes any store that immediately precedes it — correctly, by the language
+/// rules, since nothing may legally observe the result. Nothing *legal*: this
+/// store exists precisely for the illegal reader. The shipped
+/// `liss_text_free` disassembled to a null test, a magic test, a kind test,
+/// `call free` and the counter decrement, with **no write to the magic
+/// anywhere**, and the same held of `liss_int_free`, `liss_list_free`'s element
+/// loop and this function. It was uniform, not one inlining accident.
+///
+/// `write_volatile` is the fix and the whole of it: a volatile access is an
+/// observable side effect that no optimiser may remove, and it costs one `movl`
+/// that was always meant to be there.
+///
+/// This matters out of proportion to its size. Spec §5.2 makes the magic word
+/// the *entire* answer to the live counter's blind spot — an extra free plus a
+/// missing free nets to zero, and only the magic can tell that apart from a
+/// balanced program. Codegen's null-store rule (`emissio.rs`'s `libera`) makes a
+/// redundant free of a *slot* benign; a redundant free of a **temporary** has no
+/// such protection and this is what catches it.
 ///
 /// # Safety
 /// `h` must be null, or a header from [`allocare`] that has not been freed.
@@ -134,7 +158,7 @@ pub unsafe fn abolere(h: *mut LissHdr) {
     }
     unsafe {
         verifica(h);
-        (*h).magic = 0;
+        core::ptr::write_volatile(&raw mut (*h).magic, 0);
         liberare(h.cast());
     }
 }

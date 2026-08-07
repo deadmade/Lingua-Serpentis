@@ -115,10 +115,14 @@ pub fn casus_via(casus: &str) -> PathBuf {
 /// Exit status is not an afterthought in a `memoria-*` case: it is the whole
 /// assertion. Spec §7.5 has the runtime check the live-allocation count on the
 /// success path and exit **1** with `memoria non liberata est` if it is
-/// nonzero, and `abolere` clears a header's magic before freeing so that a
-/// double free reports `defectus internus: memoria violata est` rather than
-/// corrupting silently. So "exit 0 with the blessed stdout" *is* "every
-/// allocation this program made was freed exactly once".
+/// nonzero, and `abolere` clears a header's magic **volatilely** before freeing
+/// so that a double free reports `defectus internus: memoria violata est`
+/// rather than corrupting silently. (Volatilely as of this task: a plain store
+/// there was dead-store-eliminated in every shipped build — D-27.) So "exit 0
+/// with the blessed stdout" *is* "every allocation this program made was freed
+/// exactly once", with one exception: a redundant free of a **slot** is a no-op,
+/// because `Corpus::libera` leaves the slot null. Only a redundant free of a
+/// temporary reaches the magic.
 pub fn casus_par_est(casus: &str) {
     let machina = Target::hospes().expect("the host is x86_64 or aarch64");
     let via = casus_via(casus);
