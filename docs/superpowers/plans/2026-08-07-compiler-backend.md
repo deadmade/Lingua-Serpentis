@@ -16,7 +16,7 @@ The language has a mature front end, an 86-fixture corpus and a defect register 
 
 This plan builds the compiler and, at the end, deletes the interpreter. The deletion is the point rather than a side effect: two backends means writing every Latin diagnostic, the mod-256 exit rule, 1-based indexing and the grain arithmetic twice and keeping them in step forever. Spec §3.1 has the full argument.
 
-**The interpreter is scaffolding until Task 17.** It stays green throughout, and it does real work while it is here: it is the reference to diff against while codegen is half-built, it is the source of the golden display vectors (Task 4), and it is what makes the ported fixtures provably *today's* behaviour rather than the new backend's opinion. Task 17's precondition is that every fixture has been shown to produce byte-identical output under both backends.
+**The interpreter is scaffolding until Task 19.** It stays green throughout, and it does real work while it is here: it is the reference to diff against while codegen is half-built, it is the source of the golden display vectors (Task 4), and it is what makes the ported fixtures provably *today's* behaviour rather than the new backend's opinion. Task 19's precondition is that every fixture has been shown to produce byte-identical output under both backends.
 
 **Order note:** the spec's §9.2 probe cannot run first. It needs a musl staticlib, which needs musl std, which needs the toolchain change. Task 1 is therefore the toolchain and Task 2 is the probe.
 
@@ -25,7 +25,7 @@ This plan builds the compiler and, at the end, deletes the interpreter. The dele
 ## Global Constraints
 
 - **Build:** `nix develop -c cargo test --workspace`. Every task leaves it green.
-- **The interpreter stays green until Task 17.** Any task whose checkpoint is "N fixtures pass compiled" *also* requires the existing suite to be unchanged and passing. A task that makes the interpreter suite fail has failed.
+- **The interpreter stays green until Task 19.** Any task whose checkpoint is "N fixtures pass compiled" *also* requires the existing suite to be unchanged and passing. A task that makes the interpreter suite fail has failed.
 - **Every user-facing string is Latin.** No Arabic digits outside quoted spans. New coinages are checked against `latinitas::is_latin` before landing. The **one** exception is the `liss` usage string, whose English subcommands require an explicit, commented carve-out in `tests/support/diag.rs` — scoped to the usage text, never a general weakening.
 - **Diagnostics are asserted verbatim, never `contains()`.**
 - **`RECORDED_RULES` (`tests/support/diag.rs`) may only shrink.** Never weaken a rule to get green.
@@ -115,7 +115,7 @@ inputs = {
 };
 ```
 
-The toolchain must request `targets = [ "x86_64-unknown-linux-musl" "aarch64-unknown-linux-musl" ]` and the `rust-src` component. Add `wild` (already at 0.9.0 in the pin) and `qemu` (Task 16) to the shell.
+The toolchain must request `targets = [ "x86_64-unknown-linux-musl" "aarch64-unknown-linux-musl" ]` and the `rust-src` component. Add `wild` (already at 0.9.0 in the pin) and `qemu` (Task 18) to the shell.
 
 - [ ] **Step 4: Raise the MSRV**
 
@@ -167,7 +167,7 @@ Expected: the chosen message on stderr, exit 1, no signal death. **Also print th
 
 - [ ] **Step 5: Time a link**
 
-Link the image 20 times and report the mean. This is the number spec §10.2's estimate rests on, and Task 15's mitigation decision depends on it.
+Link the image 20 times and report the mean. This is the number spec §10.2's estimate rests on, and Task 17's mitigation decision depends on it.
 
 - [ ] **Step 6: Delete `probatio/` and commit only the findings**
 
@@ -239,13 +239,21 @@ Expected: PASS. `cargo insta` must report **no** snapshot change beyond line shi
 
 **Files:**
 - Create: `conformance/currunt/` — roughly 20 new fixtures
-- Create: `crates/lingua-serpentis/tests/data/scriptio-aurea.txt`
+- Create: `crates/lingua-serpentis/examples/scriptio-aurea.rs` (deleted in the final task)
+- Create: `crates/lingua-serpentis/tests/data/scriptio-aurea.txt` (moved to `liss-runtime` in Task 5)
 
 - [ ] **Step 1: Generate the golden display vectors**
 
-A `#[ignore]`d test that walks a fixed list of values through `Value::display()` and writes `(kind, payload, expected)` triples. Cover: zero, negatives, single and multi-tier, the vinculum above M, every twelfth name, the maximal sub-uncia stack (`uncia et semuncia et sextula et scripulum`), whole-plus-fraction, empty list, nested list, list of fractions, both bool literals, a multi-byte char.
+**An example, not a test.** This repo retired the "assertions inside `#[ignore]`d tests" carve-out, and a one-shot data generator is not a test in any case. Write `crates/lingua-serpentis/examples/scriptio-aurea.rs`, which walks a fixed list of values through `Value::display()` and prints `(kind, payload, expected)` triples to stdout.
 
-Run it once, commit the output. It is data from here on.
+Cover: zero, negatives, single and multi-tier, the vinculum above M, every twelfth name, the maximal sub-uncia stack (`uncia et semuncia et sextula et scripulum`), whole-plus-fraction, empty list, nested list, list of fractions, both bool literals, a multi-byte char.
+
+```sh
+cargo run -p lingua-serpentis --example scriptio-aurea \
+  > crates/lingua-serpentis/tests/data/scriptio-aurea.txt
+```
+
+Run once; commit the output. It is data from here on, and Task 5 moves it into `liss-runtime` alongside the code it pins. The example itself is deleted with the interpreter in the final task.
 
 - [ ] **Step 2: Port the interpreter's semantic tests to fixtures**
 
@@ -511,19 +519,43 @@ Mangled symbols, cross-package calls, and no frame bookkeeping at all — `liss_
 
 ---
 
-## Task 15: Lists, the CLI, and the differential harness
+## Task 15: Lists
 
-- [ ] Lists: `ListLit`, `Index` read/write, `longitudo`, `adde`, nesting, deep copy, deep equality, recursive printing.
-- [ ] `bin/liss.rs`: `run`/`build`, `--exi`, `--ad`. The temp file is created `O_EXCL` 0700, written, **unlinked**, then exec'd via `/proc/self/fd/<n>` — that unlink is the entire cleanup story and covers `SIGKILL`. Fallback path for missing `/proc`. Stdio **inherited**. A signalled child becomes `Error: programma abrupte cessavit`, exit 1.
-- [ ] `tests/compilata.rs`: every fixture run **both** ways, the two `Rendered` required equal. Scaffolding — deleted in Task 17.
-- [ ] The `ENGLISH_WORDS` carve-out for the usage string, commented and scoped.
-- [ ] Measure: `cargo test --test compilata -- --test-threads=1` against the default, and record both numbers in the spec. If it disappoints, build the content-hash cache (spec §10.2) — harness only, never in the shipped compiler.
+The last and most intricate part of codegen. Lists are the only recursive type, the only place a kind code is read at runtime, and the only place a deep copy and a deep free can disagree.
+
+- [ ] `ListLit`, `Index` read and write, `longitudo`, `adde`, arbitrary nesting (`ni lista lista`), deep copy, deep equality, recursive printing.
+- [ ] `liss_list_append` **steals** the element words from the list it consumes — allocate a header one longer, `memcpy`, store, free only the old header. Zero element copies, because the caller already handed over a private copy. This is what keeps `adde` in a loop linear.
+- [ ] Checkpoint: `exemplum-series` and every list fixture pass compiled, live count zero; the interpreter suite untouched.
+
+`feat(codegen): lists, nested and freed`
+
+---
+
+## Task 16: The CLI
+
+- [ ] `bin/liss.rs`: `run` / `build`, `--exi`, `--ad`. The bare positional form means `run`; the first argument is a subcommand iff it is exactly `run` or `build`.
+- [ ] The temp file is created `O_EXCL` 0700, written, **unlinked**, then exec'd via `/proc/self/fd/<n>` — that unlink is the entire cleanup story and is what covers `SIGKILL`. Fallback path for a missing `/proc`, with parent-side `SIGINT`/`SIGTERM` handlers that unlink and re-raise.
+- [ ] Stdio **inherited**, so the child's own runtime handles the closed pipe (D-06). The parent writes its Latinity warnings **before** spawning. A signalled child becomes `Error: programma abrupte cessavit`, exit 1.
+- [ ] `write_or_exit` and `finish` move into `lingua_serpentis::cli`, shared by both binaries. `lingua-serpentis` stays byte-identical.
+- [ ] The `ENGLISH_WORDS` carve-out for the usage string — commented, scoped to the usage text, never a general weakening.
+- [ ] New `tests/liss_cli.rs`: subcommand arity, the `./run` disambiguation, `--exi`, an unwritable output path, `build` on a program that fails to check, and the produced binary's mode bits.
 
 `feat(cli): liss run and liss build`
 
 ---
 
-## Task 16: aarch64
+## Task 17: The differential harness
+
+- [ ] `tests/compilata.rs`: every fixture run **both** ways, the two `Rendered` required equal. Scaffolding with a defined lifetime — deleted in Task 19.
+- [ ] Measure: `cargo test --test compilata -- --test-threads=1` against the default, and record both numbers in the spec. If it disappoints, build the content-hash cache (spec §10.2) — harness only, never in the shipped compiler, where a stale cache is a correctness hazard.
+- [ ] Cap the proptest generator that emits well-typed programs; it now reaches codegen on every case. Record the chosen number.
+- [ ] Checkpoint: **all 86 fixtures identical between the two backends**, with only the one intentional re-blessing from Task 14.
+
+`test(compilata): every fixture, both ways, byte for byte`
+
+---
+
+## Task 18: aarch64
 
 - [ ] Checkpoint: a cross-built binary runs under `qemu-aarch64`. Failing that, `object` asserts `EM_AARCH64`, `ET_EXEC` and no `PT_INTERP`.
 - [ ] Confirm the page-size and `SIGBUS` handling of Task 9 on a 16 KiB-page target.
@@ -532,7 +564,7 @@ Mangled symbols, cross-package calls, and no frame bookkeeping at all — `liss_
 
 ---
 
-## Task 17: Delete the interpreter
+## Task 19: Delete the interpreter
 
 **Precondition, checked and stated in the commit before a single line is removed:** every one of the 86 fixtures produces byte-identical `Rendered` under both backends, on both architectures; `cli.rs` is green; `robustness` and `generative` are green; `RECORDED_RULES` has not grown.
 
