@@ -1,0 +1,30 @@
+Int	Int(Roman { negative: false, tiers: [] })	nullus
+Int	Int(Roman { negative: true, tiers: [5, 2] })	-XXV
+Int	Int(Roman { negative: false, tiers: [4, 2, 0, 2] })	MMXXIV
+Int	Int(Roman { negative: false, tiers: [2, 3, 5, 0, 3] })	X̅X̅X̅DXXXII
+Int	Int(Roman { negative: false, tiers: [0, 0, 0, 4] })	MV̅
+Float	Float(Roman { negative: false, tiers: [] })	nullus
+Float	Float(Roman { negative: false, tiers: [1] })	uncia
+Float	Float(Roman { negative: false, tiers: [2] })	sextans
+Float	Float(Roman { negative: false, tiers: [3] })	quadrans
+Float	Float(Roman { negative: false, tiers: [4] })	triens
+Float	Float(Roman { negative: false, tiers: [5] })	quincunx
+Float	Float(Roman { negative: false, tiers: [6] })	semis
+Float	Float(Roman { negative: false, tiers: [7] })	septunx
+Float	Float(Roman { negative: false, tiers: [8] })	bes
+Float	Float(Roman { negative: false, tiers: [9] })	dodrans
+Float	Float(Roman { negative: false, tiers: [0, 1] })	dextans
+Float	Float(Roman { negative: false, tiers: [1, 1] })	deunx
+Float	Float(Roman { negative: false, tiers: [2, 1] })	I
+Float	Float(Roman { negative: false, tiers: [6, 1] })	I et triens
+Double	Double(Roman { negative: false, tiers: [0, 0, 3] })	I et semuncia
+Double	Double(Roman { negative: false, tiers: [1, 4] })	uncia et semuncia et sextula et scripulum
+Float	Float(Roman { negative: true, tiers: [6, 1] })	-I et triens
+Double	Double(Roman { negative: true, tiers: [2, 1] })	-semuncia
+Bool	Bool(true)	verus
+Bool	Bool(false)	falsus
+Char	Char('🐍')	🐍
+Text	Text("Lingua Serpentis")	Lingua Serpentis
+List	List([])	[]
+List	List([List([Int(Roman { negative: false, tiers: [1] }), Int(Roman { negative: false, tiers: [2] })]), List([Int(Roman { negative: false, tiers: [3] })])])	[[I, II], [III]]
+List	List([Float(Roman { negative: false, tiers: [4] }), Float(Roman { negative: false, tiers: [6] })])	[triens, semis]
