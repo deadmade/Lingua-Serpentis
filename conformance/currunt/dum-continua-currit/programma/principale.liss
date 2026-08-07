@@ -1,0 +1,9 @@
+munus initium reddit ni {
+    ni s = nullus;
+    dum (ni i = nullus; i minor_est °V; i = i + °I) {
+        si (i par_est °II) { continua; }
+        s = s + i;
+    }
+    scribe(s);
+    redde nullus;
+}

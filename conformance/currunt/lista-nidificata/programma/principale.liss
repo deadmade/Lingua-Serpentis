@@ -1,0 +1,6 @@
+munus initium reddit ni {
+    ni lista lista m = [[°I, °II], [°III]];
+    scribe(m[°I][°II]);
+    scribe(m[°II][°I]);
+    redde nullus;
+}

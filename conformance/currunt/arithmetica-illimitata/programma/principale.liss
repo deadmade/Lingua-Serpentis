@@ -1,0 +1,6 @@
+munus initium reddit ni {
+    ni x = °MMMCMXCIX;
+    ni y = x * x * x * x * x * x;
+    scribe(y);
+    redde nullus;
+}
