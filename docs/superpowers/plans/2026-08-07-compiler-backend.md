@@ -574,9 +574,28 @@ If / While / For / Break / Continue / Return, scope frees, the `Variable` and se
 
 Mangled symbols, cross-package calls, and no frame bookkeeping at all — `liss_enter`/`liss_leave` do not exist.
 
-- [ ] Checkpoint: a multi-package program runs; `currunt/recursio-profunda` (5,000 levels) succeeds; the renamed `errores/acervus-exhaustus` produces the Latin diagnostic and exit 1.
-- [ ] Rename `conformance/errores/vocatio-nimis-alte-implicata` → `errores/acervus-exhaustus`, rewrite `nuntii` and `NOTA.md`. **This is the only fixture whose expectation changes.**
-- [ ] Update `cli.rs`: `unbounded_recursion_is_a_clean_latin_error` asserts the new message; `recursion_inside_the_limit_still_runs` is renamed and *raised* to a 10,000-level recursion. 22 of 23 tests untouched.
+- [ ] Checkpoint: a multi-package program compiles, links and runs; deep recursion produces `Error: acervus vocationum exhaustus est` and exit 1 **in a codegen test**, not a fixture.
+
+> **Corrected 2026-08-08. The fixture and `cli.rs` work is Task 19's, not this task's.**
+> `conformance.rs` and `cli.rs` both exercise the **interpreter**, which still caps
+> at 64 frames and still emits `vocatio nimis alte implicata`
+> (`interp.rs:72`, `:205`). So all of the following would turn the suite red if done
+> here, and must wait until the interpreter is deleted:
+>
+> - renaming `errores/vocatio-nimis-alte-implicata` → `errores/acervus-exhaustus`
+>   and rewriting its `nuntii`;
+> - `currunt/recursio-profunda` at 5,000 levels;
+> - `currunt/scribe-ante-acervum`;
+> - `cli.rs`'s `unbounded_recursion_is_a_clean_latin_error` asserting the new
+>   message, and `recursion_inside_the_limit_still_runs` being raised.
+>
+> Task 14 proves the compiled behaviour the way Task 13 proved control flow — with
+> codegen tests that compile, link and run an image directly. The corpus keeps
+> asserting interpreter behaviour until it stops having one.
+>
+> Same class of defect as Task 12's checkpoint, which named a fixture requiring
+> calls the plan had assigned to Task 14: **a checkpoint must be reachable with the
+> backend that owns the expectations at that point in the sequence.**
 
 `feat(codegen): calls across packages, and a stack that ends in Latin`
 
@@ -652,8 +671,17 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 - [ ] `support::run_fixture` switches to the compiled path. `conformance.rs` inherits compilata's job.
 - [ ] Remove the two now-unreachable checker sites **structurally, not with `unreachable!`**: `current_ret` becomes non-optional, `root_namespace` a constructor parameter.
 - [ ] `catalogus.rs`: add the three crates, the `liss_panic(`, `Defectus::novus(` and `NUNTIUS_` markers, plus a unit test pinning that `b"…"` literals are extracted.
-- [ ] Register: D-04 superseded with the new mechanism and wording, D-06 noted as relocated into the runtime, **D-19 closed**.
+- [ ] Register: D-04 superseded with the new mechanism and wording, D-06 noted as relocated into the runtime, **D-19 closed**. Revisit **D-26** — with the interpreter gone the divergence has only one side left, so it becomes a plain language question about a terminator in a `dum` init clause.
 - [ ] Re-bless `catalogus` and read every removed line. Expect fewer sites and a higher fixtured fraction.
+
+### Moved here from Task 14 — the recursion expectations
+
+These could not land earlier: the corpus and `cli.rs` assert **interpreter** behaviour, and the interpreter caps at 64 frames (`interp.rs:72`) emitting `vocatio nimis alte implicata`. They become correct only once the compiled path owns the expectations.
+
+- [ ] Rename `conformance/errores/vocatio-nimis-alte-implicata` → `errores/acervus-exhaustus`; rewrite `nuntii` to `Error: acervus vocationum exhaustus est` and `NOTA.md`. **This is the only fixture in the milestone whose expectation changes.**
+- [ ] Add `currunt/recursio-profunda` — a 5,000-level recursion returning a value, proving the guard does not fire spuriously.
+- [ ] Add `currunt/scribe-ante-acervum` — prints, then recurses to death. `emissio` holds the printed lines, `nuntii` the diagnostic. **This is the fixture that pins the handler-side flush** (spec §6, D-08), and it cannot exist while the interpreter owns the expectation.
+- [ ] `cli.rs`: `unbounded_recursion_is_a_clean_latin_error` asserts the new message; `recursion_inside_the_limit_still_runs` is renamed (there is no limit) and *raised* to a 10,000-level recursion, pinning the real capability gain over the old ceiling of 64. 22 of 23 tests stay untouched.
 
 Expected: `cargo test --workspace` green with no `interp` module; `git grep -c 'interp'` zero.
 
