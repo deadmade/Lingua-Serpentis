@@ -66,32 +66,33 @@
 //! reason (`liss_ir`'s `StmtKind::For` says so at length), so `redde` reaches
 //! the loop variable without a special case.
 //!
-//! **And its missing half, added here:** a slot holds a live owned value or
-//! **null**, at every moment. Codegen zero-initialises owned slots at entry
-//! because §5.4 says so; [`Corpus::libera`] stores null back into every slot it
-//! frees for the same reason, and without it a loop double-frees a slot whose
-//! `Let` one iteration skipped. See that function.
+//! **And §7.1's dual, which is the half the design originally left unstated:**
+//! a slot holds a live owned value or **null**, at every moment. Codegen
+//! zero-initialises owned slots at entry, and [`Corpus::libera`] stores null
+//! back into every slot it frees (§7.3.2). Together those make the free
+//! discipline **idempotent**, which is what lets `Block::declares` stay a single
+//! flat set instead of becoming per-program-point liveness. Without it a loop
+//! double-frees a slot whose `Let` one iteration skipped; see that function.
 //!
-//! # What the null store costs you as a test author, and it is not small
+//! # What idempotent frees cost you as a test author, and it is not small
 //!
-//! **A redundant free of a *slot* is now benign, so over-freeing is
-//! systematically unobservable.** [`Corpus::libera`] leaves null behind, and
-//! freeing null is a no-op, so a second teardown of the same scope — an
-//! `abrumpe` that also swept a `dum` header, a `redde` that walked a scope
-//! twice — does nothing at all and every test still passes.
+//! Spec §7.3.2 names this and it is worth repeating where the tests are:
+//! **once frees are idempotent, over-freeing is systematically unobservable.**
+//! A second teardown of the same scope — an `abrumpe` that also swept a `dum`
+//! header, a `redde` that walked a scope twice — frees null and does nothing,
+//! and every test still passes.
 //!
-//! What remains detectable is **under-freeing** (the live-allocation count of
-//! §7.5), **a slot read after its scope died** (`verifica` treats null as fatal
-//! on a *read*, deliberately), and **a wrong jump target** (an answer, or a
-//! hang). What is *not* detectable is a duplicated free of a slot, and — see
-//! `docs/defectus/2026-08-03-index.md` D-27 — a duplicated free of a *temporary*
-//! is not caught by the runtime either, because `liss_*_free` never writes the
-//! magic it clears.
+//! What remains detectable is **under-freeing** (§7.5's count), **a slot read
+//! after its scope died** (`verifica` treats null as fatal on a *read*,
+//! deliberately), and **a wrong jump target** (a wrong answer, or a hang). A
+//! duplicated free of a **temporary** is caught too, but only by the magic word,
+//! and only since D-27: `abolere`'s clear was dead-store-eliminated in every
+//! shipped build until this task made it volatile.
 //!
 //! So: **"I added a redundant free and the suite stayed green" proves nothing.**
 //! A mutation meant to test an over-free must free through a fresh `use_var`,
 //! the way a real `0..params` sweep would, rather than by calling
-//! [`Corpus::libera`] twice. Written here rather than in a report because
+//! [`Corpus::libera`] twice. Written here as well as in the spec because
 //! Task 15 will meet it while adding `liss_list_put`.
 
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -852,14 +853,22 @@ impl<'a> Corpus<'a> {
     /// Free a scope's slots, in **reverse declaration order** (spec §7.3.2),
     /// leaving each one **null**.
     ///
-    /// # The null store is the missing half of the invariant, not a special case
+    /// # The null store is what makes the free discipline idempotent
     ///
-    /// Spec §5.4 has codegen zero-initialise every owned slot at entry, and
-    /// `liss_*_free` accept null, so that §7.3.4's walk over `Block::declares`
-    /// needs no proof that a `Let` ran. That establishes an invariant —
-    /// **a slot holds a live owned value or null, at every moment** — and a
-    /// teardown that frees the pointer and leaves it in the slot breaks it. The
-    /// entry initialisation is only the first instance of the same rule.
+    /// Spec §7.1's dual: **a slot holds a live owned value or null, at every
+    /// moment.** §5.4 has codegen zero-initialise every owned slot at entry and
+    /// has `liss_*_free` accept null, so §7.3.4's walk over `Block::declares`
+    /// needs no proof that a `Let` ran; the entry initialisation is the first
+    /// instance of the rule and this store is the second. A teardown that frees
+    /// the pointer and leaves it in the slot breaks it.
+    ///
+    /// **Why `declares` cannot be made position-sensitive instead.** Two
+    /// `continua`s in one block need *different* free sets for the same
+    /// `declares` — the one before a `Let` must not free that slot, the one
+    /// after must — and the only rule that expresses both is per-program-point
+    /// liveness, which is exactly the bookkeeping §5.4 exists to abolish.
+    /// Storing null keeps `declares` one flat set and makes a redundant free
+    /// harmless. Spec §7.3.2 carries the argument.
     ///
     /// Straight-line code never notices, because a scope is entered once and its
     /// slots are never read again. A **loop** notices, and deterministically:
