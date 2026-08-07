@@ -1,5 +1,7 @@
 use crate::ast::*;
 use crate::error::{LinguaError, LResult, ProgramError};
+use crate::roman::Roman;
+use liss_ir as ir;
 use std::collections::{HashMap, HashSet};
 
 /// Synthesized type of an expression during checking. `FloatLit` is the
@@ -13,16 +15,91 @@ enum InferTy {
 
 type Sig = (Vec<Type>, Type); // (param types, return type)
 
+/// A function's identity for numbering: its namespace (`None` for the root)
+/// and its name. `check_program_typed` numbers every declaration in the order
+/// it will later lower them, so `Programma::funcs[id]` is the function `id`
+/// names — see `assign_func_ids`.
+type FuncKey = (Option<String>, String);
+
+/// The checker's `Type` as the IR spells it. `mnr` and `nr` collapse into one
+/// `Frac` variant carrying its grain: every operation on them is identical
+/// modulo one constant, and only the checker's *diagnostics* need the two
+/// names apart (spec §4.1).
+fn ty_of(t: &Type) -> ir::Ty {
+    match t {
+        Type::Int => ir::Ty::Int,
+        Type::Float => ir::Ty::Frac(ir::Grain::Uncia),
+        Type::Double => ir::Ty::Frac(ir::Grain::Scripulum),
+        Type::Text => ir::Ty::Text,
+        Type::Char => ir::Ty::Char,
+        Type::Bool => ir::Ty::Bool,
+        Type::List(inner) => ir::Ty::List(Box::new(ty_of(inner))),
+    }
+}
+
+/// The IR type an `InferTy` gets on the node built for it. An unresolved
+/// fractional literal takes `nr`'s grain, its default type — the same choice
+/// `infer_name` makes when it has to name one in a diagnostic, and the same
+/// one `resolve_expr` makes with no float context.
+fn infer_ir_ty(t: &InferTy) -> ir::Ty {
+    match t {
+        InferTy::Known(ty) => ty_of(ty),
+        InferTy::FloatLit => ir::Ty::Frac(ir::Grain::Scripulum),
+    }
+}
+
+/// The grain a float type counts in, or `None` for anything that is not one.
+fn grain_of(t: &Type) -> Option<ir::Grain> {
+    match t {
+        Type::Float => Some(ir::Grain::Uncia),
+        Type::Double => Some(ir::Grain::Scripulum),
+        _ => None,
+    }
+}
+
+/// The number of a grain's units in one `as`: XII for `mnr`, CCLXXXVIII for `nr`.
+fn grain_denom(g: ir::Grain) -> Roman {
+    match g {
+        ir::Grain::Uncia => crate::fraction::uncia_grain(),
+        ir::Grain::Scripulum => crate::fraction::scripulum_grain(),
+    }
+}
+
+fn konst(ty: ir::Ty, c: ir::Const) -> ir::Expr {
+    ir::Expr { ty, kind: ir::ExprKind::Const(c) }
+}
+
 struct Checker {
     scopes: Vec<HashMap<String, Type>>,
+    // Parallel to `scopes`, one frame for one frame: the slot each name in
+    // scope is bound to. Slots are allocated per function and never reused, so
+    // leaving a block pops the NAME binding and keeps the number — which is
+    // what makes shadowing need no special case, and what makes a function's
+    // locals a flat `Vec<Ty>` (spec §4.2).
+    slots: Vec<HashMap<String, ir::SlotId>>,
+    // The current function's locals, indexed by `SlotId`. Parameters are
+    // `0..params`.
+    slot_types: Vec<ir::Ty>,
+    // The slots each open scope introduced, in declaration order. The innermost
+    // frame becomes that block's `Block::declares` when it is popped: the
+    // ownership machinery (spec §7.3), which codegen must no more re-derive
+    // than it re-derives types.
+    scope_slots: Vec<Vec<ir::SlotId>>,
     funcs: HashMap<String, Sig>,                       // current namespace (folder)
     packages: HashMap<String, HashMap<String, Sig>>,   // program-wide package signatures
     imports: HashSet<String>,                          // current file's affer set
+    // Every declaration in the program, numbered. Empty only in the legacy
+    // single-block entry point, which numbers its own top-level functions.
+    func_ids: HashMap<FuncKey, ir::FuncId>,
+    // The file whose bodies are being checked, for `Func::file`.
+    file: Option<String>,
     current_ret: Option<Type>, // Some(_) while checking a function body
     loop_depth: usize,         // how many `indem`/`dum` bodies enclose the current statement
-    // Whether the functions being checked are the program's root. Only the
-    // root's `initium` may fall off its end; see the Func arm of check_stmt.
-    root_namespace: bool,
+    // The package namespace of the functions being checked, `None` for the
+    // program's root. It decides two things: the mangled symbol (§4.3), and
+    // whether an `initium` here is the entry point — only the root's may fall
+    // off its end; see `check_func_decl`.
+    namespace: Option<String>,
 }
 
 /// Does every path through this statement leave the function?
@@ -54,31 +131,79 @@ fn block_returns(body: &[Stmt]) -> bool {
     body.iter().any(always_returns)
 }
 
+/// A statement that evaluates nothing and owns nothing: a `veritas` constant
+/// dropped on the floor. It stands in for a `dum` header clause that lowered
+/// to no statement at all, which only a `munus` declaration in the header can
+/// do — see the `For` arm of `check_stmt`.
+fn nop(line: usize) -> ir::Stmt {
+    ir::Stmt {
+        line,
+        kind: ir::StmtKind::ExprStmt(konst(ir::Ty::Bool, ir::Const::Bool(true))),
+    }
+}
+
 impl Checker {
     fn new() -> Self {
         Checker {
             scopes: vec![HashMap::new()],
+            slots: vec![HashMap::new()],
+            slot_types: Vec::new(),
+            scope_slots: vec![Vec::new()],
             funcs: HashMap::new(),
             packages: HashMap::new(),
             imports: HashSet::new(),
+            func_ids: HashMap::new(),
+            file: None,
             current_ret: None,
             loop_depth: 0,
             // The legacy single-block entry point stays permissive: it has no
             // program around it, and D-19 defers its removal.
-            root_namespace: true,
+            namespace: None,
         }
     }
 
+    /// Are the functions being checked the program's root? Only the root's
+    /// `initium` is the entry point, and only it may fall off its end.
+    fn root_namespace(&self) -> bool {
+        self.namespace.is_none()
+    }
+
+    /// Open a lexical scope: names, slot bindings and the declaration list a
+    /// `Block::declares` is made of, always the three together.
+    fn push_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+        self.slots.push(HashMap::new());
+        self.scope_slots.push(Vec::new());
+    }
+
+    /// Close it, yielding the slots it introduced in declaration order. The
+    /// numbers are NOT returned to a pool: `slot_types` keeps growing, which is
+    /// what makes an inner `ni x` a different variable from the outer one.
+    fn pop_scope(&mut self) -> Vec<ir::SlotId> {
+        self.scopes.pop();
+        self.slots.pop();
+        self.scope_slots.pop().unwrap_or_default()
+    }
+
     /// Check a loop body with `abrumpe`/`continua` enabled inside it.
-    fn check_loop_body(&mut self, body: &mut [Stmt]) -> LResult<()> {
+    fn check_loop_body(&mut self, body: &mut [Stmt]) -> LResult<ir::Block> {
         self.loop_depth += 1;
         let r = self.check_block(body);
         self.loop_depth -= 1;
         r
     }
 
-    fn lookup(&self, name: &str) -> Option<Type> {
-        self.scopes.iter().rev().find_map(|s| s.get(name).cloned())
+    /// The innermost binding of `name`: its type and its slot. The two stacks
+    /// are read in lockstep rather than searched separately, so a frame can
+    /// only answer for a name it has in both — `declare` is the one writer and
+    /// always writes both.
+    fn lookup(&self, name: &str) -> Option<(Type, ir::SlotId)> {
+        self.scopes.iter().zip(self.slots.iter()).rev().find_map(|(tys, sls)| {
+            match (tys.get(name), sls.get(name)) {
+                (Some(t), Some(s)) => Some((t.clone(), *s)),
+                _ => None,
+            }
+        })
     }
     /// `lookup`, raising the out-of-scope diagnostic when the name is unknown.
     ///
@@ -86,25 +211,49 @@ impl Checker {
     /// (the `Ident` expression, `Assign` and `IndexAssign`). Three identical
     /// literals meant the catalogue could not tell which one a message came
     /// from, and only the expression form was ever provoked — see D-24.
-    fn lookup_or_err(&self, name: &str, line: usize) -> LResult<Type> {
+    fn lookup_or_err(&self, name: &str, line: usize) -> LResult<(Type, ir::SlotId)> {
         self.lookup(name).ok_or_else(|| LinguaError {
             message: format!("variabilis ignota: '{}'", name),
             line,
         })
     }
-    fn declare(&mut self, name: String, ty: Type) {
-        self.scopes.last_mut().unwrap().insert(name, ty);
+    /// Bind `name` to a freshly allocated slot of the current function.
+    fn declare(&mut self, name: String, ty: Type) -> ir::SlotId {
+        let slot = ir::SlotId(self.slot_types.len() as u32);
+        self.slot_types.push(ty_of(&ty));
+        self.scopes.last_mut().unwrap().insert(name.clone(), ty);
+        self.slots.last_mut().unwrap().insert(name, slot);
+        if let Some(open) = self.scope_slots.last_mut() {
+            open.push(slot);
+        }
+        slot
     }
 
-    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], line: usize) -> LResult<()> {
+    /// The `FuncId` of a call target the checker has just resolved.
+    ///
+    /// Total by construction: a name only reaches here once `funcs` or
+    /// `packages` has answered for it, and both tables are built by
+    /// `collect_sigs` from exactly the declarations `assign_func_ids` numbered,
+    /// in the same walk.
+    fn func_id(&self, ns: Option<&str>, name: &str) -> ir::FuncId {
+        self.func_ids
+            .get(&(ns.map(str::to_string), name.to_string()))
+            .copied()
+            .expect("every resolved call target was numbered by assign_func_ids")
+    }
+
+    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], line: usize)
+        -> LResult<Vec<ir::Expr>>
+    {
         if params.len() != args.len() {
             return Err(LinguaError {
                 message: format!("functio '{}' numerum argumentorum falsum accepit", fname),
                 line,
             });
         }
+        let mut lowered = Vec::with_capacity(args.len());
         for (want, arg) in params.iter().zip(args.iter_mut()) {
-            let got = self.resolve_expr(arg, Some(want.clone()), line)?;
+            let (got, node) = self.resolve_expr(arg, Some(want.clone()), line)?;
             if got != *want {
                 return Err(LinguaError {
                     message: format!("argumentum typum '{}' expectat, sed '{}' datum est",
@@ -112,8 +261,9 @@ impl Checker {
                     line,
                 });
             }
+            lowered.push(node);
         }
-        Ok(())
+        Ok(lowered)
     }
 
     fn type_name(t: &Type) -> String {
@@ -133,38 +283,64 @@ impl Checker {
         }
     }
 
-    fn check_expr(&self, e: &mut Expr, line: usize) -> LResult<InferTy> {
+    fn check_expr(&self, e: &mut Expr, line: usize) -> LResult<(InferTy, ir::Expr)> {
         match e {
-            Expr::Int(_) => Ok(InferTy::Known(Type::Int)),
-            Expr::FloatLit { .. } => Ok(InferTy::FloatLit),
-            Expr::Float(_) => Ok(InferTy::Known(Type::Float)),
-            Expr::Double(_) => Ok(InferTy::Known(Type::Double)),
-            Expr::Text(_) => Ok(InferTy::Known(Type::Text)),
-            Expr::Char(_) => Ok(InferTy::Known(Type::Char)),
-            Expr::Bool(_) => Ok(InferTy::Known(Type::Bool)),
-            Expr::Ident(name) => self.lookup_or_err(name, line).map(InferTy::Known),
+            Expr::Int(r) => Ok((InferTy::Known(Type::Int),
+                konst(ir::Ty::Int, ir::Const::Int(r.clone())))),
+            Expr::FloatLit { numer, den } => {
+                // Still abstract, so the IR takes `nr`'s grain — the default
+                // this literal gets in an untyped sink. `resolve_pair` re-
+                // narrows it onto `mnr`'s grid if a context demands one, and
+                // that re-narrowing is exact: truncation composes, so
+                // trunc(trunc(n·CCLXXXVIII/d)·XII/CCLXXXVIII) is
+                // trunc(n·XII/d).
+                let count = crate::fraction::from_rational(
+                    numer, den, &crate::fraction::scripulum_grain());
+                Ok((InferTy::FloatLit, konst(
+                    ir::Ty::Frac(ir::Grain::Scripulum),
+                    ir::Const::Frac(ir::Grain::Scripulum, count))))
+            }
+            Expr::Float(c) => Ok((InferTy::Known(Type::Float), konst(
+                ir::Ty::Frac(ir::Grain::Uncia),
+                ir::Const::Frac(ir::Grain::Uncia, c.clone())))),
+            Expr::Double(c) => Ok((InferTy::Known(Type::Double), konst(
+                ir::Ty::Frac(ir::Grain::Scripulum),
+                ir::Const::Frac(ir::Grain::Scripulum, c.clone())))),
+            Expr::Text(s) => Ok((InferTy::Known(Type::Text),
+                konst(ir::Ty::Text, ir::Const::Text(s.clone())))),
+            Expr::Char(c) => Ok((InferTy::Known(Type::Char),
+                konst(ir::Ty::Char, ir::Const::Char(*c)))),
+            Expr::Bool(b) => Ok((InferTy::Known(Type::Bool),
+                konst(ir::Ty::Bool, ir::Const::Bool(*b)))),
+            Expr::Ident(name) => {
+                let (t, slot) = self.lookup_or_err(name, line)?;
+                let ty = ty_of(&t);
+                Ok((InferTy::Known(t), ir::Expr { ty, kind: ir::ExprKind::Load(slot) }))
+            }
             Expr::Unary { op, expr } => {
-                let t = self.check_expr(expr, line)?;
-                match op {
-                    UnOp::Not if t == InferTy::Known(Type::Bool) => Ok(InferTy::Known(Type::Bool)),
+                let (t, arg) = self.check_expr(expr, line)?;
+                let res = match op {
+                    UnOp::Not if t == InferTy::Known(Type::Bool) => InferTy::Known(Type::Bool),
                     UnOp::Neg => match t {
-                        InferTy::FloatLit => Ok(InferTy::FloatLit),
-                        InferTy::Known(Type::Int) => Ok(InferTy::Known(Type::Int)),
-                        InferTy::Known(Type::Float) => Ok(InferTy::Known(Type::Float)),
-                        InferTy::Known(Type::Double) => Ok(InferTy::Known(Type::Double)),
+                        InferTy::FloatLit => InferTy::FloatLit,
+                        InferTy::Known(Type::Int) => InferTy::Known(Type::Int),
+                        InferTy::Known(Type::Float) => InferTy::Known(Type::Float),
+                        InferTy::Known(Type::Double) => InferTy::Known(Type::Double),
                         // Unambiguously negation of a non-number.
-                        _ => Err(LinguaError { message: "negatio numerum requirit".into(), line }),
+                        _ => return Err(LinguaError { message: "negatio numerum requirit".into(), line }),
                     },
                     // The remaining unary operator is `non`, applied to
                     // something that is not a veritas. Quoting the keyword
                     // matches the house style of `'longitudo' seriem expectat`.
-                    _ => Err(LinguaError { message: "'non' veritatem requirit".into(), line }),
-                }
+                    _ => return Err(LinguaError { message: "'non' veritatem requirit".into(), line }),
+                };
+                let ty = infer_ir_ty(&res);
+                Ok((res, ir::Expr { ty, kind: ir::ExprKind::Unary { op: *op, arg: Box::new(arg) } }))
             }
             Expr::Binary { op, left, right } => {
-                let lt = self.check_expr(left, line)?;
-                let rt = self.check_expr(right, line)?;
-                self.check_binary(*op, lt, rt, left, right, line)
+                let (lt, lir) = self.check_expr(left, line)?;
+                let (rt, rir) = self.check_expr(right, line)?;
+                self.check_binary(*op, lt, rt, left, right, lir, rir, line)
             }
             Expr::Call { package: Some(p), name, args } => {
                 if !self.imports.contains(p) {
@@ -189,17 +365,23 @@ impl Checker {
                     message: format!("functio '{}' in fasciculo '{}' non inventa", name, p),
                     line,
                 })?;
-                self.check_args(name, &params, args, line)?;
-                Ok(InferTy::Known(ret))
+                let lowered = self.check_args(name, &params, args, line)?;
+                let func = self.func_id(Some(p), name);
+                let ty = ty_of(&ret);
+                Ok((InferTy::Known(ret),
+                    ir::Expr { ty, kind: ir::ExprKind::Call { func, args: lowered } }))
             }
             Expr::Call { package: None, name, args } => {
                 if name.as_str() == "longitudo" {
                     if args.len() != 1 {
                         return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });
                     }
-                    let t = self.resolve_expr(&mut args[0], None, line)?;
+                    let (t, arg) = self.resolve_expr(&mut args[0], None, line)?;
                     return match t {
-                        Type::List(_) => Ok(InferTy::Known(Type::Int)),
+                        // Not a function and with no symbol: it lowers to its
+                        // own IR node (§4.4).
+                        Type::List(_) => Ok((InferTy::Known(Type::Int),
+                            ir::Expr { ty: ir::Ty::Int, kind: ir::ExprKind::Len(Box::new(arg)) })),
                         other => Err(LinguaError {
                             message: format!("'longitudo' seriem expectat, non '{}'", Self::type_name(&other)),
                             line,
@@ -215,11 +397,14 @@ impl Checker {
                     // argument fixes it and the value must match.
                     let empty_list_arg = matches!(&args[0], Expr::ListLit(v) if v.is_empty());
                     if empty_list_arg {
-                        let vt = self.resolve_expr(&mut args[1], None, line)?;
-                        self.resolve_expr(&mut args[0], Some(Type::List(Box::new(vt.clone()))), line)?;
-                        return Ok(InferTy::Known(Type::List(Box::new(vt))));
+                        let (vt, item) = self.resolve_expr(&mut args[1], None, line)?;
+                        let (_, list) = self.resolve_expr(
+                            &mut args[0], Some(Type::List(Box::new(vt.clone()))), line)?;
+                        let ty = ir::Ty::List(Box::new(ty_of(&vt)));
+                        return Ok((InferTy::Known(Type::List(Box::new(vt))), ir::Expr { ty,
+                            kind: ir::ExprKind::Append { list: Box::new(list), item: Box::new(item) } }));
                     }
-                    let lt = self.resolve_expr(&mut args[0], None, line)?;
+                    let (lt, list) = self.resolve_expr(&mut args[0], None, line)?;
                     let elem = match lt {
                         Type::List(inner) => *inner,
                         other => return Err(LinguaError {
@@ -227,7 +412,7 @@ impl Checker {
                             line,
                         }),
                     };
-                    let vt = self.resolve_expr(&mut args[1], Some(elem.clone()), line)?;
+                    let (vt, item) = self.resolve_expr(&mut args[1], Some(elem.clone()), line)?;
                     if vt != elem {
                         return Err(LinguaError {
                             message: format!("'adde': series '{}' elementum '{}' non accipit",
@@ -235,20 +420,29 @@ impl Checker {
                             line,
                         });
                     }
-                    return Ok(InferTy::Known(Type::List(Box::new(elem))));
+                    let ty = ir::Ty::List(Box::new(ty_of(&elem)));
+                    return Ok((InferTy::Known(Type::List(Box::new(elem))), ir::Expr { ty,
+                        kind: ir::ExprKind::Append { list: Box::new(list), item: Box::new(item) } }));
                 }
                 let (params, ret) = self.funcs.get(name)
                     .cloned()
                     .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
-                self.check_args(name, &params, args, line)?;
-                Ok(InferTy::Known(ret))
+                let lowered = self.check_args(name, &params, args, line)?;
+                // A bare call resolves in the checker's own namespace, exactly
+                // as the interpreter's does in the executing frame's.
+                let func = self.func_id(self.namespace.as_deref(), name);
+                let ty = ty_of(&ret);
+                Ok((InferTy::Known(ret),
+                    ir::Expr { ty, kind: ir::ExprKind::Call { func, args: lowered } }))
             }
             Expr::ListLit(elems) => {
-                let elem = self.check_list_elems(elems, None, line)?;
-                Ok(InferTy::Known(Type::List(Box::new(elem))))
+                let (elem, items) = self.check_list_elems(elems, None, line)?;
+                let ty = ir::Ty::List(Box::new(ty_of(&elem)));
+                Ok((InferTy::Known(Type::List(Box::new(elem))),
+                    ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
             }
             Expr::Index { base, index } => {
-                let base_ty = self.resolve_expr(base, None, line)?;
+                let (base_ty, base_ir) = self.resolve_expr(base, None, line)?;
                 let elem = match base_ty {
                     Type::List(inner) => *inner,
                     other => return Err(LinguaError {
@@ -257,12 +451,14 @@ impl Checker {
                         line,
                     }),
                 };
-                let it = self.resolve_expr(index, Some(Type::Int), line)?;
+                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int), line)?;
                 if it != Type::Int {
                     return Err(LinguaError {
                         message: "index seriei 'ni' esse debet".into(), line });
                 }
-                Ok(InferTy::Known(elem))
+                let ty = ty_of(&elem);
+                Ok((InferTy::Known(elem), ir::Expr { ty, kind: ir::ExprKind::Index {
+                    base: Box::new(base_ir), index: Box::new(index_ir) } }))
             }
         }
     }
@@ -273,19 +469,22 @@ impl Checker {
     /// (floats then default to `nr`). Errors on an empty slice with no expected
     /// type, or on heterogeneous elements. Returns the ELEMENT type; callers
     /// wrap it in `Type::List`.
-    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, line: usize) -> LResult<Type> {
+    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, line: usize)
+        -> LResult<(Type, Vec<ir::Expr>)>
+    {
         if elems.is_empty() {
             return match expected {
-                Some(t) => Ok(t),
+                Some(t) => Ok((t, Vec::new())),
                 None => Err(LinguaError {
                     message: "typus elementorum seriei vacuae ignotus".into(), line }),
             };
         }
         let (first_el, rest) = elems.split_first_mut().unwrap();
-        let first = self.resolve_expr(first_el, expected.clone(), line)?;
+        let (first, first_ir) = self.resolve_expr(first_el, expected.clone(), line)?;
+        let mut items = vec![first_ir];
         for el in rest {
             let want = expected.clone().or_else(|| Some(first.clone()));
-            let t = self.resolve_expr(el, want, line)?;
+            let (t, node) = self.resolve_expr(el, want, line)?;
             if t != first {
                 return Err(LinguaError {
                     message: format!("elementa seriei discrepant: '{}' et '{}'",
@@ -293,13 +492,16 @@ impl Checker {
                     line,
                 });
             }
+            items.push(node);
         }
-        Ok(first)
+        Ok((first, items))
     }
 
     /// Type a list literal against an optional expected list type (the primary
     /// path, since it has the expected element type in context).
-    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>, line: usize) -> LResult<Type> {
+    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>, line: usize)
+        -> LResult<(Type, ir::Expr)>
+    {
         let elem_expected = match &expected {
             Some(Type::List(inner)) => Some((**inner).clone()),
             _ => None,
@@ -308,8 +510,9 @@ impl Checker {
             Expr::ListLit(v) => v,
             _ => unreachable!("resolve_list called on non-list"),
         };
-        let elem = self.check_list_elems(elems, elem_expected, line)?;
-        Ok(Type::List(Box::new(elem)))
+        let (elem, items) = self.check_list_elems(elems, elem_expected, line)?;
+        let ty = ir::Ty::List(Box::new(ty_of(&elem)));
+        Ok((Type::List(Box::new(elem)), ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
     }
 
     /// Synthesize `e`'s type, resolving a bare fractional literal to a concrete
@@ -317,13 +520,15 @@ impl Checker {
     /// untyped sink such as `scribe`). A `FloatLit` becomes the expected float
     /// type; with no float context it defaults to `nr`; demanded as a non-float
     /// type it is an error.
-    fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>, line: usize) -> LResult<Type> {
+    fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>, line: usize)
+        -> LResult<(Type, ir::Expr)>
+    {
         if matches!(e, Expr::ListLit(_)) {
             return self.resolve_list(e, expected, line);
         }
         match self.check_expr(e, line)? {
-            InferTy::Known(t) => Ok(t),
-            InferTy::FloatLit => {
+            (InferTy::Known(t), node) => Ok((t, node)),
+            (InferTy::FloatLit, mut node) => {
                 let ty = match expected {
                     Some(Type::Float) => Type::Float,
                     Some(Type::Double) => Type::Double,
@@ -334,27 +539,35 @@ impl Checker {
                     }),
                     None => Type::Double,
                 };
-                resolve_floatlit(e, ty.clone());
-                Ok(ty)
+                resolve_pair(e, &mut node, ty.clone());
+                Ok((ty, node))
             }
         }
     }
 
+    // Nine, because each operand now arrives as three: its synthesized type,
+    // the AST node a narrowing may still rewrite, and the IR node that must be
+    // rewritten with it. Grouping them would reword every arm below, and the
+    // arms are what a reviewer diffs against the pre-IR checker.
+    #[allow(clippy::too_many_arguments)]
     fn check_binary(&self, op: BinOp, lt: InferTy, rt: InferTy,
-                    left: &mut Expr, right: &mut Expr, line: usize) -> LResult<InferTy> {
+                    left: &mut Expr, right: &mut Expr,
+                    mut lir: ir::Expr, mut rir: ir::Expr, line: usize)
+        -> LResult<(InferTy, ir::Expr)>
+    {
         use InferTy::*;
         let mismatch = || LinguaError {
             message: format!("operatio typis '{}' et '{}' non convenit",
                 Self::infer_name(&lt), Self::infer_name(&rt)),
             line,
         };
-        match op {
+        let res = match op {
             BinOp::Add => match (&lt, &rt) {
                 (FloatLit, FloatLit) => Ok(FloatLit),
-                (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Float)) }
-                (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Float)) }
-                (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Double)) }
+                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Float)) }
+                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Double)) }
+                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Float)) }
+                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Double)) }
                 (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
                 (Known(Type::Float), Known(Type::Float)) => Ok(Known(Type::Float)),
                 (Known(Type::Double), Known(Type::Double)) => Ok(Known(Type::Double)),
@@ -363,10 +576,10 @@ impl Checker {
             },
             BinOp::Sub | BinOp::Mul | BinOp::Div => match (&lt, &rt) {
                 (FloatLit, FloatLit) => Ok(FloatLit),
-                (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Float)) }
-                (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Float)) }
-                (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Double)) }
+                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Float)) }
+                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Double)) }
+                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Float)) }
+                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Double)) }
                 (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
                 (Known(Type::Float), Known(Type::Float)) => Ok(Known(Type::Float)),
                 (Known(Type::Double), Known(Type::Double)) => Ok(Known(Type::Double)),
@@ -378,27 +591,27 @@ impl Checker {
             },
             BinOp::Eq | BinOp::Ne => match (&lt, &rt) {
                 (FloatLit, FloatLit) => {
-                    resolve_floatlit(left, Type::Double);
-                    resolve_floatlit(right, Type::Double);
+                    resolve_pair(left, &mut lir, Type::Double);
+                    resolve_pair(right, &mut rir, Type::Double);
                     Ok(Known(Type::Bool))
                 }
-                (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Bool)) }
-                (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Bool)) }
-                (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Bool)) }
+                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Bool)) }
+                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Bool)) }
+                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Bool)) }
+                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Bool)) }
                 (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
             BinOp::Gt | BinOp::Lt => match (&lt, &rt) {
                 (FloatLit, FloatLit) => {
-                    resolve_floatlit(left, Type::Double);
-                    resolve_floatlit(right, Type::Double);
+                    resolve_pair(left, &mut lir, Type::Double);
+                    resolve_pair(right, &mut rir, Type::Double);
                     Ok(Known(Type::Bool))
                 }
-                (FloatLit, Known(Type::Float)) => { resolve_floatlit(left, Type::Float); Ok(Known(Type::Bool)) }
-                (FloatLit, Known(Type::Double)) => { resolve_floatlit(left, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(Type::Float), FloatLit) => { resolve_floatlit(right, Type::Float); Ok(Known(Type::Bool)) }
-                (Known(Type::Double), FloatLit) => { resolve_floatlit(right, Type::Double); Ok(Known(Type::Bool)) }
+                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Bool)) }
+                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Bool)) }
+                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Bool)) }
+                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Bool)) }
                 (Known(Type::List(_)), Known(Type::List(_))) => Err(LinguaError {
                     message: "series ordine comparari non potest (par_est/par_non_est tantum)".into(),
                     line,
@@ -407,17 +620,32 @@ impl Checker {
                 _ => Err(mismatch()),
             },
             BinOp::And | BinOp::Or => match (&lt, &rt) {
+                // `et` and `vel` do NOT short-circuit and must not become a
+                // branch: `interp.rs:131-135` evaluates both operands and the
+                // corpus is blessed against that (spec §3.5). An ordinary
+                // `Binary` node is exactly what says so.
                 (Known(Type::Bool), Known(Type::Bool)) => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
-        }
+        }?;
+        // Both operands now agree: every arm above either had them equal or
+        // narrowed the abstract one onto the other's grain. Carried separately
+        // from the node's own type because a comparison yields `veritas` from
+        // operands that are not (§4.1, property 2).
+        let operand_ty = lir.ty.clone();
+        let ty = infer_ir_ty(&res);
+        Ok((res, ir::Expr { ty, kind: ir::ExprKind::Binary {
+            op, operand_ty, lhs: Box::new(lir), rhs: Box::new(rir) } }))
     }
 
-    fn check_stmt(&mut self, s: &mut Stmt) -> LResult<()> {
+    /// Check one statement, lowering it. `None` is a statement that lowers to
+    /// nothing: only a `munus` declaration does, and only where one is legal
+    /// (the legacy top level) or reachable (a `dum` header).
+    fn check_stmt(&mut self, s: &mut Stmt) -> LResult<Option<ir::Stmt>> {
         let line = s.line;
         match &mut s.kind {
             StmtKind::Let { ty, name, value } => {
-                let vt = self.resolve_expr(value, Some(ty.clone()), line)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(ty.clone()), line)?;
                 if vt != *ty {
                     return Err(LinguaError {
                         message: format!("'{}' typum '{}' expectat, sed '{}' datum est",
@@ -425,12 +653,12 @@ impl Checker {
                         line,
                     });
                 }
-                self.declare(name.clone(), ty.clone());
-                Ok(())
+                let slot = self.declare(name.clone(), ty.clone());
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Let { slot, value: value_ir } }))
             }
             StmtKind::Assign { name, value } => {
-                let target = self.lookup_or_err(name, line)?;
-                let vt = self.resolve_expr(value, Some(target.clone()), line)?;
+                let (target, slot) = self.lookup_or_err(name, line)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(target.clone()), line)?;
                 // `iam` is what distinguishes assigning to a variable that
                 // already has a type from declaring a new one; `Let` above
                 // keeps the original wording (D-24). The comment sits outside
@@ -445,75 +673,70 @@ impl Checker {
                         line,
                     });
                 }
-                Ok(())
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Assign { slot, value: value_ir } }))
             }
-            StmtKind::Print(e) | StmtKind::ExprStmt(e) => {
-                self.resolve_expr(e, None, line)?;
-                Ok(())
+            StmtKind::Print(e) => {
+                let (_, node) = self.resolve_expr(e, None, line)?;
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Print(node) }))
+            }
+            StmtKind::ExprStmt(e) => {
+                let (_, node) = self.resolve_expr(e, None, line)?;
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::ExprStmt(node) }))
             }
             StmtKind::If { cond, then, else_ } => {
-                self.expect_bool(cond, line)?;
-                self.check_block(then)?;
-                if let Some(eb) = else_ { self.check_block(eb)?; }
-                Ok(())
+                let cond_ir = self.expect_bool(cond, line)?;
+                let then_ir = self.check_block(then)?;
+                // `aut si` is already a nested `If` in a one-statement else
+                // block by the time it gets here (`parser.rs:288-291`), so
+                // lowering has no else-if case of its own (§4.4).
+                let else_ir = match else_ {
+                    Some(eb) => Some(self.check_block(eb)?),
+                    None => None,
+                };
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::If {
+                    cond: cond_ir, then: then_ir, else_: else_ir } }))
             }
             StmtKind::While { cond, body } => {
-                self.expect_bool(cond, line)?;
-                self.check_loop_body(body)
+                let cond_ir = self.expect_bool(cond, line)?;
+                let body_ir = self.check_loop_body(body)?;
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::While { cond: cond_ir, body: body_ir } }))
             }
             StmtKind::For { init, cond, step, body } => {
-                self.scopes.push(HashMap::new());
+                self.push_scope();
                 let r = (|| {
                     // `init`, `cond` and `step` are the loop's header, not its
                     // body: an `abrumpe` there is as loose as one outside.
-                    self.check_stmt(init)?;
-                    self.expect_bool(cond, line)?;
-                    self.check_stmt(step)?;
-                    self.check_loop_body(body)
+                    let init_ir = self.check_stmt(init)?;
+                    let cond_ir = self.expect_bool(cond, line)?;
+                    let step_ir = self.check_stmt(step)?;
+                    let body_ir = self.check_loop_body(body)?;
+                    Ok((init_ir, cond_ir, step_ir, body_ir))
                 })();
-                self.scopes.pop();
-                r
+                // The header's own slot — the `dum` variable — is in no
+                // `declares`: §7.3.5 frees it once after the exit block rather
+                // than on scope exit, and codegen reads it off `init`, which is
+                // the only statement that can declare one.
+                let _header = self.pop_scope();
+                let (init_ir, cond_ir, step_ir, body_ir) = r?;
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::For {
+                    init: Box::new(init_ir.unwrap_or_else(|| nop(line))),
+                    cond: cond_ir,
+                    step: Box::new(step_ir.unwrap_or_else(|| nop(line))),
+                    body: body_ir,
+                } }))
             }
             StmtKind::Func(f) => {
-                self.scopes.push(HashMap::new());
-                for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
-                let saved = self.current_ret.clone();
-                self.current_ret = Some(f.ret.clone());
-                // A function body is not inside any loop, whatever encloses
-                // the declaration. Nested functions are rejected, so this can
-                // only matter for the legacy top-level entry point — but the
-                // invariant is worth stating rather than relying on.
-                let saved_depth = std::mem::take(&mut self.loop_depth);
-                let r = self.check_block_inner(&mut f.body);
-                self.loop_depth = saved_depth;
-                self.current_ret = saved;
-                self.scopes.pop();
-                // After the body, so a genuine error inside it wins and no
-                // existing diagnostic is displaced by this one.
-                r?;
-                // Defectus D-01. Nothing asked whether a declared return was
-                // reachable on every path, and `interp::call` ended every body
-                // with Int(zero) regardless of the declared type — so a
-                // checker-approved `reddit voc` function could hand back a
-                // number. That is the type system being unsound, not merely
-                // permissive.
-                //
-                // Only the ROOT `initium` is exempt: the packages design §4.3
-                // licenses its fall-through and `interp.rs`'s
-                // `falling_off_initium_exits_zero` pins it. A package function
-                // that happens to share the name is ordinary.
-                if !(self.root_namespace && f.name == "initium") && !block_returns(&f.body) {
-                    return Err(LinguaError {
-                        message: format!("munus '{}' non in omni via reddit", f.name),
-                        line: s.line,
-                    });
-                }
-                Ok(())
+                // Legal only at the top level, where `check` and `check_file`
+                // call `check_func_decl` themselves and keep what it built.
+                // Reaching it here means a `munus` in a `dum` header, which the
+                // parser accepts and nothing can call: checked, then dropped.
+                self.check_func_decl(f, line)?;
+                Ok(None)
             }
             StmtKind::Return(e) => {
                 let want = self.current_ret.clone()
                     .ok_or_else(|| LinguaError { message: "'redde' extra functionem".into(), line })?;
-                let got = self.resolve_expr(e, Some(want.clone()), line)?;
+                let (got, node) = self.resolve_expr(e, Some(want.clone()), line)?;
                 if got != want {
                     return Err(LinguaError {
                         message: format!("reditus typum '{}' expectat, sed '{}' datum est",
@@ -521,10 +744,10 @@ impl Checker {
                         line,
                     });
                 }
-                Ok(())
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Return(node) }))
             }
             StmtKind::IndexAssign { name, index, value } => {
-                let target = self.lookup_or_err(name, line)?;
+                let (target, slot) = self.lookup_or_err(name, line)?;
                 let elem = match target {
                     Type::List(inner) => *inner,
                     other => return Err(LinguaError {
@@ -532,7 +755,7 @@ impl Checker {
                         line,
                     }),
                 };
-                let it = self.resolve_expr(index, Some(Type::Int), line)?;
+                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int), line)?;
                 if it != Type::Int {
                     // The assigning form `xs[i] = v`; the reading form `xs[i]`
                     // keeps `index seriei`. The fixture for this one is
@@ -542,7 +765,7 @@ impl Checker {
                         line,
                     });
                 }
-                let vt = self.resolve_expr(value, Some(elem.clone()), line)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(elem.clone()), line)?;
                 if vt != elem {
                     return Err(LinguaError {
                         message: format!("elementum typum '{}' expectat, sed '{}' datum est",
@@ -550,7 +773,8 @@ impl Checker {
                         line,
                     });
                 }
-                Ok(())
+                Ok(Some(ir::Stmt { line, kind: ir::StmtKind::IndexAssign {
+                    slot, index: index_ir, value: value_ir } }))
             }
             // Defectus D-07: these were accepted unconditionally. Outside a
             // loop the interpreter yields Flow::Break, and the function-body
@@ -562,8 +786,70 @@ impl Checker {
             StmtKind::Continue if self.loop_depth == 0 => {
                 Err(LinguaError { message: "'continua' extra iterationem".into(), line })
             }
-            StmtKind::Break | StmtKind::Continue => Ok(()),
+            StmtKind::Break => Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Break })),
+            StmtKind::Continue => Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Continue })),
         }
+    }
+
+    /// Check one function declaration and lower it. The scope it pushes is the
+    /// parameter frame, so the body block's `declares` opens with slots
+    /// `0..params` and every `redde` frees them with the rest (§7.3.4).
+    fn check_func_decl(&mut self, f: &mut FuncDecl, line: usize) -> LResult<ir::Func> {
+        self.push_scope();
+        // Slots are numbered per function, so a fresh table — restored below,
+        // because a `munus` in a `dum` header is checked inside another one.
+        let outer_slots = std::mem::take(&mut self.slot_types);
+        for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
+        let saved = self.current_ret.clone();
+        self.current_ret = Some(f.ret.clone());
+        // A function body is not inside any loop, whatever encloses
+        // the declaration. Nested functions are rejected, so this can
+        // only matter for the legacy top-level entry point — but the
+        // invariant is worth stating rather than relying on.
+        let saved_depth = std::mem::take(&mut self.loop_depth);
+        let r = self.check_block_inner(&mut f.body);
+        self.loop_depth = saved_depth;
+        self.current_ret = saved;
+        let declares = self.pop_scope();
+        let slots = std::mem::replace(&mut self.slot_types, outer_slots);
+        // After the body, so a genuine error inside it wins and no
+        // existing diagnostic is displaced by this one.
+        let mut stmts = r?;
+        // Defectus D-01. Nothing asked whether a declared return was
+        // reachable on every path, and `interp::call` ended every body
+        // with Int(zero) regardless of the declared type — so a
+        // checker-approved `reddit voc` function could hand back a
+        // number. That is the type system being unsound, not merely
+        // permissive.
+        //
+        // Only the ROOT `initium` is exempt: the packages design §4.3
+        // licenses its fall-through and `interp.rs`'s
+        // `falling_off_initium_exits_zero` pins it. A package function
+        // that happens to share the name is ordinary.
+        let is_entry = self.root_namespace() && f.name == "initium";
+        let returns = block_returns(&f.body);
+        if !is_entry && !returns {
+            return Err(LinguaError {
+                message: format!("munus '{}' non in omni via reddit", f.name),
+                line,
+            });
+        }
+        if !returns {
+            // The root `initium` falling off its end: lowering supplies the
+            // exit status the interpreter supplied at run time (§4.4). Every
+            // other function reaching here provably returns already.
+            stmts.push(ir::Stmt { line, kind: ir::StmtKind::Return(
+                konst(ir::Ty::Int, ir::Const::Int(Roman::zero()))) });
+        }
+        Ok(ir::Func {
+            symbol: ir::symbol(self.namespace.as_deref(), &f.name),
+            file: self.file.clone(),
+            is_entry,
+            params: f.params.len() as u32,
+            slots,
+            ret: ty_of(&f.ret),
+            body: ir::Block { stmts, declares },
+        })
     }
 
     /// A block that opens a scope of its own: a `si`, `aut`, `indem` or `dum`
@@ -571,16 +857,17 @@ impl Checker {
     /// happens on every path — which is what the two hand-written error exits
     /// it replaced were doing. Delegating also leaves one nested-function
     /// guard instead of two identical ones (D-24).
-    fn check_block(&mut self, body: &mut [Stmt]) -> LResult<()> {
-        self.scopes.push(HashMap::new());
+    fn check_block(&mut self, body: &mut [Stmt]) -> LResult<ir::Block> {
+        self.push_scope();
         let r = self.check_block_inner(body);
-        self.scopes.pop();
-        r
+        let declares = self.pop_scope();
+        Ok(ir::Block { stmts: r?, declares })
     }
 
     /// A block that runs in a scope the caller already pushed — a function
     /// body, whose scope is the parameter frame.
-    fn check_block_inner(&mut self, body: &mut [Stmt]) -> LResult<()> {
+    fn check_block_inner(&mut self, body: &mut [Stmt]) -> LResult<Vec<ir::Stmt>> {
+        let mut stmts = Vec::new();
         for s in body.iter_mut() {
             if let StmtKind::Func(f) = &s.kind {
                 return Err(LinguaError {
@@ -588,14 +875,15 @@ impl Checker {
                     line: s.line,
                 });
             }
-            self.check_stmt(s)?;
+            stmts.extend(self.check_stmt(s)?);
         }
-        Ok(())
+        Ok(stmts)
     }
 
-    fn expect_bool(&self, cond: &mut Expr, line: usize) -> LResult<()> {
-        if self.check_expr(cond, line)? == InferTy::Known(Type::Bool) {
-            Ok(())
+    fn expect_bool(&self, cond: &mut Expr, line: usize) -> LResult<ir::Expr> {
+        let (t, node) = self.check_expr(cond, line)?;
+        if t == InferTy::Known(Type::Bool) {
+            Ok(node)
         } else {
             Err(LinguaError { message: "condicio 'veritas' esse debet".into(), line })
         }
@@ -627,6 +915,49 @@ fn resolve_floatlit(e: &mut Expr, ty: Type) {
     }
 }
 
+/// `resolve_floatlit`'s mirror over the typed IR, deliberately adjacent to it:
+/// the same three arms in the same order, so the two cannot drift apart.
+///
+/// The IR node for a `FloatLit` was already built when the AST one was still
+/// abstract, so it carries `nr`'s grain — the default. Re-narrowing it onto
+/// `mnr`'s is exact rather than lossy, because truncation composes:
+/// `trunc(trunc(n·CCLXXXVIII/d)·XII/CCLXXXVIII) = trunc(n·XII/d)`, which is
+/// what `resolve_floatlit` computes directly from the rational. Conflating an
+/// abstract literal with an already-resolved `mnr`/`nr` one is safe for the
+/// same reason `resolve_floatlit` may: it is only ever called on a subtree
+/// whose synthesized type was `FloatLit`, and every leaf of such a subtree is
+/// a literal.
+fn resolve_floatlit_ir(e: &mut ir::Expr, g: ir::Grain) {
+    let narrowed = match &mut e.kind {
+        ir::ExprKind::Const(ir::Const::Frac(had, count)) => {
+            *count = crate::fraction::from_rational(count, &grain_denom(*had), &grain_denom(g));
+            *had = g;
+            true
+        }
+        ir::ExprKind::Unary { arg, .. } => { resolve_floatlit_ir(arg, g); true }
+        ir::ExprKind::Binary { operand_ty, lhs, rhs, .. } => {
+            resolve_floatlit_ir(lhs, g);
+            resolve_floatlit_ir(rhs, g);
+            *operand_ty = ir::Ty::Frac(g);
+            true
+        }
+        _ => false,
+    };
+    if narrowed {
+        e.ty = ir::Ty::Frac(g);
+    }
+}
+
+/// Narrow one operand in both trees at once. Every caller goes through this
+/// rather than through either half, so neither rewrite can be written without
+/// the other.
+fn resolve_pair(ast: &mut Expr, node: &mut ir::Expr, ty: Type) {
+    if let Some(g) = grain_of(&ty) {
+        resolve_floatlit_ir(node, g);
+    }
+    resolve_floatlit(ast, ty);
+}
+
 /// The names the language keeps for its own builtins, and the diagnostic for
 /// taking one. Both entry points enforce this rule; they used to do it from
 /// byte-identical copies, which is two implementations of one rule that can
@@ -640,6 +971,7 @@ fn reserved_name_error(name: &str, line: usize) -> Option<LinguaError> {
 
 pub fn check(program: &mut [Stmt]) -> LResult<()> {
     let mut c = Checker::new();
+    let mut next = 0u32;
     for s in program.iter() {
         if let StmtKind::Func(f) = &s.kind {
             if let Some(e) = reserved_name_error(&f.name, s.line) {
@@ -647,10 +979,12 @@ pub fn check(program: &mut [Stmt]) -> LResult<()> {
             }
             let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
             c.funcs.insert(f.name.clone(), (ptypes, f.ret.clone()));
+            c.func_ids.insert((None, f.name.clone()), ir::FuncId(next));
+            next += 1;
         }
     }
     for s in program.iter_mut() {
-        c.check_stmt(s)?;
+        let _ = c.check_stmt(s)?;
     }
     Ok(())
 }
@@ -679,12 +1013,41 @@ fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramErr
     Ok(sigs)
 }
 
-/// Check one file's bodies against its folder's namespace and its own imports.
+/// Every function in the program, numbered in the order `check_program_typed`
+/// lowers them: the root's files first, then each package in `BTreeMap` order,
+/// each file in order, each declaration in order. `Programma::funcs[id]` is
+/// therefore the function `id` names, and `check_file` asserts it as it goes.
+///
+/// Names are unique within a namespace — `collect_sigs` has already rejected a
+/// duplicate by the time this runs — so the map is one entry per declaration.
+fn assign_func_ids(prog: &ParsedProgram) -> HashMap<FuncKey, ir::FuncId> {
+    let mut namespaces: Vec<(Option<&str>, &Vec<ParsedFile>)> = vec![(None, &prog.root)];
+    for (name, files) in &prog.packages {
+        namespaces.push((Some(name.as_str()), files));
+    }
+    let mut ids = HashMap::new();
+    let mut next = 0u32;
+    for (ns, files) in namespaces {
+        for file in files {
+            for s in &file.ast.funcs {
+                let StmtKind::Func(f) = &s.kind else { continue };
+                ids.insert((ns.map(str::to_string), f.name.clone()), ir::FuncId(next));
+                next += 1;
+            }
+        }
+    }
+    ids
+}
+
+/// Check one file's bodies against its folder's namespace and its own imports,
+/// appending each lowered function to `out`.
 fn check_file(
     file: &mut ParsedFile,
+    ns: Option<&str>,
     ns_sigs: &HashMap<String, Sig>,
     pkg_sigs: &HashMap<String, HashMap<String, Sig>>,
-    is_root: bool,
+    func_ids: &HashMap<FuncKey, ir::FuncId>,
+    out: &mut Vec<ir::Func>,
 ) -> Result<(), ProgramError> {
     for imp in &file.ast.imports {
         if !pkg_sigs.contains_key(&imp.package) {
@@ -695,19 +1058,44 @@ fn check_file(
         }
     }
     let mut c = Checker::new();
-    c.root_namespace = is_root;
+    c.namespace = ns.map(str::to_string);
+    c.file = Some(file.path.clone());
     c.funcs = ns_sigs.clone();
     c.packages = pkg_sigs.clone();
     c.imports = file.ast.imports.iter().map(|i| i.package.clone()).collect();
+    c.func_ids = func_ids.clone();
     for s in file.ast.funcs.iter_mut() {
-        c.check_stmt(s).map_err(|e| ProgramError::in_file(&file.path, e))?;
+        let line = s.line;
+        // `parse_file` puts nothing but `munus` declarations in `funcs`, so the
+        // fallback is unreachable; checking it anyway is what the loop did
+        // before, and needs no panic to say so.
+        if !matches!(s.kind, StmtKind::Func(_)) {
+            let _ = c.check_stmt(s).map_err(|e| ProgramError::in_file(&file.path, e))?;
+            continue;
+        }
+        let StmtKind::Func(f) = &mut s.kind else { continue };
+        debug_assert_eq!(
+            func_ids.get(&(ns.map(str::to_string), f.name.clone())),
+            Some(&ir::FuncId(out.len() as u32)),
+            "lowering order must be the order assign_func_ids numbered",
+        );
+        let lowered = c.check_func_decl(f, line).map_err(|e| ProgramError::in_file(&file.path, e))?;
+        out.push(lowered);
     }
     Ok(())
 }
 
-/// Check a whole parsed program (§4 of the design): per-namespace signatures,
-/// the `initium` entry point, import validity, then every file's bodies.
+/// Check a whole parsed program (§4 of the design), discarding the IR it built.
+/// The interpreter's entry point; `check_program_typed` is the compiler's, and
+/// they are one walk, so a diagnostic cannot differ between them (spec §3.4).
 pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
+    check_program_typed(prog).map(|_| ())
+}
+
+/// Check a whole parsed program (§4 of the design): per-namespace signatures,
+/// the `initium` entry point, import validity, then every file's bodies — and
+/// emit the typed IR codegen consumes (§3.4, §4).
+pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, ProgramError> {
     let root_sigs = collect_sigs(&prog.root)?;
     let mut pkg_sigs: HashMap<String, HashMap<String, Sig>> = HashMap::new();
     for (name, files) in &prog.packages {
@@ -737,16 +1125,18 @@ pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
         }
     }
 
+    let func_ids = assign_func_ids(prog);
+    let mut funcs = Vec::new();
     for file in prog.root.iter_mut() {
-        check_file(file, &root_sigs, &pkg_sigs, true)?;
+        check_file(file, None, &root_sigs, &pkg_sigs, &func_ids, &mut funcs)?;
     }
     for (name, files) in prog.packages.iter_mut() {
         let ns = &pkg_sigs[name];
         for file in files.iter_mut() {
-            check_file(file, ns, &pkg_sigs, false)?;
+            check_file(file, Some(name), ns, &pkg_sigs, &func_ids, &mut funcs)?;
         }
     }
-    Ok(())
+    Ok(ir::Programma { funcs })
 }
 
 #[cfg(test)]

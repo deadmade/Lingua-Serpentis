@@ -1,0 +1,20 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 343
+expression: dump(&p)
+---
+#0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots 
+  declares []
+  L3   scribe (call #1 (const I):ni (const II):ni):ni
+  L4   redde (call #2 (const III):ni):ni
+
+#1 liss_11_mathematica_5_summa  file=mathematica/summa.liss  entry=false  params=2  reddit ni
+  slots s0:ni s1:ni
+  declares [s0 s1]
+  L1   redde (Add<ni> (load s0):ni (load s1):ni):ni
+
+#2 liss_11_mathematica_7_initium  file=mathematica/summa.liss  entry=false  params=1  reddit ni
+  slots s0:ni
+  declares [s0]
+  L2   redde (load s0):ni

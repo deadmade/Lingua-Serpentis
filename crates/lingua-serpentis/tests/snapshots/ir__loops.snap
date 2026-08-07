@@ -1,0 +1,36 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 334
+expression: dump(&lower1(LOOPS))
+---
+#0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots s0:ni s1:ni s2:ni
+  declares [s0]
+  L2   let s0 = (const nullus):ni
+  L3   indem (Lt<ni> (load s0):ni (const V):ni):veritas
+      declares []
+      L4   set s0 = (Add<ni> (load s0):ni (const I):ni):ni
+      L5   si (Eq<ni> (load s0):ni (const III):ni):veritas
+        then
+          declares []
+          L5   continua
+      L6   si (Eq<ni> (load s0):ni (const IV):ni):veritas
+        then
+          declares []
+          L6   abrumpe
+  L8   dum
+    init
+      L8   let s1 = (const I):ni
+    cond (Lt<ni> (load s1):ni (const V):ni):veritas
+    step
+      L8   set s1 = (Add<ni> (load s1):ni (const I):ni):ni
+    corpus
+      declares [s2]
+      L9   let s2 = (Mul<ni> (load s1):ni (const II):ni):ni
+      L10  scribe (load s2):ni
+      L11  si (Gt<ni> (load s2):ni (const VI):ni):veritas
+        then
+          declares []
+          L11  abrumpe
+      L12  continua
+  L14  redde (const nullus):ni

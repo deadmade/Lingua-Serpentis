@@ -1,0 +1,17 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 353
+expression: dump(&lower1(FRACTIONS))
+---
+#0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots s0:mnr s1:nr s2:mnr s3:nr
+  declares [s0 s1 s2 s3]
+  L2   let s0 = (const XIII grana):mnr
+  L3   let s1 = (const CCCXXIX grana):nr
+  L4   let s2 = (Add<mnr> (const XIII grana):mnr (const XIII grana):mnr):mnr
+  L5   let s3 = (Neg (const CCCXXIX grana):nr):nr
+  L6   scribe (load s0):mnr
+  L7   scribe (load s1):nr
+  L8   scribe (load s2):mnr
+  L9   scribe (load s3):nr
+  L1   redde (const nullus):ni

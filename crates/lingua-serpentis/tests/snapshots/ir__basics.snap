@@ -1,0 +1,19 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 324
+expression: dump(&lower1(BASICS))
+---
+#0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots s0:ni s1:voc s2:ni
+  declares [s0 s1]
+  L2   let s0 = (const V):ni
+  L3   set s0 = (Add<ni> (load s0):ni (const I):ni):ni
+  L4   let s1 = (const "salve"):voc
+  L5   scribe (load s1):voc
+  L6   si (const verus):veritas
+    then
+      declares [s2]
+      L7   let s2 = (const X):ni
+      L8   scribe (load s2):ni
+  L10  scribe (load s0):ni
+  L11  redde (const nullus):ni

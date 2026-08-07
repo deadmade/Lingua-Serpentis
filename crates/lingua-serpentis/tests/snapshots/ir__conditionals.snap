@@ -1,0 +1,31 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 329
+expression: dump(&lower1(CONDITIONALS))
+---
+#0 liss_0__10_classifica  file=principale.liss  entry=false  params=1  reddit voc
+  slots s0:ni
+  declares [s0]
+  L2   si (Lt<ni> (load s0):ni (const nullus):ni):veritas
+    then
+      declares []
+      L2   redde (const "negativus"):voc
+    aut
+      declares []
+      L3   si (Eq<ni> (load s0):ni (const nullus):ni):veritas
+        then
+          declares []
+          L3   redde (const "nihil"):voc
+        aut
+          declares []
+          L4   redde (const "positivus"):voc
+
+#1 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots 
+  declares []
+  L7   scribe (call #0 (const I):ni):voc
+  L8   si (const verus):veritas
+    then
+      declares []
+      L8   scribe (const 'a'):lit
+  L9   redde (const nullus):ni

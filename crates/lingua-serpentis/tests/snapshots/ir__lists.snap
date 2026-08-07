@@ -1,0 +1,15 @@
+---
+source: crates/lingua-serpentis/tests/ir.rs
+assertion_line: 348
+expression: dump(&lower1(LISTS))
+---
+#0 liss_0__7_initium  file=principale.liss  entry=true  params=0  reddit ni
+  slots s0:[ni] s1:ni
+  declares [s0 s1]
+  L2   let s0 = (list (const I):ni (const II):ni (const III):ni):[ni]
+  L3   set s0[(const I):ni] = (const X):ni
+  L4   let s1 = (longitudo (load s0):[ni]):ni
+  L5   set s0 = (adde (load s0):[ni] (load s1):ni):[ni]
+  L6   scribe (index (load s0):[ni] (const II):ni):ni
+  L7   scribe (longitudo (adde (list ):[ni] (const I):ni):[ni]):ni
+  L8   redde (const nullus):ni
