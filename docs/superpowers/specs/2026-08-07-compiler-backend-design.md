@@ -358,9 +358,15 @@ dispatches on it, so it is categorically not the tagged value the ABI forbids.
 
 ### 5.4 Everything consumes
 
-**Every runtime operation takes ownership of its owned arguments and returns
-exactly one new owned value.** The sole exception is `liss_list_put`, which
-borrows the list it mutates.
+**Every runtime *operation* takes ownership of its owned arguments and returns
+exactly one new owned value.** Two functions borrow instead:
+
+- `liss_list_put`, which mutates the list it is given;
+- **every `liss_*_copy`**, which must borrow its source. `Load` is §7.2's only
+  unconditional copy site and reads a slot the function still owns; a consuming
+  copy would empty the slot on first read and make every later `Load` of that
+  variable a use-after-free. It is doubly forced: `liss_list_copy` is also called
+  internally to deep-copy an element the source list still owns.
 
 This is the key simplification of the entire design. It means a statement's
 expression tree leaves exactly **one** live temporary — its root — so codegen
@@ -369,6 +375,76 @@ statement" collapses to "free the root if nothing consumed it".
 
 There is **no `liss_enter` / `liss_leave`**. With the recursion cap gone, calls
 carry no bookkeeping whatsoever.
+
+#### Freeing a null pointer is a no-op
+
+`liss_int_free`, `liss_text_free` and `liss_list_free` accept a null pointer and
+do nothing, exactly as C's `free` does.
+
+This is not a convenience — it is what keeps §7.3.4's "one uniform walk over
+`Block::declares`, with no special case" true. `Block::declares` lists every slot
+bound *anywhere* in the block, regardless of position, so a `redde` taken before
+a later declaration frees a slot whose `Let` never executed:
+
+```
+munus initium reddit ni {
+  si (verus) { redde nullus; }
+  voc s = "salve";
+  redde nullus;
+}
+```
+
+Cranelift requires a `Variable` be defined on every path reaching a use, so
+codegen zero-initialises owned slots at entry and frees unconditionally. If null
+were fatal, that correct program would exit 1 with a corruption diagnostic. The
+alternative — codegen proving initialisation per slot per path — is exactly the
+bookkeeping this design exists to avoid.
+
+#### How diagnostics cross the boundary
+
+```c
+_Noreturn void liss_panic(const char *file, uint64_t line,
+                          const char *fmt,
+                          const LissInt *arg0, const LissInt *arg1);
+```
+
+Three properties, each forced rather than chosen:
+
+- **The message is a C string, not pointer-plus-length.** The catalogue ratchet
+  extracts the first string literal near a marker, so the sentence must appear
+  *inline at the call site*. A length would mean writing the sentence twice at
+  one site, or hiding it behind a `const` the ratchet cannot see. For codegen a C
+  string is also one `.rodata` symbol and one address, rather than a symbol plus
+  a second immediate to keep in step with it.
+- **Substitution happens inside `liss_panic`,** because
+  `index extra fines: {} (longitudo {})` has two holes and must remain one
+  literal at one site. Both slots are `LissInt`, so **a diagnostic needing a
+  non-numeric hole cannot use this entry point** — extending it means adding
+  `liss_panicN`, never changing this signature, which Tasks 11–15 emit against at
+  every raising site.
+- **Every fallible operation carries a trailing `(file, line)`** rather than
+  setting an ambient locus. An ambient locus is not merely more bookkeeping, it
+  is wrong: a raise inside a callee would report whatever line the caller last
+  set, unless every call site saved and restored it — which is the shadow call
+  stack this design abolished.
+
+#### The runtime's own vocabulary
+
+Beyond the three diagnostics inherited from the interpreter — `divisio per
+nullum`, `modulus per nullum`, `index extra fines: {} (longitudo {})` — the
+runtime owns four sentences of its own:
+
+| sentence | raised when |
+|---|---|
+| `memoria non liberata est` | the live-allocation count is nonzero at exit (§7.5) |
+| `defectus internus: memoria violata est` | a header's magic fails, or any corrupt input |
+| `memoria exhausta est` | `malloc` returns null, or a length computation overflows |
+| `acervus vocationum exhaustus est` | the guard page is hit (§8) |
+
+All four are permanently UNCOVERED by design: each means the compiler is broken
+or the machine is out of memory. They follow the existing register — subject plus
+perfect passive participle plus `est`, agreeing in gender — and the three
+`memoria` sentences are deliberately one family distinguished by participle.
 
 ### 5.5 `value.rs` is deleted, not extracted
 
