@@ -1,0 +1,12 @@
+munus initium reddit ni {
+    ni i = nullus;
+    voc acc = "";
+    dum (voc marca = "|"; verus; i = i + °I) {
+        voc nota = "n";
+        si (i maior_est °IV) { abrumpe; }
+        si (i par_est °II) { continua; }
+        acc = acc + nota + marca;
+    }
+    scribe(acc);
+    redde nullus;
+}

@@ -2,13 +2,15 @@
 //!
 //! # What this covers, and what it does not
 //!
-//! **Straight-line code over all six scalar types** (Task 12): constants, slots,
-//! every binary and unary operator, the four comparisons, and the division and
-//! modulus raises. Control flow — `si`, `dum`, `indem`, `abrumpe`, `continua` —
-//! is Task 13; lists are Task 15. Everything outside that is an `unimplemented!`
-//! naming the task that fills it in, **not** a [`Defectus`]: a Latin sentence
-//! saying "this compiler cannot do that yet" would be a claim about the user's
-//! program, and it is not one. Nothing user-facing can reach these panics,
+//! **Every statement and every scalar type** (Tasks 12–13): constants, slots,
+//! every binary and unary operator, the four comparisons, the division and
+//! modulus raises, and the whole of control flow — `si`/`aut`, `indem`, `dum`,
+//! `abrumpe`, `continua`, `redde` — with the ownership discipline of spec §7.
+//! **Lists are Task 15**, and everything they need is the only
+//! `unimplemented!` left: `ListLit`, `Index`, `Len`, `Append`, `IndexAssign`
+//! and `scribe` of a series. Those are **not** a [`Defectus`], because a Latin
+//! sentence saying "this compiler cannot do that yet" would be a claim about
+//! the user's program and it is not one. Nothing user-facing can reach them,
 //! because no CLI calls [`compila`] until Task 16.
 //!
 //! `ExprKind::Call` is emitted here, one task before the one that owns it,
@@ -45,15 +47,37 @@
 //! §5.4's rule — every operation consumes its owned arguments and returns one
 //! new owned value — is why there is no temporary set here and never will be.
 //! A statement's expression tree leaves exactly **one** live temporary, its
-//! root, and only [`StmtKind::ExprStmt`] fails to consume it. The three rules
-//! that remain are [`Corpus::sententia`]'s `Assign` (evaluate → free old →
-//! store), [`Corpus::blocus`]'s scope exit, and [`Corpus::sententia`]'s `Return`
-//! (free every enclosing block, innermost first, never the returned value).
+//! root, and only [`StmtKind::ExprStmt`] fails to consume it. Copies happen at
+//! exactly one place: `Load` (§7.2). Everything else moves.
 //!
-//! Copies happen at exactly one place: `Load` (§7.2). Everything else moves.
+//! The whole of §7.3, and where each rule lives:
+//!
+//! | § | rule | here |
+//! |---|---|---|
+//! | 1 | free the statement root if nothing consumed it | [`Corpus::sententia`]'s `ExprStmt` |
+//! | 2 | scope exit frees `declares` in reverse order | [`Corpus::libera`], called by [`Corpus::blocus`] |
+//! | 3 | `Assign` is evaluate → free old → store | [`Corpus::sententia`]'s `Assign` |
+//! | 4 | `redde` frees every enclosing block, innermost first | [`Corpus::libera_usque`]`(0)` |
+//! | 5 | `abrumpe` frees to the loop body, not a `dum` header | [`Ansa::profunditas`], and [`Corpus::dum`]'s exit block |
+//! | 6 | `continua` frees the same set, then jumps to the step | [`Ansa::gradus`] |
+//!
+//! **The one invariant that makes this tractable: every owned slot lives in
+//! some `Block::declares`.** A `dum` header is a `Block` for exactly that
+//! reason (`liss_ir`'s `StmtKind::For` says so at length), so `redde` reaches
+//! the loop variable without a special case.
+//!
+//! **And its missing half, added here:** a slot holds a live owned value or
+//! **null**, at every moment. Codegen zero-initialises owned slots at entry
+//! because §5.4 says so; [`Corpus::libera`] stores null back into every slot it
+//! frees for the same reason, and without it a loop double-frees a slot whose
+//! `Let` one iteration skipped. See that function.
 
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{AbiParam, InstBuilder, Signature, UserFuncName, Value, types};
+// One machine-level basic block. Aliased because `liss_ir::Block` is a
+// *lexical* block — a list of statements and the slots it declares — and the
+// two appear within three lines of each other everywhere control flow is built.
+use cranelift_codegen::ir::Block as Nodus;
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{Context, isa};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
@@ -151,6 +175,31 @@ const fn granum(g: Grain) -> i64 {
 /// catalogue's markers.
 fn sedes_ignota() -> Defectus {
     Defectus::novus("defectus internus: sedes ignota")
+}
+
+/// `abrumpe` or `continua` with no loop to name, or a loop whose recorded scope
+/// depth is deeper than the scope stack it indexes into.
+///
+/// Unreachable from a valid program — `checker.rs` refuses both keywords at
+/// `loop_depth == 0` with `'abrumpe' extra ansam` — but it is reachable from a
+/// codegen that pushed a loop and forgot to pop it, and that is a defect to
+/// name rather than an index panic. One helper for the two sites, per D-24 —
+/// the empty loop stack and the out-of-range scope index are the same
+/// inconsistency seen from either end, so they get one sentence rather than
+/// two the catalogue would have to keep apart.
+fn saltus_extra_ansam() -> Defectus {
+    Defectus::novus("defectus internus: saltus extra ansam")
+}
+
+/// Whether a value of this type owns heap memory — that is, whether [`liber`]
+/// has anything to do and whether the slot holding it must be left null
+/// afterwards.
+///
+/// [`liber`]: Corpus::liber
+fn possidet(ty: &Ty) -> bool {
+    // Spec §5.1: `veritas` and `lit` are immediates and nothing more. Every
+    // other type is one pointer to one header.
+    !matches!(ty, Ty::Bool | Ty::Char)
 }
 
 /// Compile a whole program to one relocatable ELF object for `machina`.
@@ -399,6 +448,7 @@ impl Emissor {
                 scidae_datum: None,
                 linea: 0,
                 ambitus: Vec::new(),
+                ansae: Vec::new(),
             };
             corpus.blocus(&func.body)?;
 
@@ -516,7 +566,41 @@ struct Corpus<'a> {
     /// §7.3.4). Straight-line code never puts more than the function body on it;
     /// the stack exists because `Return` must walk *every* enclosing scope and
     /// Task 13 is what makes that more than one entry.
+    ///
+    /// **Every owned slot in a function is in exactly one entry of this stack
+    /// while it is live.** That is the invariant the whole of §7.3 rests on, and
+    /// it is why `StmtKind::For` carries its header as a `Block`: a `dum`
+    /// variable is pushed here like any other scope, so `Return` reaches it
+    /// without a special case and `Break`/`Continue` skip it by index.
     ambitus: Vec<Vec<SlotId>>,
+    /// The loops currently open, outermost first — where `abrumpe` and
+    /// `continua` jump, and how far down [`Corpus::ambitus`] they tear down.
+    /// A stack rather than a pair, because both keywords bind to the
+    /// **innermost** enclosing loop.
+    ansae: Vec<Ansa>,
+}
+
+/// One enclosing loop, as `abrumpe` and `continua` see it (spec §7.3.5–6).
+#[derive(Clone, Copy)]
+struct Ansa {
+    /// `abrumpe`'s target: the block after the loop, where a `dum`'s header
+    /// teardown is emitted once for every path that reaches it.
+    exitus: Nodus,
+    /// `continua`'s target — and the two loops differ. For `dum` it is the
+    /// **step** block, because `continua` must still run the update clause
+    /// (`interp.rs`'s `continue_skips_iteration` is blessed against exactly
+    /// that, and a jump to the condition instead is an infinite loop, not a
+    /// wrong answer). For `indem` it is the condition block, which is all
+    /// there is.
+    gradus: Nodus,
+    /// The index in [`Corpus::ambitus`] of the loop **body**'s scope.
+    ///
+    /// Both keywords free `ambitus[profunditas..]`, innermost first: "from the
+    /// current block up to and including the loop body". A `dum` header sits at
+    /// `profunditas - 1` and is deliberately *not* in that range — its teardown
+    /// is emitted once after the exit block, so freeing it here would be the
+    /// second free of the same pointer.
+    profunditas: usize,
 }
 
 impl<'a> Corpus<'a> {
@@ -551,6 +635,50 @@ impl<'a> Corpus<'a> {
             .current_block()
             .and_then(|b| self.fb.func.layout.last_inst(b))
             .is_some_and(|i| self.fb.func.dfg.insts[i].opcode().is_terminator())
+    }
+
+    /// Move the cursor to `nodus`, having first satisfied `switch_to_block`'s
+    /// precondition.
+    ///
+    /// # The precondition is a disjunction, and asserting only one leg is wrong
+    ///
+    /// Spec §7.4 says `is_filled()` is asserted before every `switch_to_block`.
+    /// The method is **private** in `cranelift-frontend` 0.134 and
+    /// [`Corpus::terminatus`] is its equivalent — but `switch_to_block` accepts
+    ///
+    /// ```text
+    /// position.is_none() || is_unreachable() || is_pristine(pos) || is_filled(pos)
+    /// ```
+    ///
+    /// and *pristine* is the leg that matters here: a block the builder has
+    /// switched to but emitted nothing into is still pristine, which is exactly
+    /// an empty `aut { }` arm and a `dum` whose step lowered to nothing.
+    /// Asserting `terminatus()` alone would fire on both — legal programs, both
+    /// of them, and neither an error a user could act on.
+    ///
+    /// The layout answers all three legs at once: no current block, or a
+    /// current block into which nothing has been emitted (pristine), or one
+    /// whose last instruction is a terminator (filled). `is_unreachable` needs
+    /// no separate test — an unreachable block is one of the other two here,
+    /// because this crate never leaves one half-built.
+    ///
+    /// `debug_assert!` rather than `assert!`, deliberately: it mirrors
+    /// `switch_to_block`'s own, which is compiled out of a release
+    /// `cranelift-frontend` too, and a codegen bug must not become a panic in a
+    /// user's release build. The `Defectus` for a genuinely broken CFG is
+    /// Cranelift's verifier, one call later, which does run in release.
+    fn transi(&mut self, nodus: Nodus) {
+        debug_assert!(
+            match self.fb.current_block() {
+                None => true,
+                Some(b) => match self.fb.func.layout.last_inst(b) {
+                    None => true,
+                    Some(i) => self.fb.func.dfg.insts[i].opcode().is_terminator(),
+                },
+            },
+            "a block must be filled or pristine before the cursor leaves it",
+        );
+        self.fb.switch_to_block(nodus);
     }
 
     /// Call one ABI entry point that returns nothing.
@@ -663,6 +791,7 @@ impl<'a> Corpus<'a> {
     fn liber(&mut self, ty: &Ty, v: Value) -> Result<(), Defectus> {
         let ptr = self.ptr();
         let nomen = match ty {
+            // `possidet` is the same question asked without a name to free.
             Ty::Bool | Ty::Char => return Ok(()),
             // `ni`, `mnr` and `nr` are all one `*mut LissInt`; the grain is a
             // property of the type and never travels in the value.
@@ -691,16 +820,78 @@ impl<'a> Corpus<'a> {
         self.voca_unum(nomen, &[ptr], ptr, &[v])
     }
 
-    /// Free a scope's slots, in **reverse declaration order** (spec §7.3.2).
+    /// Free a scope's slots, in **reverse declaration order** (spec §7.3.2),
+    /// leaving each one **null**.
+    ///
+    /// # The null store is the missing half of the invariant, not a special case
+    ///
+    /// Spec §5.4 has codegen zero-initialise every owned slot at entry, and
+    /// `liss_*_free` accept null, so that §7.3.4's walk over `Block::declares`
+    /// needs no proof that a `Let` ran. That establishes an invariant —
+    /// **a slot holds a live owned value or null, at every moment** — and a
+    /// teardown that frees the pointer and leaves it in the slot breaks it. The
+    /// entry initialisation is only the first instance of the same rule.
+    ///
+    /// Straight-line code never notices, because a scope is entered once and its
+    /// slots are never read again. A **loop** notices, and deterministically:
+    ///
+    /// ```text
+    /// indem (i minor_est °IV) {
+    ///   i = i + °I;
+    ///   si (i par_est °II) { continua; }
+    ///   voc s = "salve";                 // declared after the `continua`
+    /// }
+    /// ```
+    ///
+    /// `s` is in the body block's `declares` wherever its `Let` sits, so the
+    /// `continua` frees it — null on the first iteration, and on the iteration
+    /// after one that fell through, **the pointer the last scope exit already
+    /// freed**. Measured, without this store:
+    /// `Error: defectus internus: memoria violata est`, exit 1, on a legal
+    /// program. `conformance/currunt/memoria-sedes-post-continua` is that
+    /// program, and it is in the corpus.
+    ///
+    /// The store costs one `iconst 0` and one `def_var` per owned slot per
+    /// teardown, entirely inside the SSA `Variable` layer — on the paths that do
+    /// not need it, it is a constant that no `use_var` ever reads and it reaches
+    /// no machine instruction.
     fn libera(&mut self, declares: &[SlotId]) -> Result<(), Defectus> {
+        let ptr = self.ptr();
         for slot in declares.iter().rev() {
             let (var, ty) = self.sedem(*slot)?;
+            if !possidet(ty) {
+                continue;
+            }
             let v = self.fb.use_var(var);
             self.liber(ty, v)?;
+            let nihil = self.fb.ins().iconst(genus(ptr, ty), 0);
+            self.fb.def_var(var, nihil);
         }
         Ok(())
     }
 
+    /// Tear down every scope from `profunditas` to the innermost, in that
+    /// order — what `redde` (`profunditas` 0), `abrumpe` and `continua` each
+    /// do before they jump (spec §7.3.4–6).
+    ///
+    /// The clone is a `Vec<Vec<SlotId>>` of the open scopes and is taken because
+    /// [`Corpus::libera`] needs `&mut self`. Slot lists are short and a jump is
+    /// rare; the alternative is threading an index through every free.
+    fn libera_usque(&mut self, profunditas: usize) -> Result<(), Defectus> {
+        let ambitus = self.ambitus.clone();
+        let Some(aperti) = ambitus.get(profunditas..) else {
+            return Err(saltus_extra_ansam());
+        };
+        for scopus in aperti.iter().rev() {
+            self.libera(scopus)?;
+        }
+        Ok(())
+    }
+
+    /// One lexical block: its statements, then its scope teardown.
+    ///
+    /// **Not the `dum` header**, which is a `Block` whose scope outlives its
+    /// statement list — see [`Corpus::dum`].
     fn blocus(&mut self, block: &Block) -> Result<(), Defectus> {
         self.ambitus.push(block.declares.clone());
         for stmt in &block.stmts {
@@ -717,16 +908,20 @@ impl<'a> Corpus<'a> {
             // and in release a `Defectus` claiming an internal compiler failure
             // over a program that is simply valid.
             //
-            // **Task 13 needs this and not only here.** `abrumpe` and
-            // `continua` fill a block the same way, so every arm that walks
-            // statements owes the same guard.
+            // **This is also the guard `abrumpe` and `continua` need**, and it
+            // is the only one they need: both fill the block with a `jump`
+            // exactly as `redde` fills it with a `return`, so `terminatus()`
+            // answers for all three. `sententia_post_abrumpe_neglegitur`
+            // exercises both spellings.
             if self.terminatus() {
                 break;
             }
             self.sententia(stmt)?;
         }
         // Scope exit (spec §7.3.2) — unless the block already ended in a
-        // `redde`, which freed this scope and every enclosing one itself.
+        // `redde`, an `abrumpe` or a `continua`, each of which freed this scope
+        // itself on its way out. Running it again is not a missed free but a
+        // **double** one, and the same `terminatus()` prevents both.
         if !self.terminatus() {
             self.libera(&block.declares)?;
         }
@@ -801,10 +996,30 @@ impl<'a> Corpus<'a> {
                 // `0..params` again off `Func::params` would double-free every
                 // heap parameter on every `redde`.
                 let v = self.expressio(e)?;
-                for ambitus in self.ambitus.clone().iter().rev() {
-                    self.libera(ambitus)?;
-                }
+                self.libera_usque(0)?;
                 self.fb.ins().return_(&[v]);
+                Ok(())
+            }
+            StmtKind::If { cond, then, else_ } => self.si(cond, then, else_.as_ref()),
+            StmtKind::While { cond, body } => self.indem(stmt.line, cond, body),
+            StmtKind::For { header, cond, step, body } => {
+                self.dum(stmt.line, header, cond, step, body)
+            }
+            // **The two jumps differ only in where they land** (spec §7.3.5–6):
+            // both free from the current block up to and including the loop
+            // body, and neither frees a `dum` header — `Ansa::profunditas` is
+            // the index of the body's scope, and the header sits below it.
+            StmtKind::Break | StmtKind::Continue => {
+                let Some(ansa) = self.ansae.last().copied() else {
+                    return Err(saltus_extra_ansam());
+                };
+                self.libera_usque(ansa.profunditas)?;
+                let meta = if matches!(stmt.kind, StmtKind::Break) {
+                    ansa.exitus
+                } else {
+                    ansa.gradus
+                };
+                self.fb.ins().jump(meta, &[]);
                 Ok(())
             }
             StmtKind::IndexAssign { .. } => unimplemented!(
@@ -812,13 +1027,213 @@ impl<'a> Corpus<'a> {
                  consumes the index and the value, and frees the element it \
                  displaces",
             ),
-            other => unimplemented!(
-                "Task 13: control flow — {other:?}. Blocks are sealed the moment \
-                 their complete predecessor set is known (spec §7.4), and \
-                 `abrumpe`/`continua` free from the current block up to the loop \
-                 body but *not* a `dum` header",
-            ),
         }
+    }
+
+    /// `si` / `aut` — spec §4.4's flattened form, so there is no else-if arm.
+    ///
+    /// ```text
+    ///        brif cond
+    ///        ├── tunc ──┐
+    ///        └── aliud ─┤     (`exitus` directly, when there is no `aut`)
+    ///                exitus
+    /// ```
+    ///
+    /// **Sealing.** `tunc` and `aliud` have exactly one predecessor each, the
+    /// `brif`, and are sealed the moment it is emitted. `exitus` is sealed only
+    /// after both arms have had their chance to jump to it — that is its
+    /// complete predecessor set, and sealing it a line earlier is the
+    /// most common `cranelift-frontend` bug there is.
+    ///
+    /// **When neither arm falls through** — both `redde`, which is how a
+    /// function with no trailing statement is written — `exitus` is left
+    /// *pristine*: created, sealed, never switched to, never inserted into the
+    /// layout, and therefore exempt from `finalize`'s "every block is filled"
+    /// check. The cursor stays on the second arm's filled block, so
+    /// [`Corpus::blocus`]'s `terminatus()` guard sees the statement list is over
+    /// and skips the scope teardown that `redde` already did.
+    fn si(
+        &mut self,
+        cond: &Expr,
+        then: &Block,
+        else_: Option<&Block>,
+    ) -> Result<(), Defectus> {
+        // A `veritas` is an immediate and owns nothing (spec §5.1), so the
+        // condition leaves no temporary for §7.3.1 to free — the `brif` is the
+        // one place in this file a value is consumed by an instruction rather
+        // than by a call.
+        let c = self.expressio(cond)?;
+        let tunc = self.fb.create_block();
+        let aliud = self.fb.create_block();
+        let exitus = self.fb.create_block();
+        self.fb.ins().brif(c, tunc, &[], aliud, &[]);
+        self.fb.seal_block(tunc);
+        self.fb.seal_block(aliud);
+
+        let mut pervius = false;
+        self.transi(tunc);
+        self.blocus(then)?;
+        if !self.terminatus() {
+            self.fb.ins().jump(exitus, &[]);
+            pervius = true;
+        }
+
+        self.transi(aliud);
+        if let Some(aliter) = else_ {
+            self.blocus(aliter)?;
+        }
+        if !self.terminatus() {
+            self.fb.ins().jump(exitus, &[]);
+            pervius = true;
+        }
+
+        self.fb.seal_block(exitus);
+        if pervius {
+            self.transi(exitus);
+        }
+        Ok(())
+    }
+
+    /// `indem` — a condition-only loop.
+    ///
+    /// ```text
+    ///        jump ──▶ caput ──brif──▶ corpus ──┐
+    ///                   ▲                      │
+    ///                   └──────────────────────┘   (and every `continua`)
+    ///                     └─false─▶ exitus         (and every `abrumpe`)
+    /// ```
+    ///
+    /// **Sealing.** `caput` is the loop header and is sealed **last**, after the
+    /// body's back edge exists — that is the one block in this file whose
+    /// predecessor set is not complete when it is created, and the reason
+    /// `seal_all_blocks` is not used. `corpus` is sealed at the `brif`, its only
+    /// predecessor. `exitus` takes the `brif`'s false edge plus one edge per
+    /// `abrumpe`, so it is sealed after the body too.
+    ///
+    /// `indem` has no header scope of its own: the loop introduces no binding,
+    /// so `Ansa::profunditas` is the depth at which [`Corpus::blocus`] is about
+    /// to push the body's.
+    fn indem(&mut self, linea: usize, cond: &Expr, body: &Block) -> Result<(), Defectus> {
+        let caput = self.fb.create_block();
+        let corpus = self.fb.create_block();
+        let exitus = self.fb.create_block();
+
+        self.fb.ins().jump(caput, &[]);
+        self.transi(caput);
+        // The condition is re-evaluated on every iteration and any raise inside
+        // it names the `indem`'s own line, not whatever the body last set.
+        self.linea = linea;
+        let c = self.expressio(cond)?;
+        self.fb.ins().brif(c, corpus, &[], exitus, &[]);
+        self.fb.seal_block(corpus);
+
+        self.transi(corpus);
+        self.ansae.push(Ansa { exitus, gradus: caput, profunditas: self.ambitus.len() });
+        let r = self.blocus(body);
+        self.ansae.pop();
+        r?;
+        if !self.terminatus() {
+            self.fb.ins().jump(caput, &[]);
+        }
+
+        self.fb.seal_block(caput);
+        self.fb.seal_block(exitus);
+        self.transi(exitus);
+        Ok(())
+    }
+
+    /// `dum` — init, condition, step, and the one loop with a scope of its own.
+    ///
+    /// ```text
+    ///   header.stmts ─jump─▶ caput ──brif──▶ corpus ──▶ gradus ──┐
+    ///                          ▲                 (and `continua`)│
+    ///                          └────────────────────────────────-┘
+    ///                            └─false─▶ exitus ─▶ free(header.declares)
+    ///                                        ▲ (and every `abrumpe`)
+    /// ```
+    ///
+    /// **The header teardown is emitted once, in the exit block** (spec §7.3.5),
+    /// rather than on the back edge — which is what makes the loop variable die
+    /// exactly once however many `abrumpe`s and iterations there are. It is
+    /// *not* what makes `redde` correct: a `redde` inside the body leaves the
+    /// function without ever reaching `exitus`, so the header is pushed onto
+    /// [`Corpus::ambitus`] as an ordinary scope and §7.3.4's walk frees it
+    /// there. Both, and neither alone.
+    ///
+    /// **Sealing** is `indem`'s, with `gradus` added: it takes the body's
+    /// fall-through and one edge per `continua`, so it is sealed after the body
+    /// and before the cursor moves onto it.
+    fn dum(
+        &mut self,
+        linea: usize,
+        header: &Block,
+        cond: &Expr,
+        step: &Stmt,
+        body: &Block,
+    ) -> Result<(), Defectus> {
+        // The header's scope opens *before* its init statement, so a `redde`
+        // anywhere below finds the loop variable on the scope stack. Not
+        // `blocus`, because `blocus` would tear the scope down at the end of the
+        // init clause, which is where the loop begins rather than where it ends.
+        self.ambitus.push(header.declares.clone());
+        let r = self.dum_intus(linea, header, cond, step, body);
+        // Popped on the error path too: a `Defectus` abandons the function, but
+        // leaving the stack unbalanced would make the *next* thing to read it
+        // wrong rather than absent.
+        self.ambitus.pop();
+        r
+    }
+
+    fn dum_intus(
+        &mut self,
+        linea: usize,
+        header: &Block,
+        cond: &Expr,
+        step: &Stmt,
+        body: &Block,
+    ) -> Result<(), Defectus> {
+        for stmt in &header.stmts {
+            self.sententia(stmt)?;
+        }
+
+        let caput = self.fb.create_block();
+        let corpus = self.fb.create_block();
+        let gradus = self.fb.create_block();
+        let exitus = self.fb.create_block();
+
+        self.fb.ins().jump(caput, &[]);
+        self.transi(caput);
+        // Restored after the init clause, which moved it (spec §4.1: `Stmt`
+        // carries `line` and codegen carries the line of the statement it is
+        // emitting).
+        self.linea = linea;
+        let c = self.expressio(cond)?;
+        self.fb.ins().brif(c, corpus, &[], exitus, &[]);
+        self.fb.seal_block(corpus);
+
+        self.transi(corpus);
+        self.ansae.push(Ansa { exitus, gradus, profunditas: self.ambitus.len() });
+        let r = self.blocus(body);
+        self.ansae.pop();
+        r?;
+        if !self.terminatus() {
+            self.fb.ins().jump(gradus, &[]);
+        }
+
+        self.fb.seal_block(gradus);
+        self.transi(gradus);
+        self.sententia(step)?;
+        if !self.terminatus() {
+            self.fb.ins().jump(caput, &[]);
+        }
+
+        self.fb.seal_block(caput);
+        self.fb.seal_block(exitus);
+        self.transi(exitus);
+        // Spec §7.3.5: **once**, here, for every path that leaves the loop
+        // normally or by `abrumpe`. The `redde` path never arrives and freed it
+        // itself.
+        self.libera(&header.declares)
     }
 
     fn expressio(&mut self, e: &Expr) -> Result<Value, Defectus> {

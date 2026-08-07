@@ -1,0 +1,12 @@
+munus initium reddit ni {
+    ni i = nullus;
+    ni facta = nullus;
+    indem (i minor_est °IV) {
+        i = i + °I;
+        si (i par_est °II) { continua; }
+        voc s = "salve";
+        facta = facta + °I;
+    }
+    scribe(facta);
+    redde nullus;
+}

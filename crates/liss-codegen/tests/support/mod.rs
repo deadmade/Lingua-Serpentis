@@ -57,6 +57,125 @@ pub fn ir_solum(fons: &str) -> liss_ir::Programma {
     prog
 }
 
+/// Lower a whole **program folder** — a root plus its packages — exactly as
+/// `run_dir_with_warnings` does, but stopping at the typed IR.
+///
+/// `Func::file` is left alone here: a folder program's diagnostics name their
+/// file (`Error in 'principale.liss', linea N:`), which is the difference
+/// [`ir_solum`] exists to erase for single-file sources.
+pub fn ir_scrinii(dir: &Path) -> liss_ir::Programma {
+    let prog = lingua_serpentis::program::load_dir(dir).expect("the folder loads");
+    let uno = |f: lingua_serpentis::program::SourceFile| {
+        let tokens = tokenize(&f.src).expect("the fixture lexes");
+        let ast = parse_file(&tokens).expect("the fixture parses");
+        ParsedFile { path: f.path, ast }
+    };
+    let mut parsed = ParsedProgram {
+        root: prog.root.into_iter().map(uno).collect(),
+        packages: prog
+            .packages
+            .into_iter()
+            .map(|(n, fs)| (n, fs.into_iter().map(uno).collect()))
+            .collect(),
+    };
+    check_program_typed(&mut parsed).expect("the fixture type-checks")
+}
+
+/// One conformance case's blessed expectation, read the way
+/// `tests/support::Fixture` reads it: a missing stream file is an empty stream,
+/// a missing `exitus` is status 0.
+pub fn expectatum(casus: &str) -> lingua_serpentis::Rendered {
+    let dir = radix().join("conformance/currunt").join(casus);
+    let lege = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_default();
+    let exitus = lege("exitus");
+    lingua_serpentis::Rendered {
+        stdout: lege("emissio"),
+        stderr: lege("nuntii"),
+        code: exitus.trim().parse().unwrap_or(0),
+    }
+}
+
+/// What a conformance case runs, by the corpus's own rule: an external program
+/// named by `VIA`, otherwise the case's own `programma/`. A **directory** is a
+/// program folder and a **file** is a single-source program, and the two lower
+/// differently — see [`ir_solum`].
+pub fn casus_via(casus: &str) -> PathBuf {
+    let dir = radix().join("conformance/currunt").join(casus);
+    let via = dir.join("VIA");
+    match std::fs::read_to_string(&via) {
+        Ok(rel) => radix().join(rel.trim()),
+        Err(_) => dir.join("programma"),
+    }
+}
+
+/// **The checkpoint assertion.** Compile and run one conformance case and
+/// require it to match the blessed expectation byte for byte — stdout, stderr
+/// and exit status.
+///
+/// Exit status is not an afterthought in a `memoria-*` case: it is the whole
+/// assertion. Spec §7.5 has the runtime check the live-allocation count on the
+/// success path and exit **1** with `memoria non liberata est` if it is
+/// nonzero, and `abolere` clears a header's magic before freeing so that a
+/// double free reports `defectus internus: memoria violata est` rather than
+/// corrupting silently. So "exit 0 with the blessed stdout" *is* "every
+/// allocation this program made was freed exactly once".
+pub fn casus_par_est(casus: &str) {
+    let machina = Target::hospes().expect("the host is x86_64 or aarch64");
+    let via = casus_via(casus);
+    let prog = if via.is_dir() {
+        ir_scrinii(&via)
+    } else {
+        let fons = std::fs::read_to_string(&via)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", via.display()));
+        ir_solum(&fons)
+    };
+    let (code, stdout, stderr) = exsequere(&imago(&prog, machina), casus);
+    let compilatum = lingua_serpentis::Rendered {
+        stdout,
+        stderr,
+        code: code.expect("the image was not killed by a signal"),
+    };
+    assert_eq!(
+        expectatum(casus),
+        compilatum,
+        "compiled `{casus}` does not match its blessed expectation",
+    );
+}
+
+/// **The ABI entry points one program calls, in the order codegen emitted
+/// them** — read off the object's relocations, filtered to `interesting`.
+///
+/// This is the oracle for the ownership rules a program cannot observe. Two
+/// frees in the wrong order leak nothing and print the same thing (§7.3.2);
+/// a copy taken after the free it should precede reads memory the allocator
+/// has not handed out again, so it usually returns the right bytes (§7.3.3).
+/// Both are visible here and nowhere else in this suite.
+///
+/// **Only sound within one basic block.** Relocation offsets are `.text`
+/// *layout* order, and Cranelift orders blocks for the branch predictor, not
+/// for the reader — a loop body routinely lands after the code that follows the
+/// loop. Callers must therefore use straight-line programs. Within a block,
+/// layout order is emission order, because a call has side effects and nothing
+/// reorders one.
+pub fn vocationes(prog: &liss_ir::Programma, interesting: &[&str]) -> Vec<String> {
+    use object::{Object, ObjectSection, ObjectSymbol};
+
+    let octeti = liss_codegen::compila(prog, &Target::X86_64).expect("the program compiles");
+    let fasciculus = object::File::parse(&octeti[..]).expect("a relocatable object");
+    let mut ordo = Vec::new();
+    for sectio in fasciculus.sections() {
+        for (_, r) in sectio.relocations() {
+            let object::RelocationTarget::Symbol(i) = r.target() else { continue };
+            let Ok(s) = fasciculus.symbol_by_index(i) else { continue };
+            let Ok(nomen) = s.name() else { continue };
+            if interesting.contains(&nomen) {
+                ordo.push(nomen.to_owned());
+            }
+        }
+    }
+    ordo
+}
+
 /// `ETXTBSY`, spelled out rather than pulled in: this crate's dev-dependencies
 /// are the ones spec §11 allows, and `libc` is not among them. The number is
 /// 26 on both Linux targets and the constant has never moved.

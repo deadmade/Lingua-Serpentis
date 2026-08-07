@@ -1,0 +1,18 @@
+munus quaere capit (voc semen) reddit voc {
+    ni k = nullus;
+    indem (k minor_est °III) {
+        dum (voc nota = "-nota"; k minor_est °II; k = k + °I) {
+            voc intus = "!";
+            si (k par_est °I) {
+                redde semen + nota + intus;
+            }
+        }
+        k = k + °I;
+    }
+    redde semen;
+}
+
+munus initium reddit ni {
+    scribe(quaere("radix"));
+    redde nullus;
+}

@@ -1,0 +1,12 @@
+munus perlege capit (ni limes) reddit voc {
+    ni i = nullus;
+    dum (voc pars = "pars"; verus; i = i + °I) {
+        si (i maior_est limes) { redde pars + pars; }
+    }
+    redde "numquam";
+}
+
+munus initium reddit ni {
+    scribe(perlege(°II));
+    redde nullus;
+}

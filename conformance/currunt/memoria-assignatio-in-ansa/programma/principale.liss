@@ -1,0 +1,10 @@
+munus initium reddit ni {
+    ni i = nullus;
+    voc s = "a";
+    indem (i minor_est °III) {
+        s = s + s;
+        i = i + °I;
+    }
+    scribe(s);
+    redde nullus;
+}
