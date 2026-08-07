@@ -460,6 +460,20 @@ Parse the embedded blobs with `object` and assert `liss_panic`, `main` and the C
 > reopens. Every Task 9 test still passes without it, because those tests install
 > the handler explicitly — so nothing else will catch the omission. Assert the call
 > exists, not merely that the symbol does.
+>
+> **`a_main_in_this_crate_must_install_the_guard` is not that assertion.** It is a
+> substring co-occurrence check — "this file contains `fn main(`, therefore it must
+> also contain `liss_custos_institue(` somewhere". A green result does **not** mean
+> the call is inside `main`, that it precedes `liss_initium`, or that it is a call
+> at all rather than a comment mentioning the name. Treat it as catching total
+> omission only, and add a real check here.
+>
+> Task 9 also established that an `.init_array` constructor is the wrong mechanism
+> *on a host build* — constructors run before `std::rt::init`, so std installs its
+> own `SIGSEGV` handler over ours immediately afterwards, leaving the guard inert
+> rather than merely untested. But the musl target bypasses `lang_start` entirely,
+> so there is no std handler to lose the race to, and a constructor **would** work
+> there. That is this task's call to make.
 
 - [ ] **Step 2–3: Implement**
 
