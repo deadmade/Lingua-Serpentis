@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/lingua-serpentis", "crates/latinitas", "crates/liss-runtime"]
+members = ["crates/lingua-serpentis", "crates/latinitas", "crates/liss-runtime", "crates/liss-ir"]
 
 [workspace.package]
 edition = "2024"

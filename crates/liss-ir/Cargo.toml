@@ -1,0 +1,16 @@
+[package]
+name = "liss-ir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "liss_ir"
+path = "src/lib.rs"
+
+# liss-ir is what the checker emits, so lingua-serpentis must depend on it.
+# The only thing it needs from anywhere is Roman, for integer and fractional
+# constants -- keeping this list at one entry is what keeps `cargo test`
+# touching the lexer from first building Cranelift (spec §4).
+[dependencies]
+liss-runtime = { path = "../liss-runtime" }
