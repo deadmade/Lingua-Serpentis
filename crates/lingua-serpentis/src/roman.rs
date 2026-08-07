@@ -1,89 +1,78 @@
-/// A Roman-native integer: a sign plus a little-endian bag of decimal tiers.
-/// Canonical invariant: every tier has `units <= 4` and `five <= 1`, there are
-/// no trailing all-zero tiers, and the empty `tiers` vector is the unique zero
-/// (never negative). Structural equality is therefore numeric equality.
+/// A Roman-native integer: a sign plus a little-endian bag of decimal digits.
+/// Canonical invariant: every digit is `0..=9`, there are no trailing
+/// all-zero digits, and the empty `tiers` vector is the unique zero (never
+/// negative). Structural equality is therefore numeric equality.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Roman {
     negative: bool,
-    tiers: Vec<Tier>,
+    tiers: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Tier {
-    units: u8, // 0..=4
-    five: u8,  // 0..=1
-}
-
-impl Tier {
-    fn digit(self) -> u8 { self.five * 5 + self.units } // 0..=9
-    fn from_digit(d: u8) -> Tier { Tier { units: d % 5, five: d / 5 } } // d in 0..=9
-}
-
-/// Drop trailing all-zero tiers so the canonical form is unique.
-fn trim(mut tiers: Vec<Tier>) -> Vec<Tier> {
-    while matches!(tiers.last(), Some(t) if t.digit() == 0) {
+/// Drop trailing zero digits so the canonical form is unique.
+fn trim(mut tiers: Vec<u8>) -> Vec<u8> {
+    while matches!(tiers.last(), Some(0)) {
         tiers.pop();
     }
     tiers
 }
 
-/// Build a canonical `Roman` from a sign and carry-normalized tiers; forces zero
-/// to be non-negative.
-fn make(negative: bool, tiers: Vec<Tier>) -> Roman {
+/// Build a canonical `Roman` from a sign and carry-normalized digits; forces
+/// zero to be non-negative.
+fn make(negative: bool, tiers: Vec<u8>) -> Roman {
     let tiers = trim(tiers);
     Roman { negative: negative && !tiers.is_empty(), tiers }
 }
 
-/// Compare two magnitudes (tiers only, sign ignored). Canonical form has no
-/// trailing zero tiers, so the longer vector is strictly larger.
-fn mag_cmp(a: &[Tier], b: &[Tier]) -> std::cmp::Ordering {
+/// Compare two magnitudes (digits only, sign ignored). Canonical form has no
+/// trailing zero digits, so the longer vector is strictly larger.
+fn mag_cmp(a: &[u8], b: &[u8]) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     if a.len() != b.len() { return a.len().cmp(&b.len()); }
     for k in (0..a.len()).rev() {
-        let c = a[k].digit().cmp(&b[k].digit());
+        let c = a[k].cmp(&b[k]);
         if c != Ordering::Equal { return c; }
     }
     Ordering::Equal
 }
 
-/// Magnitude add in base-10 digit space (per-tier carrying).
-fn mag_add(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
+/// Magnitude add in base-10 digit space (per-digit carrying).
+fn mag_add(a: &[u8], b: &[u8]) -> Vec<u8> {
     let n = a.len().max(b.len());
     let mut out = Vec::with_capacity(n + 1);
     let mut carry = 0u8;
     for k in 0..n {
-        let da = a.get(k).map_or(0, |t| t.digit());
-        let db = b.get(k).map_or(0, |t| t.digit());
+        let da = a.get(k).copied().unwrap_or(0);
+        let db = b.get(k).copied().unwrap_or(0);
         let s = da + db + carry; // <= 9 + 9 + 1 = 19
-        out.push(Tier::from_digit(s % 10));
+        out.push(s % 10);
         carry = s / 10;
     }
-    if carry > 0 { out.push(Tier::from_digit(carry)); }
+    if carry > 0 { out.push(carry); }
     trim(out)
 }
 
 /// Magnitude subtract in base-10 digit space; requires magnitude a >= b.
-fn mag_sub(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
+fn mag_sub(a: &[u8], b: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(a.len());
     let mut borrow = 0i16;
     for k in 0..a.len() {
-        let da = a[k].digit() as i16;
-        let db = b.get(k).map_or(0, |t| t.digit() as i16);
+        let da = a[k] as i16;
+        let db = b.get(k).map_or(0, |&d| d as i16);
         let mut d = da - db - borrow;
         if d < 0 { d += 10; borrow = 1; } else { borrow = 0; }
-        out.push(Tier::from_digit(d as u8));
+        out.push(d as u8);
     }
     trim(out) // borrow ends at 0 because a >= b
 }
 
 /// Halve a magnitude, returning (quotient, remainder ∈ {0,1}) — long division
-/// by two from the most-significant tier down.
-fn mag_halve(a: &[Tier]) -> (Vec<Tier>, u8) {
-    let mut out = vec![Tier { units: 0, five: 0 }; a.len()];
+/// by two from the most-significant digit down.
+fn mag_halve(a: &[u8]) -> (Vec<u8>, u8) {
+    let mut out = vec![0u8; a.len()];
     let mut rem = 0u8;
     for k in (0..a.len()).rev() {
-        let cur = rem * 10 + a[k].digit(); // <= 19
-        out[k] = Tier::from_digit(cur / 2);
+        let cur = rem * 10 + a[k]; // <= 19
+        out[k] = cur / 2;
         rem = cur % 2;
     }
     (trim(out), rem)
@@ -91,8 +80,8 @@ fn mag_halve(a: &[Tier]) -> (Vec<Tier>, u8) {
 
 /// Magnitude multiply via the doubling ladder (Russian-peasant): only `mag_add`
 /// (doubling) and `mag_halve`. Never a host multiply of the value.
-fn mag_mul(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
-    let mut result: Vec<Tier> = Vec::new();
+fn mag_mul(a: &[u8], b: &[u8]) -> Vec<u8> {
+    let mut result: Vec<u8> = Vec::new();
     let mut x = a.to_vec();
     let mut y = b.to_vec();
     while !y.is_empty() {
@@ -106,7 +95,7 @@ fn mag_mul(a: &[Tier], b: &[Tier]) -> Vec<Tier> {
 
 /// Magnitude divide, returning (quotient, remainder). Requires d != 0.
 /// Doubling long division, built on `mag_add`/`mag_sub`/`mag_cmp`.
-fn mag_divmod(n: &[Tier], d: &[Tier]) -> (Vec<Tier>, Vec<Tier>) {
+fn mag_divmod(n: &[u8], d: &[u8]) -> (Vec<u8>, Vec<u8>) {
     // The `d != 0` precondition is now enforced by `Roman::div_rem`, this
     // function's only caller, which returns None rather than calling in. It
     // was a `debug_assert!` here, compiled out of release, where an empty `d`
@@ -140,10 +129,23 @@ impl Roman {
     pub fn from_u64(mut n: u64) -> Roman {
         let mut tiers = Vec::new();
         while n > 0 {
-            tiers.push(Tier::from_digit((n % 10) as u8));
+            tiers.push((n % 10) as u8);
             n /= 10;
         }
         Roman { negative: false, tiers } // no trailing zeros by construction
+    }
+
+    /// This `Roman`'s digits, little-endian, with no trailing zeros (empty
+    /// for zero).
+    pub fn digits(&self) -> &[u8] {
+        &self.tiers
+    }
+
+    /// Build a canonical `Roman` from a sign and little-endian digits (each
+    /// `0..=9`), stripping trailing zeros and clearing the sign if the
+    /// magnitude is zero.
+    pub fn from_digits(negative: bool, digits: &[u8]) -> Roman {
+        make(negative, digits.to_vec())
     }
 
     pub fn from_i64(n: i64) -> Roman {
@@ -163,7 +165,7 @@ impl Roman {
     pub fn to_i64(&self) -> Option<i64> {
         let mut acc: i128 = 0;
         for t in self.tiers.iter().rev() {
-            acc = acc * 10 + t.digit() as i128;
+            acc = acc * 10 + *t as i128;
             if acc > i64::MAX as i128 + 1 { return None; } // allow magnitude of i64::MIN
         }
         if self.negative { acc = -acc; }
@@ -174,7 +176,7 @@ impl Roman {
         if self.negative { return None; }
         let mut acc: u128 = 0;
         for t in self.tiers.iter().rev() {
-            acc = acc.checked_mul(10)?.checked_add(t.digit() as u128)?;
+            acc = acc.checked_mul(10)?.checked_add(*t as u128)?;
         }
         usize::try_from(acc).ok()
     }
@@ -182,7 +184,7 @@ impl Roman {
     pub fn to_f64(&self) -> f64 {
         let mut acc = 0.0f64;
         for (k, t) in self.tiers.iter().enumerate() {
-            acc += t.digit() as f64 * 10f64.powi(k as i32);
+            acc += *t as f64 * 10f64.powi(k as i32);
         }
         if self.negative { -acc } else { acc }
     }
@@ -319,7 +321,7 @@ impl Roman {
         let mut s = String::new();
         if self.negative { s.push('-'); }
         for k in (0..self.tiers.len()).rev() {
-            s.push_str(&render_digit(self.tiers[k].digit(), k));
+            s.push_str(&render_digit(self.tiers[k], k));
         }
         s
     }
@@ -608,6 +610,28 @@ mod tests {
             parse_roman("V"),
             Err("numerus sine '°': 'V'".to_string())
         );
+    }
+
+    #[test]
+    fn digits_are_little_endian_and_canonical() {
+        let r = Roman::from_u64(1024);
+        assert_eq!(r.digits(), &[4, 2, 0, 1]);
+        assert!(Roman::zero().digits().is_empty());
+    }
+
+    #[test]
+    fn from_digits_round_trips_through_display() {
+        for n in [0u64, 1, 9, 10, 4999, 1_000_000] {
+            let r = Roman::from_u64(n);
+            let back = Roman::from_digits(false, r.digits());
+            assert_eq!(r.display(), back.display());
+        }
+    }
+
+    #[test]
+    fn from_digits_strips_trailing_zeros_to_stay_canonical() {
+        assert_eq!(Roman::from_digits(false, &[1, 0, 0]).digits(), &[1]);
+        assert!(Roman::from_digits(true, &[0, 0]).is_zero());
     }
 
     #[test]
