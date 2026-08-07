@@ -400,6 +400,14 @@ were fatal, that correct program would exit 1 with a corruption diagnostic. The
 alternative — codegen proving initialisation per slot per path — is exactly the
 bookkeeping this design exists to avoid.
 
+**The worked example above is a `redde`, and that is why this rule looked
+narrower than it is.** A `redde` leaves the function, so it can never observe the
+slot again — it cannot see the gap that makes the null store necessary. The rule
+that actually matters is §7.3.2's: every free stores null back, so a later
+`continua` through the same `declares` finds null rather than a dangling pointer.
+Reading this section alone, and then writing a free loop without the store, is
+the bug.
+
 #### How diagnostics cross the boundary
 
 ```c
@@ -515,6 +523,12 @@ Every owned word is, at every moment, in exactly one of four places: one slot;
 one pending temporary of the executing statement; one element position of one
 list; or in flight as a call's return value, owned by the caller on return.
 
+And the dual, which is the half this design originally left unstated: **a slot
+holds a live owned value or null, at every moment.** Codegen zero-initialises
+owned slots at entry, and every free stores null back into the slot it emptied.
+Together those make the free discipline **idempotent**, which is what lets
+`Block::declares` stay a single flat set.
+
 **No aliasing, ever.** This is achievable precisely because the language has
 pure value semantics — the interpreter cloned on every variable read
 (`interp.rs:88`) and on every element read (`interp.rs:182`), so there is no
@@ -534,7 +548,31 @@ That is what keeps `adde` in a loop linear in words rather than in deep copies.
 1. **Statement root** — after each statement, free the expression tree's root if
    nothing consumed it. At most one call, by §5.4.
 2. **Scope exit** — at the end of each block, free `block.declares` in reverse
-   declaration order.
+   declaration order, **storing null into each slot as it is freed**.
+
+   The null store is not tidiness; without it a legal program double-frees.
+   `declares` lists every slot bound anywhere in the block, regardless of
+   position, so a `continua` taken before a later declaration frees a slot the
+   next iteration's scope exit will free again:
+
+   ```
+   indem (cond) {
+       si (x) { continua; }
+       voc s = "salve";
+       si (y) { continua; }   // this one must free s
+   }
+   ```
+
+   The two `continua`s need *different* free sets for the same block. A
+   position-sensitive `declares` could express that, but only by becoming
+   per-program-point liveness — precisely the "codegen proving initialisation per
+   slot per path" that §5.4 exists to abolish. Storing null keeps `declares` flat
+   and makes redundant frees harmless.
+
+   **The cost, and it is worth naming:** once frees are idempotent,
+   **over-freeing becomes systematically unobservable**. Only under-freeing (a
+   leak, caught by §7.5) and wrong jump targets remain detectable. A test that
+   adds a redundant free and still passes has proved nothing.
 3. **`Assign` is evaluate → free old → store.** The order is load-bearing:
    `x = x + °I` must read `x` before the old value dies, and if evaluation
    panics the slot must still hold a valid pointer.
