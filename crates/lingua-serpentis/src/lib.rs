@@ -1,6 +1,13 @@
 pub mod error;
-pub mod roman;
-pub mod fraction;
+/// `Roman` and its arithmetic moved to `liss-runtime` (spec §11) — it needs
+/// to be compiled for the host, inside the compiler, and for musl, inside
+/// `liss-abi`, so it cannot live inside the interpreter's own crate. This
+/// re-export keeps every existing `crate::roman::...` / `lingua_serpentis::
+/// roman::...` call site working unchanged.
+pub use liss_runtime::roman;
+/// Fraction arithmetic, moved to `liss-runtime` alongside `roman` for the
+/// same reason.
+pub use liss_runtime::fraction;
 pub mod token;
 pub mod lexer;
 pub mod ast;

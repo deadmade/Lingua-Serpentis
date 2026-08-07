@@ -103,7 +103,11 @@ fn literal_after(src: &str, from: usize, window: usize) -> Option<String> {
 
 fn extract_sites() -> Vec<Site> {
     let root = support::repo_root();
-    let mut files: Vec<_> = ["lingua-serpentis", "latinitas"]
+    // `liss-runtime` joined the scan when `roman.rs` (four diagnostics) and
+    // `exitus.rs` (one) moved out of `lingua-serpentis` — without it those
+    // five sites would silently vanish from the count rather than showing up
+    // as a loss the ratchet must justify.
+    let mut files: Vec<_> = ["lingua-serpentis", "latinitas", "liss-runtime"]
         .iter()
         .flat_map(|c| {
             std::fs::read_dir(root.join("crates").join(c).join("src"))

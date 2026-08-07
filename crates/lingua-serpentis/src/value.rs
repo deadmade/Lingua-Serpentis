@@ -1,5 +1,10 @@
 use crate::roman::Roman;
 
+/// The tree-walking interpreter's own tagged runtime representation. Spec
+/// §5.5 describes this type going away — but that is about the backend under
+/// construction, which has no interpreter and nothing tagged. `interp.rs`
+/// still walks a tree and still needs a runtime tag until it is deleted
+/// itself (final task of this milestone), so `Value` stays here for now.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(Roman),

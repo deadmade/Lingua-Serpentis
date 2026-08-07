@@ -1,13 +1,14 @@
 use crate::roman::Roman;
 
+/// `BinOp`/`UnOp` moved down to `liss-runtime` (spec §5.5, §10.4): they carry
+/// no AST data of their own, just the operator's identity, so they belong
+/// with the arithmetic they drive rather than the syntax tree that names
+/// them. Re-exported so every `crate::ast::{BinOp, UnOp}` call site —
+/// reached today only through `use crate::ast::*;` — keeps working.
+pub use liss_runtime::{BinOp, UnOp};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type { Int, Float, Double, Text, Char, Bool, List(Box<Type>) }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BinOp { Add, Sub, Mul, Div, Mod, Eq, Ne, Gt, Lt, And, Or }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum UnOp { Not, Neg }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {

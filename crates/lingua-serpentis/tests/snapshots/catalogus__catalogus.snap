@@ -1,8 +1,9 @@
 ---
 source: crates/lingua-serpentis/tests/catalogus.rs
+assertion_line: 307
 expression: report
 ---
-101 sites · 70 fixtured · 0 ambiguous · 26 uncovered · 5 unparsed
+103 sites · 70 fixtured · 0 ambiguous · 26 uncovered · 7 unparsed
 
 crates/lingua-serpentis/src/checker.rs:90  variabilis ignota: '{}'  → fixtured
 crates/lingua-serpentis/src/checker.rs:101  functio '{}' numerum argumentorum falsum accepit  → fixtured
@@ -62,7 +63,7 @@ crates/lingua-serpentis/src/interp.rs:367  operatio binaria invalida  → UNCOVE
 crates/lingua-serpentis/src/interp.rs:374  divisio per nullum  → fixtured
 crates/lingua-serpentis/src/interp.rs:409  modulus per nullum  → fixtured
 crates/lingua-serpentis/src/interp.rs:437  comparatio invalida  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:471  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
+crates/lingua-serpentis/src/interp.rs:491  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/latinity.rs:24  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/latinity.rs:46  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED
@@ -70,7 +71,7 @@ crates/lingua-serpentis/src/lexer.rs:81  chorda non clausa  → fixtured
 crates/lingua-serpentis/src/lexer.rs:90  littera invalida  → fixtured
 crates/lingua-serpentis/src/lexer.rs:112  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
 crates/lingua-serpentis/src/lexer.rs:118  signum ignotum: '{}'  → fixtured
-crates/lingua-serpentis/src/lib.rs:133  UNPARSED  → UNPARSED
+crates/lingua-serpentis/src/lib.rs:140  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/main.rs:39  Usus: lingua-serpentis <via.liss | directorium>  → UNCOVERED
 crates/lingua-serpentis/src/main.rs:54  Error: via '{}' non inventa est  → UNCOVERED
 crates/lingua-serpentis/src/main.rs:58  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
@@ -101,7 +102,9 @@ crates/lingua-serpentis/src/program.rs:101  scida '{}' signis incognitis scripta
 crates/lingua-serpentis/src/program.rs:103  scida '{}' aperiri non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:111  directorium programmatis legi non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:119  directorium percurri non potest  → UNCOVERED
-crates/lingua-serpentis/src/roman.rs:205  numerus Romanus vacuus  → fixtured
-crates/lingua-serpentis/src/roman.rs:217  numerus Romanus invalidus: '{}'  → fixtured
-crates/lingua-serpentis/src/roman.rs:256  numerus sine '°': '{}'  → UNCOVERED
-crates/lingua-serpentis/src/roman.rs:272  fractio sine denominatore  → fixtured
+crates/liss-runtime/src/exitus.rs:13  UNPARSED  → UNPARSED
+crates/liss-runtime/src/exitus.rs:30  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
+crates/liss-runtime/src/roman.rs:205  numerus Romanus vacuus  → fixtured
+crates/liss-runtime/src/roman.rs:217  numerus Romanus invalidus: '{}'  → fixtured
+crates/liss-runtime/src/roman.rs:256  numerus sine '°': '{}'  → UNCOVERED
+crates/liss-runtime/src/roman.rs:272  fractio sine denominatore  → fixtured
