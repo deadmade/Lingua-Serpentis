@@ -679,6 +679,33 @@ fn scaena() {
                 liss_abi::scriptio::liss_print_text(t);
                 liss_exit(0);
             }
+            "fistula-erratum" => {
+                // Both descriptors gone, and output pending so the flush
+                // actually reaches a `write`. A failing program must still
+                // exit **1**: a closed error channel is not permission to
+                // claim success, and `judge` reads exit 0 from a program that
+                // raised as a `clean success` violation. Before the flush
+                // stopped deciding the status, `scribe_ad` met `EPIPE` on
+                // descriptor 1 and `_exit(0)`d from inside `liss_panic`.
+                //
+                // `liss_custos_institue` is what sets `SIG_IGN` in a compiled
+                // program; this binary inherited it from `std::rt::init`, so
+                // say it here rather than lean on that.
+                libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+                let mut fistula = [0 as libc::c_int; 2];
+                assert_eq!(libc::pipe(fistula.as_mut_ptr()), 0, "pipe");
+                libc::close(fistula[0]);
+                assert!(libc::dup2(fistula[1], 1) >= 0, "dup2");
+                assert!(libc::dup2(fistula[1], 2) >= 0, "dup2");
+                liss_print_int(ni(1));
+                liss_panic(
+                    std::ptr::null(),
+                    0,
+                    c"res mala".as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                );
+            }
             "nuntius-nudus" => {
                 liss_panic(
                     std::ptr::null(),
@@ -804,6 +831,20 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
         // rules out a panic that happened to be caught somewhere.
         assert!(!stderr.contains("panicked"), "{scaena} must not be a Rust panic");
     }
+}
+
+#[test]
+fn a_closed_pipe_never_turns_a_failure_into_a_success() {
+    // The counterpart to `custos.rs`'s `a_closed_pipe_never_decides_the_exit_
+    // status`, on the other failing path. Nothing can be read back — the child
+    // has no working descriptor left — so the status is the whole assertion,
+    // and it is the whole point.
+    let out = in_subprocesso("fistula-erratum");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "`liss_panic` must exit 1 even when neither descriptor accepts a byte",
+    );
 }
 
 #[test]

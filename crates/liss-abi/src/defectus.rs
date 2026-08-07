@@ -84,7 +84,13 @@ pub unsafe extern "C" fn liss_panic(
 
     // D-08: everything `scribe` produced before the failure still reaches
     // stdout. The interpreter used to discard it with the error.
-    unsafe { crate::scriptio::liss_flush() };
+    //
+    // `effunde` and not `liss_flush`: a closed descriptor 1 must not end the
+    // program here. `liss_flush` is the *success* path's flush and exits 0 on
+    // one, which from inside a raise would be `judge`'s `clean success`
+    // violation — and, because the flush returns early on an empty buffer,
+    // would fire only for programs that happened to have printed something.
+    let _ = unsafe { crate::scriptio::effunde() };
 
     let mut cifrae = [0u8; 20];
     erratum(b"Error");

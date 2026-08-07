@@ -125,6 +125,33 @@ fn extract_sites() -> Vec<Site> {
     // duplication; spec §10.3 predicts the result there — fewer sites and a
     // higher fixtured fraction.
     //
+    // **`NUNTIUS_` is deferred to Task 19 as well, and for its own reasons.**
+    // Spec §10.3 states the rule in two halves — every async-signal-safe message
+    // constant is named `NUNTIUS_*`, *and* `NUNTIUS_` is a marker. Task 9
+    // shipped the naming; the marker waits, and the argument above does not
+    // carry over, because `acervus vocationum exhaustus est` exists nowhere else
+    // in the workspace. Three separate things stop it:
+    //
+    //   1. `custos.rs`'s `NUNTIUS_PRAEFIXUM` is `b"Error: "` — the prefix, not a
+    //      sentence. The marker as specified would make it a site and read
+    //      `Error: ` as its message, adding a row that is not a diagnostic.
+    //   2. `acervus vocationum exhaustus est` has no fixture and cannot have
+    //      one: `errores/acervus-exhaustus` needs a compiler that can emit a
+    //      recursive program, which is Tasks 16–17. The site would land
+    //      UNCOVERED and depress the fixtured fraction for a reason that has
+    //      nothing to do with coverage.
+    //   3. `NUNTIUS_MEMORIA` says `defectus internus: memoria violata est`,
+    //      which `defectus.rs` also raises inline. That is the *same*
+    //      uniqueness problem as above, one crate down: with both markers in,
+    //      the two sites read `ambiguous`. They have to land together and be
+    //      resolved together — Task 19 should expect to add a guard, or accept
+    //      one deliberate `ambiguous` pair and say why.
+    //
+    // Until then `tests/abi.rs`'s `every_latin_sentence_this_crate_can_say_is_
+    // listed_here` is the stand-in. It is weaker in two known ways: it reads
+    // only `c"…"` literals, so a `b"…"` message would slip past it, and it is
+    // crate-local, so it cannot see duplication anywhere else.
+    //
     // Task 19 will also need a guard for `liss_panic`'s own *definition*,
     // beside the existing one for `-> LinguaError {`: a function that declares
     // a diagnostic entry point is not itself a site that raises one, and

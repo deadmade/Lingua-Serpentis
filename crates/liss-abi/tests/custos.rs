@@ -39,7 +39,7 @@ fn main() {
         return;
     }
 
-    let probationes: [(&str, fn()); 4] = [
+    let probationes: [(&str, fn()); 6] = [
         (
             "the_bounds_are_the_mapping_top_minus_the_limit",
             the_bounds_are_the_mapping_top_minus_the_limit,
@@ -55,6 +55,14 @@ fn main() {
         (
             "a_closed_pipe_is_an_ordinary_end_of_output",
             a_closed_pipe_is_an_ordinary_end_of_output,
+        ),
+        (
+            "a_closed_pipe_never_decides_the_exit_status",
+            a_closed_pipe_never_decides_the_exit_status,
+        ),
+        (
+            "a_main_in_this_crate_must_install_the_guard",
+            a_main_in_this_crate_must_install_the_guard,
         ),
     ];
 
@@ -109,11 +117,7 @@ fn scaena(nomen: &str) {
                 // scenario would pass on std's disposition and check nothing.
                 libc::signal(libc::SIGPIPE, libc::SIG_DFL);
                 liss_custos_institue();
-
-                let mut fistula = [0 as libc::c_int; 2];
-                assert_eq!(libc::pipe(fistula.as_mut_ptr()), 0, "pipe");
-                libc::close(fistula[0]);
-                assert!(libc::dup2(fistula[1], 1) >= 0, "dup2");
+                frange_fistulam();
 
                 liss_print_text(liss_text_new(ANTE.as_ptr(), ANTE.len() as u64));
                 liss_flush();
@@ -121,10 +125,37 @@ fn scaena(nomen: &str) {
                 // returned `EPIPE`.
                 libc::_exit(7);
             }
+            // The same two faults as `abyssus` and `violatio`, with stdout
+            // already closed — and deliberately with different amounts of
+            // pending output, because that is the variable that used to decide
+            // the exit status. `abyssus` leaves 13 bytes in the buffer, so the
+            // flush reached a `write` and met `EPIPE`; `violatio` leaves none,
+            // so the flush short-circuited and never saw it.
+            "fistula-abyssus" => {
+                liss_custos_institue();
+                frange_fistulam();
+                liss_print_text(liss_text_new(ANTE.as_ptr(), ANTE.len() as u64));
+                let _ = abyssus(0);
+            }
+            "fistula-violatio" => {
+                liss_custos_institue();
+                frange_fistulam();
+                let vagus = 0x1000usize as *const u8;
+                let _ = std::ptr::read_volatile(vagus);
+            }
             other => panic!("unknown scenario {other}"),
         }
     }
     unreachable!("every scenario ends the process");
+}
+
+/// Give this process a descriptor 1 whose reader is gone, so the next write to
+/// it meets `EPIPE`.
+unsafe fn frange_fistulam() {
+    let mut fistula = [0 as libc::c_int; 2];
+    assert_eq!(unsafe { libc::pipe(fistula.as_mut_ptr()) }, 0, "pipe");
+    unsafe { libc::close(fistula[0]) };
+    assert!(unsafe { libc::dup2(fistula[1], 1) } >= 0, "dup2");
 }
 
 fn in_subprocesso(scaena: &str) -> Output {
@@ -269,4 +300,75 @@ fn a_closed_pipe_is_an_ordinary_end_of_output() {
         "`prog | head` must not kill the child; D-06 moved into the runtime",
     );
     assert_eq!(String::from_utf8_lossy(&out.stderr), "");
+}
+
+/// A closed stdout is an end of *output*, and nothing more.
+///
+/// It used to be an end of the *program*, decided inside `scribe_ad`, and the
+/// decision leaked into the failing paths: `liss_flush` short-circuits when the
+/// buffer is empty, so it never reached a `write` and never saw `EPIPE`. The
+/// same class of fault therefore reported differently depending on how much
+/// output the program happened to have buffered — `fistula-abyssus` exited 0
+/// with an empty stderr, `fistula-violatio` exited 1 with its sentence. `judge`
+/// settles which of the two is right and rules out the middle: exit 0 with a
+/// diagnostic is `clean success`, exit 1 without one is `diagnostic present`,
+/// so exit 1 *with* the sentence is the only outcome that satisfies the
+/// invariant.
+fn a_closed_pipe_never_decides_the_exit_status() {
+    for (scaena, nuntius) in [
+        (
+            "fistula-abyssus",
+            "Error: acervus vocationum exhaustus est\n",
+        ),
+        (
+            "fistula-violatio",
+            "Error: defectus internus: memoria violata est\n",
+        ),
+    ] {
+        let out = in_subprocesso(scaena);
+        assert_eq!(out.status.code(), Some(1), "{scaena} status");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stderr),
+            nuntius,
+            "{scaena} stderr",
+        );
+    }
+}
+
+/// The Task 10 tripwire.
+///
+/// `liss_custos_institue` has no caller: `main` arrives with Task 10 (spec §6,
+/// "the runtime provides `main`"), and a `main` that calls `liss_initium` and
+/// forgets the installer would leave **every other check in this file
+/// passing** — they all install explicitly — while D-04 stayed quietly open
+/// until somebody ran a recursive program. Prose in a brief is not enough for
+/// a hole that shows no symptom in the test suite.
+///
+/// So: crude on purpose, and it fires the moment an entry point appears in this
+/// crate without the call. It asserts nothing about a crate that has no entry
+/// point, because today that is the honest state.
+fn a_main_in_this_crate_must_install_the_guard() {
+    let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
+    let mut inventum = false;
+    for intrans in std::fs::read_dir(dir).expect("src/ is readable") {
+        let via = intrans.expect("a directory entry").path();
+        if via.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let fons = std::fs::read_to_string(&via).expect("utf-8 source");
+        if !fons.contains("fn main(") {
+            continue;
+        }
+        inventum = true;
+        assert!(
+            fons.contains("liss_custos_institue("),
+            "{}: an entry point must install the guard before `liss_initium`, \
+             or deep recursion is a bare SIGSEGV again — spec §8, D-04",
+            via.display(),
+        );
+    }
+    print!(
+        "({} entry point in liss-abi/src) ",
+        if inventum { "an" } else { "no" }
+    );
 }

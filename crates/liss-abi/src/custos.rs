@@ -7,6 +7,24 @@
 //! So the fault is caught here and reported as an ordinary exit-1 Latin
 //! diagnostic.
 //!
+//! # The one thing this module cannot do for itself
+//!
+//! **The runtime's `main` must call [`liss_custos_institue`] before
+//! `liss_initium`, and nothing in this crate can make it.** There is no entry
+//! point here yet — spec §6 gives `main` to the runtime and Task 10 writes it —
+//! so the installer currently has no caller outside the tests, and a `main`
+//! that calls `liss_initium` and forgets it would leave every test in
+//! `tests/custos.rs` passing, because each installs explicitly. D-04 would stay
+//! open with no symptom until somebody ran a recursive program.
+//!
+//! An `.init_array` constructor would have removed the need to remember, and is
+//! rejected: on a host build `std::rt::init` runs *after* the constructors and
+//! installs std's own `SIGSEGV` handler over ours, so the mechanism is not
+//! merely untested here — it is inert here, which is the worst way to ship
+//! something. `tests/custos.rs` carries the enforcement instead:
+//! `a_main_in_this_crate_must_install_the_guard` fails the moment an entry
+//! point appears in `src/` without the call.
+//!
 //! **`std::rt::init` never runs** (spec §8.1). The entry point is
 //! `#[unsafe(no_mangle)] extern "C" fn main`, so `lang_start` is bypassed, std
 //! installs no `SIGSEGV` handler, and there is no English `has overflowed its
@@ -131,12 +149,10 @@ static PAGINA: AtomicUsize = AtomicUsize::new(0);
 
 /// Install the guard: bounds, alternate stack, `SIGSEGV`/`SIGBUS`, `SIGPIPE`.
 ///
-/// Everything expensive happens here, before `liss_initium`. Failure is silent
-/// and leaves the default dispositions — the pre-Task-9 behaviour — because
-/// there is nothing a program can usefully do about a kernel that refuses
-/// `sigaltstack`, and reporting it would need a sentence the catalogue would
-/// then have to carry for a case that cannot arise: both calls take a valid
-/// signal number and a `static` buffer of a size the kernel already accepts.
+/// Everything expensive happens here, before `liss_initium` — and **`main` must
+/// call this**, which nothing in this crate can enforce; see the module doc.
+/// Failure is silent and leaves the default dispositions, the pre-Task-9
+/// behaviour, for the reasons on [`pone_manum`].
 ///
 /// # Safety
 /// Call **once**, from the main thread, before any other entry point. The
@@ -152,15 +168,29 @@ pub unsafe extern "C" fn liss_custos_institue() {
     // D-06, relocated: see the module doc.
     unsafe { libc::signal(libc::SIGPIPE, libc::SIG_IGN) };
 
+    let _institutum = unsafe { pone_manum() };
+}
+
+/// The alternate stack and the two dispositions. `false` if the kernel refused
+/// any of the three.
+///
+/// All three are checked, and all three fail the same way — an unchecked call
+/// beside a checked one reads as an oversight rather than a decision, and the
+/// decision here is that there is nothing to do: a handler with no stack of its
+/// own would fault on entry, and a kernel that refuses a `static` buffer of a
+/// size it already accepts, or a signal number that has existed since v7, is not
+/// a kernel a Latin sentence will help.
+///
+/// # Safety
+/// Call once, from the main thread: `sigaltstack` is per-thread.
+unsafe fn pone_manum() -> bool {
     unsafe {
         let mut alternus: libc::stack_t = core::mem::zeroed();
         alternus.ss_sp = (&raw mut ALTERNUS).cast::<c_void>();
         alternus.ss_size = MENSURA_ALTERNA;
         alternus.ss_flags = 0;
         if libc::sigaltstack(&alternus, ptr::null_mut()) != 0 {
-            // A handler with no stack of its own would fault on entry, which is
-            // worse than not installing one.
-            return;
+            return false;
         }
 
         let mut actio: libc::sigaction = core::mem::zeroed();
@@ -169,9 +199,16 @@ pub unsafe extern "C" fn liss_custos_institue() {
         // `si_addr` is the whole discriminator. **Both signals**: on aarch64 a
         // stack fault may arrive as either.
         actio.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
+        // Both signals in the mask, not an empty one. Without `SA_NODEFER` the
+        // kernel blocks the signal being delivered, but only that one — so a
+        // `SIGBUS` could re-enter this handler on the alternate stack it is
+        // already using. One line closes it, and `_exit(1)` means neither is
+        // ever unblocked again.
         libc::sigemptyset(&mut actio.sa_mask);
-        libc::sigaction(libc::SIGSEGV, &actio, ptr::null_mut());
-        libc::sigaction(libc::SIGBUS, &actio, ptr::null_mut());
+        libc::sigaddset(&mut actio.sa_mask, libc::SIGSEGV);
+        libc::sigaddset(&mut actio.sa_mask, libc::SIGBUS);
+        libc::sigaction(libc::SIGSEGV, &actio, ptr::null_mut()) == 0
+            && libc::sigaction(libc::SIGBUS, &actio, ptr::null_mut()) == 0
     }
 }
 
@@ -249,6 +286,18 @@ fn culmen_mappae() -> Option<usize> {
     if fd < 0 {
         return None;
     }
+    // The scan is its own function so that no `?` inside it can return past the
+    // `close`. Every such path is provably unreachable — the slices are bounded
+    // by the read's own return value — but a descriptor whose release depends on
+    // that argument is the wrong shape to leave in a runtime.
+    let culmen = unsafe { culmen_ex_fd(fd) };
+    unsafe { libc::close(fd) };
+    culmen
+}
+
+/// # Safety
+/// `fd` must be open for reading.
+unsafe fn culmen_ex_fd(fd: c_int) -> Option<usize> {
     let mut lectio = [0u8; 4096];
     let mut linea = [0u8; 256];
     let mut longitudo = 0usize;
@@ -283,7 +332,6 @@ fn culmen_mappae() -> Option<usize> {
             longitudo = 0;
         }
     }
-    unsafe { libc::close(fd) };
     inventum
 }
 
@@ -322,10 +370,15 @@ fn hexadecimalis(cifrae: &[u8]) -> Option<usize> {
 unsafe extern "C" fn manus(_signum: c_int, notitia: *mut libc::siginfo_t, _contextus: *mut c_void) {
     // D-08, for the one case the flush-at-exit design could not have covered:
     // everything `scribe` produced before the fault still reaches stdout.
-    // `liss_flush` is `write(2)` and integer arithmetic, and `scriptio` stores
-    // the buffer's length with `Release` *after* the bytes, so the length read
-    // here names bytes that are fully written.
-    unsafe { crate::scriptio::liss_flush() };
+    // `effunde` is `write(2)` and integer arithmetic, and `scriptio` stores the
+    // buffer's length with `Release` *after* the bytes, so the length read here
+    // names bytes that are fully written.
+    //
+    // Its result is deliberately dropped. A closed descriptor 1 must not decide
+    // this program's status: the sentence below and `_exit(1)` are owed whether
+    // or not the pending output got out, and `liss_flush`'s exit-0 belongs to
+    // the success path alone.
+    let _ = unsafe { crate::scriptio::effunde() };
 
     let nuntius = unsafe { discerne(notitia) };
     erratum(NUNTIUS_PRAEFIXUM);
