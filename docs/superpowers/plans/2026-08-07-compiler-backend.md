@@ -454,6 +454,13 @@ Also set `SIGPIPE` to `SIG_IGN` here and treat `EPIPE` as exit 0 (spec §6, D-06
 
 Parse the embedded blobs with `object` and assert `liss_panic`, `main` and the CRT symbols are present for both targets.
 
+> **Carried from Task 9 — do not lose this.** `liss_custos_institue` currently has
+> no caller. The runtime's `main` **must call `liss_custos_institue()` first, before
+> `liss_initium`**, or stack exhaustion is signal death again and D-04 quietly
+> reopens. Every Task 9 test still passes without it, because those tests install
+> the handler explicitly — so nothing else will catch the omission. Assert the call
+> exists, not merely that the symbol does.
+
 - [ ] **Step 2–3: Implement**
 
 `build.rs` invokes cargo on `liss-abi` per target into an `OUT_DIR`-local `--target-dir`, with `RUSTFLAGS`, `RUSTC_WRAPPER`, `CARGO_BUILD_TARGET` and the make jobserver variables **removed** — inherited nix flags break a cross-build. Prelink with `ld -r` per spec §9.2. Honour `LISS_RUNTIME_DIR` as an escape hatch, and when a musl target is missing, fail with a message naming the target and the flake.
