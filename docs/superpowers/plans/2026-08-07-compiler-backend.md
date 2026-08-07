@@ -612,6 +612,23 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 - [ ] `tests/compilata.rs`: every fixture run **both** ways, the two `Rendered` required equal. Scaffolding with a defined lifetime — deleted in Task 19.
 - [ ] Measure: `cargo test --test compilata -- --test-threads=1` against the default, and record both numbers in the spec. If it disappoints, build the content-hash cache (spec §10.2) — harness only, never in the shipped compiler, where a stale cache is a correctness hazard.
 - [ ] Cap the proptest generator that emits well-typed programs; it now reaches codegen on every case. Record the chosen number.
+
+> **D-26 is a known, expected divergence — the generator must not read it as a bug.**
+> A terminator in a `dum` init clause (`dum (redde nullus; verus; …)`, and the
+> `abrumpe`/`continua` spellings) diverges *by design pending a language decision*:
+> the interpreter discards the `Flow` from the init clause and loops forever
+> (`interp.rs:325`); compiled code returns immediately. See D-26 in
+> `docs/defectus/2026-08-03-index.md`.
+>
+> Today's `generative.rs` sidesteps this only because it excludes `dum` entirely.
+> **A broader generator that reaches codegen can synthesise this shape**, and it
+> would be a differential failure that is neither backend's fault. Exclude it
+> explicitly, and say so in the generator rather than in a comment here.
+>
+> It is deliberately **not** a `conformance/` fixture: a fixture would bless one
+> backend's answer as the language's. It is pinned instead by
+> `caput_dum_terminatum_componitur` in `regimen.rs` — real coverage, but not
+> differential coverage.
 - [ ] Checkpoint: **all 86 fixtures identical between the two backends**, with only the one intentional re-blessing from Task 14.
 
 `test(compilata): every fixture, both ways, byte for byte`
