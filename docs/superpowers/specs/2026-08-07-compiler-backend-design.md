@@ -517,12 +517,8 @@ Everything expensive happens at initialisation, before `liss_initium`:
   allocates nothing.
 - page size from `sysconf(_SC_PAGESIZE)`, never a hardcoded 4096, because
   aarch64 kernels commonly ship 16 KiB and 64 KiB pages;
-- stack bounds, computed once here and never in the handler, by three layers,
-  first success winning: `pthread_getattr_np` plus `pthread_attr_getstack`; else
-  `getrlimit(RLIMIT_STACK)` against the address of a local in `main`; else
-  parsing `/proc/self/maps` for `[stack]`. **Which layer actually works for the
-  main thread on musl is confirmed empirically, not assumed** — the accuracy of
-  `pthread_getattr_np` there is implementation-defined.
+- stack bounds, computed once here and never in the handler. **Measured, not
+  assumed — and the measurement overturned the obvious answers.** See below.
 - `sigaction` for **both `SIGSEGV` and `SIGBUS`** with `SA_ONSTACK | SA_SIGINFO`,
   because on aarch64 a stack fault may arrive as either.
 
@@ -539,6 +535,39 @@ bounds unknown                       → the first
 
 The guard band is **1 MiB**, not one page: Linux's `stack_guard_gap` defaults to
 256 pages, so a fault caused by stack growth can land that far below the mapping.
+
+#### Getting the bounds right — the measured result
+
+The main thread's stack **grows on demand**. Every interface that reports the
+stack as it *currently exists* therefore reports a small fraction of what it may
+become, and the guard page sits at the bottom of the *potential* stack, megabytes
+below. Measured on musl, x86_64, with `RLIMIT_STACK` at 16 MiB and a deliberate
+overflow:
+
+| method | reports | classification |
+|---|---|---|
+| `pthread_getattr_np` + `pthread_attr_getstack` | 124 KiB | ✗ wrong |
+| `getrlimit` against a local in `main` | 16 MiB, top ~32 KiB low | ✗ wrong |
+| `/proc/self/maps` `[stack]` | 152 KiB | ✗ wrong |
+| **`[stack]` mapping's high address − `RLIMIT_STACK`** | **16 MiB, correct** | **✓ right** |
+
+The first and third describe only the pages already touched. The second gets the
+*size* right but the *top* wrong, because `argv`, the environment and the auxv
+sit above `main`'s frame — roughly 32 KiB on a normal invocation, which is
+enough to push the computed floor past the real one and misclassify the fault.
+
+**So: take the high address of the `[stack]` mapping from `/proc/self/maps`, and
+subtract `RLIMIT_STACK`.** Fall back to `getrlimit` against a local only if
+`/proc` is unavailable, and record that the fallback is known-approximate. If
+`RLIMIT_STACK` is `RLIM_INFINITY`, treat the bounds as unknown.
+
+An earlier draft of this section listed the three wrong methods in preference
+order and did not list the right one. The consequence would not have been an
+invariant violation — both branches are well-formed exit-1 Latin diagnostics, so
+the robustness suite would still have passed — but every real stack overflow,
+the single most common runtime failure a recursive program can have, would have
+reported `defectus internus: memoria violata est`. The `errores/acervus-exhaustus`
+fixture is what pins this, and it would have failed.
 
 **The handler never reads `ucontext_t`.** Recovering the faulting stack pointer
 from `uc_mcontext` would mean hand-rolled musl struct offsets — `gregs[REG_RSP]`
@@ -611,11 +640,13 @@ contending for the outer `.cargo-lock`.
 The locked decisions said "embed the musl staticlib". That is necessary and not
 sufficient. Producing a static ELF without rustc also requires, per target, from
 `$(rustc --print target-libdir --target=T)/self-contained/`: `crt1.o`, `crti.o`,
-`crtn.o`, and — depending on whether rustc already bundles it into `staticlib`
-output — `libc.a`.
+`crtn.o`, and **`libc.a`**.
 
-Whether `libc.a` is bundled is the single question that most affects the
-compiler's size, and it is settled empirically before anything else is built.
+**Measured: rustc does not bundle `libc.a` into `staticlib` output.** The
+archive holds Rust codegen units and `compiler-builtins` objects only — 329
+members, not one of which defines `malloc`, `memcpy`, `write` or
+`__libc_start_main`. Embedding `libc.a` separately is therefore mandatory, not
+conditional.
 
 The archives are **prelinked once at compiler build time** with `ld -r`, so
 every program link is one program object plus one runtime object plus three CRT
@@ -765,9 +796,18 @@ job unchanged.
 
 This reverses §3.2 of the conformance suite design. Of eighty-six fixtures,
 seventy-four are `errores` and most fail in the lexer, parser or checker,
-never reaching codegen; roughly twenty-five actually compile, at some 25–40 ms
-each. That is about a second single-threaded and well under half of it with the
-harness's default parallelism.
+never reaching codegen; roughly twenty-five actually compile.
+
+**Measured, not estimated.** A prelinked link of a hello-world through libwild
+in memory takes a **median of 11.5 ms** (mean 14.5 over 20 runs, min 10.9; the
+45 ms first run is cold cache). Adding Cranelift, the image write and a
+fork/exec/wait, a compiling fixture costs on the order of 25 ms. That is well
+under a second single-threaded for the whole corpus, and a fraction of it with
+the harness's default parallelism.
+
+The linked image for a trivial program is **4.6 MB**, which is the floor for any
+Lingua Serpentis binary and worth stating plainly: static musl plus Rust std is
+not small.
 
 The earlier "~100× faster in-process" figure was measured against spawning the
 *interpreter* — a very different baseline from spawning a static binary that
@@ -910,9 +950,8 @@ musl targets, and `qemu` for the aarch64 checkpoint. MSRV rises 1.85 → 1.94.
 1. **The Windows linker.** Whether libwild grows PE/COFF support or a minimal PE
    linker must be written. Blocks scheduling the Windows milestone; blocks
    nothing in this one.
-2. **Whether rustc bundles `libc.a`** into `staticlib` output, worth 2–4 MB per
-   target. Settled empirically by the first task, and the answer only changes a
-   size, not a design.
+2. ~~**Whether rustc bundles `libc.a`**~~ — **resolved.** It does not; `libc.a`
+   must be embedded per target (§9.2). Measured by the probe.
 3. **When to schedule *elisio ad ultimum usum*.** With the interpreter gone there
    is no faster path to fall back to, which is a mild argument for sooner than
    "someday".
