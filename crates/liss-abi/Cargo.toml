@@ -16,6 +16,14 @@ rust-version = "1.94"
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+# `ingressus` adds the runtime's `main` (spec §6). It is **off by default and
+# must stay off** for every host build: an integration test binary already
+# defines `main`, so an ungated one in the rlib is `duplicate symbol: main` at
+# link time. `liss-codegen/build.rs` turns it on for the two musl staticlibs it
+# embeds, and nothing else does.
+[features]
+ingressus = []
+
 [dependencies]
 # The one dependency the whole workspace is permitted (spec §11): `write`,
 # `_exit`, `malloc`, `free`, and — from Task 9 — `sigaltstack`/`sigaction`,
@@ -33,6 +41,18 @@ liss-runtime = { path = "../liss-runtime" }
 name = "custos"
 path = "tests/custos.rs"
 harness = false
+
+# The embedded runtime is always built `--release` regardless of the compiler's
+# own profile (`liss-codegen/build.rs`), so "debug build" never becomes a
+# property of *which* prebuilt musl archive shipped.
+#
+# `panic = "abort"` because `liss_panic` never unwinds (spec §6): no landing
+# pads and no `_Unwind_Resume` from this crate's own code. It does **not**
+# remove the need to prelink `libunwind.a` — the precompiled musl `libstd` is
+# built with unwinding and references `_Unwind_*` regardless — and cargo ignores
+# the setting for the `test` profile, so `cargo test --release` is unaffected.
+[profile.release]
+panic = "abort"
 
 [dev-dependencies]
 # `tests/abi.rs` redirects fd 1 through a pipe to read back what the output

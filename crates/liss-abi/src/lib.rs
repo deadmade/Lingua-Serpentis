@@ -64,6 +64,15 @@ use core::mem::{align_of, size_of};
 #[cfg(unix)]
 pub mod custos;
 pub mod defectus;
+/// The runtime's `main` (spec §6). Behind the `ingressus` feature, which the
+/// musl cross-build in `liss-codegen/build.rs` is the only thing that turns on:
+/// this crate is *also* built as an `rlib` for its own tests, every test binary
+/// already defines `main`, and an ungated one here is a `duplicate symbol: main`
+/// at link time — measured, not feared. See the module doc for why the guard is
+/// installed by a call there rather than by an `.init_array` constructor.
+#[cfg(all(unix, feature = "ingressus"))]
+pub mod ingressus;
+
 pub mod memoria;
 pub mod numeri;
 pub mod scriptio;

@@ -1,0 +1,24 @@
+[package]
+name = "liss-codegen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# Nothing at runtime yet. Cranelift and libwild arrive with Tasks 11–15; this
+# task ships only the embedded musl runtime and the `Target`/`Runtime` pair that
+# selects between the two of them.
+[dependencies]
+
+[build-dependencies]
+# `build.rs` reads the cross-built `liss-abi` staticlib to discover which
+# symbols the prelink must keep, and reads `crt1.o` to discover what the C
+# runtime demands of it. Both lists were hand-written once and both were wrong;
+# see the comments there.
+object = { version = "0.40", default-features = false, features = ["read", "std", "archive", "elf"] }
+
+[dev-dependencies]
+# The tests parse the embedded blobs. Everything they assert — `main` calls the
+# guard installer before `liss_initium`, `libc.a` really did get prelinked, the
+# CRT objects are the right architecture — is a statement about the *shipped*
+# bytes, not about the source they were built from.
+object = { version = "0.40", default-features = false, features = ["read", "std", "elf"] }
