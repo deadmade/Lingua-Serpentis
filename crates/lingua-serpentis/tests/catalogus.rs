@@ -107,7 +107,30 @@ fn extract_sites() -> Vec<Site> {
     // `exitus.rs` (one) moved out of `lingua-serpentis` — without it those
     // five sites would silently vanish from the count rather than showing up
     // as a loss the ratchet must justify.
-    let mut files: Vec<_> = ["lingua-serpentis", "latinitas", "liss-runtime"]
+    //
+    // `liss-abi` joins it on creation, for the same reason and ahead of need:
+    // it is where the runtime's diagnostics live from now on, and a crate added
+    // later would let a message slip in unrecorded in between. It contributes
+    // nothing yet, because the marker that finds its sites — `liss_panic(` — is
+    // deliberately **not** in `MARKERS` here.
+    //
+    // That deferral is the whole point. `liss-abi` re-raises `divisio per
+    // nullum`, `modulus per nullum` and `index extra fines: {} (longitudo {})`,
+    // which `interp.rs` still raises too. Adding the marker while both
+    // implementations exist would make each of those patterns non-unique, and
+    // `fixtured` decides on uniqueness — all six sites would read `ambiguous`
+    // and the fixtured count would drop by three, recording a *loss* of
+    // coverage where nothing was actually lost. The marker lands in Task 19,
+    // in the same commit that deletes the interpreter and with it the
+    // duplication; spec §10.3 predicts the result there — fewer sites and a
+    // higher fixtured fraction.
+    //
+    // Task 19 will also need a guard for `liss_panic`'s own *definition*,
+    // beside the existing one for `-> LinguaError {`: a function that declares
+    // a diagnostic entry point is not itself a site that raises one, and
+    // without the guard `defectus.rs`'s `pub unsafe extern "C" fn liss_panic(`
+    // reads UNPARSED.
+    let mut files: Vec<_> = ["lingua-serpentis", "latinitas", "liss-runtime", "liss-abi"]
         .iter()
         .flat_map(|c| {
             std::fs::read_dir(root.join("crates").join(c).join("src"))
