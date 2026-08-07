@@ -189,9 +189,10 @@ pub struct Programma {
     pub funcs: Vec<Func>,
 }
 
-/// Escapes one identifier component for `symbol`: any byte outside
-/// `[A-Za-z0-9_]` becomes `_uXXXX_`, the lowercase hex of its Unicode scalar
-/// value. Identifiers are Unicode-alphabetic (`lexer.rs` uses
+/// Escapes one identifier component for `symbol`: any character outside
+/// `[A-Za-z0-9_]` becomes `_uXXXX_`, where `XXXX` is that character's
+/// Unicode scalar value in lowercase hex -- one escape per `char`, not per
+/// UTF-8 byte. Identifiers are Unicode-alphabetic (`lexer.rs` uses
 /// `is_alphabetic()`), so a passthrough is not an option -- non-ASCII
 /// identifiers are legal in this language, and this is what keeps the
 /// mapping injective once combined with `symbol`'s length prefix.
