@@ -13,6 +13,7 @@
 
 pub mod exitus;
 pub mod fraction;
+pub mod genus;
 pub mod roman;
 pub mod scriptio;
 

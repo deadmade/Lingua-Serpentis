@@ -17,61 +17,12 @@
 //! property of the linker plus these blobs plus these flags, and only running
 //! the produced image says so.
 
+mod support;
+
 use liss_codegen::nexus::{Nexus, WildNexus};
 use liss_codegen::target::Target;
-use lingua_serpentis::ast::{ParsedFile, ParsedProgram};
-use lingua_serpentis::checker::check_program_typed;
-use lingua_serpentis::lexer::tokenize;
-use lingua_serpentis::parser::parse_file;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-
-/// The workspace root, found by walking up from this crate.
-fn radix() -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    while !p.join("conformance").is_dir() {
-        assert!(p.pop(), "no `conformance/` above the manifest directory");
-    }
-    p
-}
-
-/// Lower one source file to the typed IR, exactly as the driver will.
-fn ir(via: &Path, fons: &str) -> liss_ir::Programma {
-    let tokens = tokenize(fons).expect("the fixture lexes");
-    let ast = parse_file(&tokens).expect("the fixture parses");
-    let mut prog = ParsedProgram {
-        root: vec![ParsedFile { path: via.display().to_string(), ast }],
-        packages: BTreeMap::new(),
-    };
-    check_program_typed(&mut prog).expect("the fixture type-checks")
-}
-
-/// Write `imago` somewhere executable, run it, and give back
-/// `(status, stdout, stderr)`.
-///
-/// The path is unlinked *after* the wait rather than before the exec, because
-/// spec §9.5's `/proc/self/fd` dance belongs to the CLI task; here a test
-/// directory that the harness removes is enough.
-fn exsequere(imago: &[u8], nomen: &str) -> (Option<i32>, String, String) {
-    let dir = std::env::temp_dir().join(format!("liss-salve-{}-{nomen}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    let via = dir.join("imago");
-    std::fs::write(&via, imago).expect("the image is written");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&via, std::fs::Permissions::from_mode(0o700))
-            .expect("the image is made executable");
-    }
-    let out = Command::new(&via).output().expect("the image executes");
-    let _ = std::fs::remove_dir_all(&dir);
-    (
-        out.status.code(),
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-    )
-}
+use std::path::Path;
+use support::{exsequere, ir, radix};
 
 /// **The task.** `exemplum-salve`, compiled, linked, run — and its stdout
 /// compared against the same `emissio` the interpreted path is compared

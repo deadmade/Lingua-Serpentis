@@ -148,38 +148,15 @@ const _: () = {
 // `ni lista lista` is 18, the element kind of `k` is `k - 8`. Closed form,
 // unbounded nesting, no interning table. Codegen only ever *writes* these as
 // compile-time immediates; the runtime reads them to walk lists.
-
-pub const KIND_BOOL: u32 = 0;
-pub const KIND_CHAR: u32 = 1;
-pub const KIND_INT: u32 = 2;
-/// `mnr` — a count of unciae, 1/12 of the `as`.
-pub const KIND_FRAC_UNCIA: u32 = 3;
-/// `nr` — a count of scripula, 1/288.
-pub const KIND_FRAC_SCRIPULUM: u32 = 4;
-pub const KIND_TEXT: u32 = 5;
-
-/// One level of `lista` nesting.
-pub const GRADUS: u32 = 8;
-
-/// The scalar type underneath any nesting.
-#[inline]
-pub const fn basis(kind: u32) -> u32 {
-    kind & (GRADUS - 1)
-}
-
-/// How many `lista` levels deep — 0 for a scalar.
-#[inline]
-pub const fn profunditas(kind: u32) -> u32 {
-    kind >> 3
-}
-
-/// The grain denominator a fractional kind counts in: XII for `mnr`,
-/// CCLXXXVIII for `nr`. `None` for every other kind.
-#[inline]
-pub const fn granum(kind: u32) -> Option<u64> {
-    match kind {
-        KIND_FRAC_UNCIA => Some(12),
-        KIND_FRAC_SCRIPULUM => Some(288),
-        _ => None,
-    }
-}
+//
+// **They are defined in `liss_runtime::genus`, not here**, and re-exported so
+// `liss_abi::KIND_INT` still names the same constant. This crate is
+// cross-compiled for musl and is never linked into the compiler (spec §11), so
+// `liss-codegen` — the only *writer* of these numbers — cannot import from it;
+// it used to carry a copied `GENUS_NI = 2` with a comment as the only thing
+// tying the two together. `liss-runtime` is a dependency of both and needs no
+// new row in spec §11's table, which is what makes one definition possible.
+pub use liss_runtime::genus::{
+    GRADUS, KIND_BOOL, KIND_CHAR, KIND_FRAC_SCRIPULUM, KIND_FRAC_UNCIA, KIND_INT, KIND_TEXT, basis,
+    granum, profunditas,
+};
