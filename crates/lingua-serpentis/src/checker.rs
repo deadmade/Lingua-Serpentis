@@ -650,9 +650,17 @@ impl Checker {
             },
             BinOp::And | BinOp::Or => match (&lt, &rt) {
                 // `et` and `vel` do NOT short-circuit and must not become a
-                // branch: `interp.rs:131-135` evaluates both operands and the
-                // corpus is blessed against that (spec §3.5). An ordinary
-                // `Binary` node is exactly what says so.
+                // branch (spec §3.5). An ordinary `Binary` node is exactly what
+                // says so, and emitting an `And`/`Or` control-flow form here is
+                // the easiest silent semantic change in the project.
+                //
+                // Pinned by `conformance/errores/{vel,et}-utrumque-latus`, whose
+                // right operand divides by zero: evaluating both raises, and
+                // short-circuiting prints the left operand and exits 0 — a
+                // difference on all three streams. The rule *originated* with
+                // `interp.rs:131-135`, which evaluated both sides and then
+                // dispatched on the operator; those fixtures are what carries it
+                // now that there is no interpreter to compare against.
                 (Known(Type::Bool), Known(Type::Bool)) => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
             },
@@ -852,9 +860,14 @@ impl Checker {
         // permissive.
         //
         // Only the ROOT `initium` is exempt: the packages design §4.3
-        // licenses its fall-through and `interp.rs`'s
-        // `falling_off_initium_exits_zero` pins it. A package function
-        // that happens to share the name is ordinary.
+        // licenses its fall-through, and `conformance/currunt/
+        // initium-sine-reditu` pins it end to end — the program runs,
+        // prints and exits 0. `interp.rs`'s
+        // `falling_off_initium_exits_zero` was the pin before Task 19,
+        // and for a while afterwards there was none: this arm and the
+        // `Return(0)` below were checker- and IR-only, neither of which
+        // observes the exit status the exemption is *about*. A package
+        // function that happens to share the name is ordinary.
         let is_entry = self.root_namespace() && f.name == "initium";
         let returns = block_returns(&f.body);
         if !is_entry && !returns {

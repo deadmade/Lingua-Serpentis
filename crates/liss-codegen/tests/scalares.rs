@@ -261,8 +261,15 @@ fn fractio_per_nullum_quoque_prohibetur() {
 /// This is spec §3.5, and it is the one rule in this task that fails *silently*:
 /// a compiler that emitted the branch its author's reflexes reach for would
 /// print `verus` and exit 0 here, which looks like a better language and is a
-/// different one. `interp.rs:131-135` evaluates both sides and then dispatches
-/// on the operator, and the 103-fixture corpus is blessed against that.
+/// different one. The rule came from `interp.rs:131-135`, which evaluated both
+/// sides and *then* dispatched on the operator.
+///
+/// **The corpus carries it too, as of Task 19** —
+/// `conformance/errores/vel-utrumque-latus` is this exact program — and until
+/// then it did not: no `.liss` file in the project used `et` or `vel` as an
+/// operator, so this test and its `et` twin were the only guard there was,
+/// while three comments elsewhere described them as a redundant second check of
+/// a corpus that had never covered it.
 ///
 /// The program is chosen so that short-circuiting and evaluating both are
 /// **observably** different, which a fault on the *left* operand would not be:

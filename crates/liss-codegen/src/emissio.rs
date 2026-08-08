@@ -52,8 +52,19 @@
 //! # The rule a codegen author is most likely to break, and it is silent
 //!
 //! **`et` and `vel` evaluate both operands** (spec §3.5). They do not
-//! short-circuit: `interp.rs:131-135` evaluates both sides and *then* dispatches
-//! on the operator, and the 103-fixture corpus is blessed against exactly that.
+//! short-circuit. The rule originated with `interp.rs:131-135`, which evaluated
+//! both sides and *then* dispatched on the operator; what holds it now is
+//! `conformance/errores/{vel,et}-utrumque-latus`, whose right operand divides by
+//! zero, so evaluating both raises and short-circuiting prints the left operand
+//! and exits 0 — a difference on stdout, stderr and status at once.
+//!
+//! **Until Task 19 no fixture covered this at all**, and three comments
+//! including this one said one did. Not one of the corpus's `.liss` programs
+//! used `et` or `vel` as an operator; the rule rested entirely on
+//! `scalares.rs`'s two unit tests, which those comments described as a redundant
+//! second check. Anyone tidying them away on that basis would have left the
+//! invariant unguarded.
+//!
 //! There is no `And`/`Or` control-flow form in the IR and there must not be one;
 //! [`Corpus::expressio`]'s `Binary` arm evaluates `lhs` and then `rhs`
 //! unconditionally, and `et`/`vel` are `band`/`bor` over the two results.
@@ -674,9 +685,10 @@ struct Ansa {
     exitus: Nodus,
     /// `continua`'s target — and the two loops differ. For `dum` it is the
     /// **step** block, because `continua` must still run the update clause
-    /// (`interp.rs`'s `continue_skips_iteration` is blessed against exactly
-    /// that, and a jump to the condition instead is an infinite loop, not a
-    /// wrong answer). For `indem` it is the condition block, which is all
+    /// (`conformance/currunt/dum-continua-currit` is blessed against exactly
+    /// that â it was `interp.rs`'s `continue_skips_iteration` before Task 19 â
+    /// and a jump to the condition instead is an infinite loop, not a wrong
+    /// answer, so the fixture hangs rather than diffs). For `indem` it is the condition block, which is all
     /// there is.
     gradus: Nodus,
     /// The index in [`Corpus::ambitus`] of the loop **body**'s scope.
@@ -1142,10 +1154,13 @@ impl<'a> Corpus<'a> {
             // element type never appears here.
             StmtKind::IndexAssign { slot, index, value } => {
                 let ptr = self.ptr();
-                // **Index, then value**, which is `interp.rs:267-268`'s order
-                // and therefore the order the corpus is blessed against: a
-                // `xs[f()] = g()` whose two calls both print would print them
-                // the other way round otherwise.
+                // **Index, then value.** Pinned by `series.rs`'s
+                // `ordo_evaluationis_a_fonte_legitur`, whose recorded answer is
+                // the interpreter's: a `xs[f()] = g()` whose two calls both
+                // raise names the wrong one if these two lines swap.
+                // `liss_list_put`'s bounds check happens after both, so nothing
+                // else in the suite can see the order. It was
+                // `interp.rs:267-268`'s.
                 let i = self.expressio(index)?;
                 let v = self.expressio(value)?;
                 let verbum = self.verbum(v);
@@ -1350,12 +1365,20 @@ impl<'a> Corpus<'a> {
         // accident: "`init`, `cond` and `step` are the loop's header, not its
         // body: an `abrumpe` there is as loose as one outside."
         //
-        // The **interpreter** disagrees with all of this: `interp.rs:325`
-        // discards the `Flow` from `self.exec(init)`, so a `redde` there loops
-        // forever and an `abrumpe` there is ignored outright. That divergence is
-        // **D-26** in `docs/defectus/2026-08-03-index.md`, deferred pending a
-        // language decision; it is not codegen's to resolve, and codegen's only
-        // duty is not to crash.
+        // **This behaviour is undecided, not settled** — it is **D-26** in
+        // `docs/defectus/2026-08-03-index.md`, deferred pending a language
+        // decision, and it is not codegen's to resolve. The interpreter used to
+        // disagree (`interp.rs:325` discarded the `Flow` from
+        // `self.exec(init)`, so a `redde` there looped forever and an `abrumpe`
+        // there was ignored); with one backend left there is nothing to
+        // disagree *with*, and what remains is that the reading below is the
+        // only one anybody can observe while nobody has chosen it.
+        //
+        // So this is the one place in the compiler whose output a fixture must
+        // **not** bless — `regimen.rs`'s `caput_dum_terminatum_componitur` pins
+        // it instead, and `generative.rs`'s `caput_dum_terminatum` keeps the
+        // generator from drawing the shape. Codegen's duty here is only not to
+        // crash.
         for stmt in &header.stmts {
             if self.terminatus() {
                 break;
@@ -1420,14 +1443,19 @@ impl<'a> Corpus<'a> {
             ExprKind::Binary { op, operand_ty, lhs, rhs } => {
                 // **Both operands, unconditionally, in source order.**
                 //
-                // For `et` and `vel` this is spec §3.5 and not an oversight:
-                // `interp.rs:131-135` evaluates both sides and *then* dispatches
-                // on the operator, so `verus vel (°V / nullus par_est °I)` is a
-                // runtime error today rather than `verus`, and the 103-fixture
-                // corpus is blessed against exactly that. The IR has no
-                // `And`/`Or` control-flow form, only this node; keep it that
-                // way. If short-circuiting is ever wanted it is a language
-                // change with its own spec, not a codegen detail.
+                // For `et` and `vel` this is spec §3.5 and not an oversight, so
+                // `verus vel (°V / nullus par_est °I)` is a runtime error rather
+                // than `verus`. `conformance/errores/{vel,et}-utrumque-latus`
+                // are exactly those two programs, and reordering or guarding
+                // these two lines fails both on all three streams —
+                // `scalares.rs`'s `{vel,et}_dextrum_latus_quoque_aestimat` say
+                // the same thing from inside this crate. The rule came from
+                // `interp.rs:131-135`, which evaluated both sides and then
+                // dispatched; the fixtures are what carry it now.
+                //
+                // The IR has no `And`/`Or` control-flow form, only this node;
+                // keep it that way. If short-circuiting is ever wanted it is a
+                // language change with its own spec, not a codegen detail.
                 let a = self.expressio(lhs)?;
                 let b = self.expressio(rhs)?;
                 self.binarium(*op, operand_ty, a, b)
@@ -1456,7 +1484,7 @@ impl<'a> Corpus<'a> {
             ExprKind::ListLit { items } => self.series(&e.ty, items),
             // `xs[i]` — **1-based, bounds-checked, and a deep copy** (spec
             // §5.4). The copy is not an optimisation this file could skip: it
-            // is `interp.rs:182`'s `items[i - 1].clone()`, and it is what keeps
+            // was `interp.rs:182`'s `items[i - 1].clone()`, and it is what keeps
             // the no-aliasing invariant — after the call the element is still
             // in the list *and* the result is a value this expression owns and
             // something above must free.
