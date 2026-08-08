@@ -462,14 +462,27 @@ runtime owns four sentences of its own:
 | sentence | raised when |
 |---|---|
 | `memoria non liberata est` | the live-allocation count is nonzero at exit (§7.5) |
-| `defectus internus: memoria violata est` | a header's magic fails, or any corrupt input |
+| `defectus internus: memoria violata est: verificatio` | a header's magic fails, or any corrupt input |
+| `defectus internus: memoria violata est: signum` | §8's handler classifies a fault as away from the stack |
 | `memoria exhausta est` | `malloc` returns null, or a length computation overflows |
 | `acervus vocationum exhaustus est` | the guard page is hit (§8) |
 
-All four are permanently UNCOVERED by design: each means the compiler is broken
-or the machine is out of memory. They follow the existing register — subject plus
-perfect passive participle plus `est`, agreeing in gender — and the three
-`memoria` sentences are deliberately one family distinguished by participle.
+All of them are permanently UNCOVERED by design: each means the compiler is
+broken or the machine is out of memory. They follow the existing register —
+subject plus perfect passive participle plus `est`, agreeing in gender — and the
+three `memoria` sentences are deliberately one family distinguished by
+participle.
+
+**`memoria violata est` is written twice and must not read twice the same.** The
+handler cannot call `liss_panic` (§8.2) and §10.3 wants the literal inline at the
+site the catalogue attributes it to, so the two are separate sites by
+construction. Worded identically they were a pair the catalogue could only ever
+downgrade: `fixtured` is granted to a workspace-unique pattern, and the first
+provocation of either would have marked both `ambiguous` permanently. The tail
+names how the fault was found — the kernel's signal, or a `verifica`'s rejection
+— which is the one thing a reader of the sentence could not otherwise recover.
+The same rule now holds for every repeated wording in the compiler: `imago non
+coniuncta est` and three of `emissio.rs`'s sentences carry tails for it.
 
 ### 5.5 `value.rs` is deleted, not extracted
 
@@ -651,6 +664,19 @@ reported as 70 would be *silently accepted* by the robustness harness, which is
 the one place we most want it caught. The diagnostic text carries the
 distinction; the exit code carries the invariant.
 
+**Amended after the whole-branch review: that argument was true about exit 70 and
+false about exit 1, and the gap was real.** Exit 1 with a well-formed Latin
+sentence was accepted by the robustness harness too — `memoria non liberata est`
+carries no file, no line, no English word, no Arabic digit and no Rust type name,
+so every lexical rule `judge` has passed it. The exit code alone bought nothing.
+What makes the argument true is a rule in `judge` keyed on the sentence, added
+beside the one for `programma abrupte cessavit` and for the same reason: a
+message that is well-formed as *language* can still be a violation for what it
+*reports*. `defectus internus: ` got one at the same time, as a prefix rather
+than a list, so a §10.3 sentence nobody has written yet is caught the day it is.
+Neither rule enters `RECORDED_RULES`; that array is violations the suite
+tolerates, and these are violations it refuses.
+
 The counter is **always on, in every build** — one relaxed atomic against a
 `malloc`. This deviates from the earlier decision to make it debug-only, for two
 reasons. With a prebuilt musl archive, "debug build" would be a property of
@@ -700,7 +726,7 @@ calls `_exit(1)`. No allocation, no formatting, no `std::io` (it locks), and
 
 ```
 si_addr ∈ [low − 1 MiB, low + page)  → Error: acervus vocationum exhaustus est
-otherwise                            → Error: defectus internus: memoria violata est
+otherwise                            → Error: defectus internus: memoria violata est: signum
 bounds unknown                       → the first
 ```
 
@@ -737,7 +763,7 @@ order and did not list the right one. The consequence would not have been an
 invariant violation — both branches are well-formed exit-1 Latin diagnostics, so
 the robustness suite would still have passed — but every real stack overflow,
 the single most common runtime failure a recursive program can have, would have
-reported `defectus internus: memoria violata est`. The `errores/acervus-exhaustus`
+reported `defectus internus: memoria violata est: signum`. The `errores/acervus-exhaustus`
 fixture is what pins this, and it would have failed.
 
 **The handler never reads `ucontext_t`.** Recovering the faulting stack pointer
@@ -1200,6 +1226,45 @@ in the runtime: `divisio per nullum`, `modulus per nullum` and
 higher fixtured fraction, and no `ambiguous` entries from cross-crate
 duplication — because there is no longer a second implementation to duplicate.
 
+#### Two metrics, not one — amended after the whole-branch review
+
+**The prediction above is stated against the wrong number, and this paragraph is
+the correction.** As one total it reads as wrong: 115 sites → 123, and 70/115 =
+60.9% fixtured → 70/123 = 56.9%. More sites, a lower fraction.
+
+The cause is **this section's own instruction to add the `Defectus::novus(`
+marker**. That marker brings the compiler's twenty admissions of its own bugs
+into the catalogue — `munus componi non potuit`, `machina ignota est`, and
+eighteen more. Every one of them is permanently UNCOVERED and *must* be: no
+fixture can provoke a compiler defect on purpose. Counting them alongside the
+diagnostics a fixture is supposed to reach makes the ratchet's headline number
+fall whenever the compiler grows a new internal check, which is the opposite of
+what a ratchet should reward.
+
+So the catalogue is read as **two metrics**, and only the first is the ratchet's
+subject:
+
+1. **Diagnostics a program can provoke** — every site whose sentence does not
+   begin `defectus internus: `. This is what the fixture corpus is for and what
+   the criterion in §12 is stated against. **115 → 103 sites, 70 → 70 fixtured,
+   60.9% → 68.0%.**
+2. **Compiler-internal failures** — the `defectus internus: ` sites. **0 → 20,
+   all UNCOVERED, all permanently so.** Growth here is a compiler that checks
+   itself more, not coverage that got worse. What guards *these* is not a
+   fixture but `judge`'s `no internal defect` rule (§7.5): a compiler-internal
+   sentence reaching a fuzzed run is a failure, not a row to be covered.
+
+On metric 1 the prediction above is **exactly right, on both halves** — fewer
+sites and a higher fixtured fraction. It was only ever wrong about a total that
+mixes the two.
+
+A handful of metric-1 rows are also unprovokable by design and say so where they
+stand: `memoria non liberata est`, `memoria exhausta est`, `programma abrupte
+cessavit`, and `cli.rs`'s I/O failures, which `tests/cli.rs` covers because git
+cannot carry a file mode. The `defectus internus: ` prefix is a proxy for
+"only a broken compiler reaches this", not a complete census of one — but it is
+an exact, greppable proxy, which a hand-maintained list would not be.
+
 ### 10.4 Re-homing what dies with the interpreter
 
 **The timing matters more than the mechanics: everything that uses the
@@ -1302,20 +1367,52 @@ musl targets, and `qemu` for the aarch64 checkpoint. MSRV rises 1.85 → 1.94.
 - `liss build examples/computatrum` produces a statically linked ELF that runs
   on a machine with no Rust toolchain and matches its conformance fixture.
 - **Before the interpreter is deleted**, every fixture produces byte-identical
-  `Rendered` values under both backends, on both architectures. This is the
-  gate on the deletion, not a report after it.
+  `Rendered` values under both backends. **Achieved on x86_64 only, and the
+  "on both architectures" half was never discharged.** Task 17's differential
+  harness drove both backends through `liss run` on the host; there was never an
+  aarch64 leg. Recorded honestly rather than ticked:
+
+  - **113 fixtures, differentially, on x86_64, before the deletion** — done, and
+    it is what gated Task 19.
+  - **aarch64 execution: five programs**, all under `qemu-aarch64` in
+    `liss-codegen/tests/aemulatio.rs` (`exemplum-salve`, D-10's redacted exit
+    status, stack exhaustion, the displaced-stack discriminator, and a
+    live-count check). `series.rs:880-882` states the same limit from the other
+    side: only the host's image is executed anywhere in the suite. Everything
+    else on aarch64 is *compiled* and inspected, not run.
+  - **Full-corpus aarch64 execution: outstanding**, and **now unachievable in
+    the form written here.** The criterion is differential — it compares two
+    backends — and the oracle was deleted in Task 19. Nothing can produce the
+    interpreter's aarch64 `Rendered` values retroactively. What remains
+    achievable is the weaker, still-worthwhile claim: run the corpus under
+    `qemu-aarch64` and compare against the *fixtures*, which is a second
+    architecture agreeing with recorded expectations rather than with a second
+    implementation. That is a task for whoever schedules aarch64 next, and it is
+    not this milestone's.
 - All 113 fixtures pass through the compiled path, with exactly one intentional
   re-blessing (§10.1). Task 17 measured 112 already byte-identical and the
   113th to be exactly that re-blessing. **47 of the 113 reach codegen**; the
   rest pin front-end parity between `liss` and the interpreter, which is a
   different and lesser claim — see §10.1.
 - The live-allocation counter reads zero at exit for every `currunt` and
-  `monita` fixture, including the six new `memoria-*` cases.
+  `monita` fixture **that exits 0**, including the six new `memoria-*` cases.
+  The qualifier is not a weakening: §7.5's check runs on the success path, and
+  `conformance/currunt/scribe-ante-acervum` legitimately has no success path —
+  it exhausts the stack on purpose, and the handler `_exit`s without reaching
+  the check. Its `NOTA.md` argues this in full. Stated unqualified, the
+  criterion demands a count from a program that never gets to take one.
 - Unbounded recursion produces `Error: acervus vocationum exhaustus est` and
   exit 1 — never a signal.
 - `cargo test --workspace` is green with `interp.rs` deleted, and
   `docs/defectus/2026-08-03-index.md` records D-19 closed and D-04 amended.
-- The catalogue snapshot has fewer sites and more fixtured than today.
+- The catalogue snapshot has fewer sites and more fixtured than today, **counted
+  over the diagnostics a program can provoke** — §10.3's metric 1, which is what
+  the fixture corpus is for. Achieved: 115 → 103 sites and 60.9% → 68.0%
+  fixtured. Compiler-internal failures are counted separately and went 0 → 20,
+  all permanently UNCOVERED; that number rising means the compiler checks itself
+  more, and it is `judge`'s `no internal defect` rule that guards it, not a
+  fixture. Stated as one total the criterion fails (115 → 123 sites, 60.9% →
+  56.9%) for a reason §10.3 created — see §10.3 for the full accounting.
 - A cross-built aarch64 binary runs under `qemu-aarch64`.
 
 ## 13. Open Questions

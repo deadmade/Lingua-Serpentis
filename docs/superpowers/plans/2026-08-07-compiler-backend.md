@@ -745,6 +745,6 @@ Expected: `cargo test --workspace` green with no `interp` module; `git grep -c '
 - [ ] `nix develop -c cargo test --workspace` green.
 - [ ] `liss build examples/computatrum --exi /tmp/computatrum`; `file` reports statically linked; running it matches `conformance/currunt/exemplum-computatrum`.
 - [ ] The binary runs in a container with no Rust toolchain.
-- [ ] Every `currunt` and `monita` fixture exits with the live-allocation count at zero.
-- [ ] `catalogus` snapshot has fewer sites and more fixtured than at Task 1.
+- [ ] Every `currunt` and `monita` fixture **that exits 0** has the live-allocation count at zero. `conformance/currunt/scribe-ante-acervum` has no success path for §7.5's check to run on — it dies on the guard page and the handler `_exit`s — and its `NOTA.md` argues the exception in full.
+- [ ] `catalogus` snapshot has fewer sites and more fixtured than at Task 1, **counted over the diagnostics a program can provoke** (spec §10.3's metric 1). Compiler-internal `defectus internus: ` sites are counted separately and are permanently UNCOVERED by design.
 - [ ] `docs/defectus/2026-08-03-index.md` records D-19 closed and D-04 superseded.
