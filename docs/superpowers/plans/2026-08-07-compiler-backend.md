@@ -690,6 +690,30 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 - [ ] `support::run_fixture` switches to the compiled path — **through `liss run`, not the raw image.** If it runs the image directly, the three `Monitum`-carrying `nuntii` files (`lista-index-lectio`, `lista-litteralis`, `longitudo-numerat`) have to be re-blessed empty, which contradicts "the recursion fixture is the only expectation that changes" and deletes the corpus's only coverage of Latinity warnings. `conformance.rs` inherits compilata's job.
 - [ ] Remove the two now-unreachable checker sites **structurally, not with `unreachable!`**: `current_ret` becomes non-optional, `root_namespace` a constructor parameter.
 - [ ] `catalogus.rs`: add the three crates, the `liss_panic(`, `Defectus::novus(` and `NUNTIUS_` markers, plus a unit test pinning that `b"…"` literals are extracted.
+
+> **`judge` must gain a rule for `programma abrupte cessavit`, or §8 loses all fuzzed enforcement.**
+> Spec §9.5 justifies the CLI mapping a signalled child to that sentence on the
+> grounds that a bare 139 "would be silently accepted by the robustness harness."
+> **That reasoning is wrong, and both forms are accepted today**: 139 fails
+> `judge`'s `code != 1` test, and the mapped form parses as a well-formed
+> structural diagnostic with no English, digits or Rust type names. `judge` only
+> ever sees `Outcome::Signalled` for the process *it* spawned, and under
+> `liss run` that is the parent.
+>
+> So once `run_binary::BINARY` points at `liss`, §8's guarantee — that no compiled
+> program dies by signal — has **zero** fuzzed enforcement unless `judge` treats
+> that sentence as a `no abort` violation. Add the rule in the same commit that
+> flips the binary.
+
+> **Two catalogue rows can only go `ambiguous`, never `fixtured`.**
+> `via '{}' non inventa est` and `nomen scidae in '.liss' desinere debet` now exist
+> at two sites each — `main.rs` and `cli.rs`. They are `UNCOVERED` today only
+> because neither has been *observed*: `catalogus.rs`'s ladder tests `!seen` before
+> duplication. The moment `run_fixture` points at `liss run` and a fixture provokes
+> either, **all four** sites flip to `ambiguous`, and no fixture can move them back
+> — only a reword can. This resolves itself if `main.rs` is deleted here; §9.5 says
+> `lingua-serpentis` stays "for this milestone", so decide deliberately rather than
+> discovering it as a header regression.
 - [ ] Register: D-04 superseded with the new mechanism and wording, D-06 noted as relocated into the runtime, **D-19 closed**. Revisit **D-26** — with the interpreter gone the divergence has only one side left, so it becomes a plain language question about a terminator in a `dum` init clause.
 - [ ] Re-bless `catalogus` and read every removed line. Expect fewer sites and a higher fixtured fraction.
 
