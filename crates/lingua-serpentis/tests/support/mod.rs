@@ -7,6 +7,110 @@ pub mod diag;
 pub mod mutate;
 pub mod proc;
 
+/// The compiling driver, built by cargo because these targets name it.
+pub const LISS: &str = env!("CARGO_BIN_EXE_liss");
+
+/// How long one program may take under `liss run` before it is called a hang
+/// rather than waited on.
+///
+/// Generous, because it is a backstop and not a performance budget: `liss run`
+/// on the slowest thing in the corpus is two orders of magnitude inside it.
+/// Without a deadline a program that does not terminate hangs the whole suite
+/// instead, on a machine where nobody can see which one did it.
+const MORA: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// How often the deadline is checked. Short enough to add nothing measurable to
+/// a run that takes tens of milliseconds.
+const PAUSA: std::time::Duration = std::time::Duration::from_millis(2);
+
+/// **Compile and run one program through `liss run`, and render its two streams
+/// and status the way a caller sees them.**
+///
+/// `target` is a path exactly as a user would type it: a `.liss` file is a
+/// single-source program and a directory is a program folder, and `liss`
+/// chooses between them on the same evidence. That distinction is load-bearing
+/// rather than incidental — the two modes render diagnostics differently
+/// (`Error in linea N:` against `Error in 'f.liss', linea N:`), so a harness
+/// that decided for `liss` would be able to hide the difference.
+///
+/// # Why `liss run` and not the image
+///
+/// **Latinity warnings are a front-end product.** The parent writes them and
+/// *then* spawns the child (spec §9.5), so the bytes a caller sees are the
+/// parent's warnings followed by the child's own diagnostics — which is exactly
+/// what the blessed `nuntii` files record, the interpreter having had only one
+/// process to write from. A harness that ran the bare image would see none of
+/// them and would have to re-bless three `nuntii` files empty, deleting the
+/// corpus's only coverage of Latinity warnings in the name of a harness detail.
+///
+/// # Why the two processes' streams stay in order
+///
+/// The parent's stderr and the child's are the *same open file description* —
+/// `Stdio::from(File)` hands the child a dup of the handle, so the two share one
+/// offset — and the parent flushes before it spawns. Captured to files rather
+/// than pipes because a program that outruns a pipe buffer would deadlock a
+/// harness that waits before it reads, and some of these do so on purpose.
+pub fn curre(target: &Path) -> Result<Rendered, String> {
+    use std::process::{Command, Stdio};
+
+    let dir = proc::temp_dir("liss-curre");
+    let emissio = dir.path().join("emissio");
+    let nuntii = dir.path().join("nuntii");
+    let aperi = |p: &Path| {
+        std::fs::File::create(p).map_err(|e| format!("cannot create {}: {e}", p.display()))
+    };
+    let out = aperi(&emissio)?;
+    let err = aperi(&nuntii)?;
+
+    let mut child = Command::new(LISS)
+        .arg("run")
+        .arg(target)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(out))
+        .stderr(Stdio::from(err))
+        .spawn()
+        .map_err(|e| format!("cannot spawn `{LISS} run {}`: {e}", target.display()))?;
+
+    let terminus = std::time::Instant::now() + MORA;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break s,
+            Ok(None) if std::time::Instant::now() >= terminus => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "`liss run {}` was still running after {MORA:?}",
+                    target.display()
+                ));
+            }
+            Ok(None) => std::thread::sleep(PAUSA),
+            Err(e) => return Err(format!("wait on `liss run {}`: {e}", target.display())),
+        }
+    };
+
+    let lege = |p: &Path| {
+        std::fs::read(p)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .map_err(|e| format!("cannot read {}: {e}", p.display()))
+    };
+    let stdout = lege(&emissio)?;
+    let stderr = lege(&nuntii)?;
+
+    // `code()` is `None` exactly when a signal ended the process, and the
+    // process here is the compiling **parent**: `liss` maps a signalled child to
+    // `Error: programma abrupte cessavit` and exit 1 (§9.5), so this arm means
+    // the compiler itself was killed. Reported rather than unwrapped, because a
+    // panic here would name the harness instead of the failure.
+    let code = status.code().ok_or_else(|| {
+        format!(
+            "`liss run {}` was killed by a signal; stdout {stdout:?}, stderr {stderr:?}",
+            target.display()
+        )
+    })?;
+
+    Ok(Rendered { stdout, stderr, code })
+}
+
 /// The four corpus categories, in the order they are reported.
 pub const CATEGORIES: [&str; 4] = ["currunt", "errores", "monita", "defectus"];
 
