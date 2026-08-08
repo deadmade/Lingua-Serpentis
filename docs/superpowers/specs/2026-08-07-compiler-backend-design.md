@@ -967,16 +967,31 @@ discipline. The consequence is concrete: the robustness harness's English
 denylist requires an explicit, commented carve-out scoped to the usage string —
 not a general weakening of the rule.
 
-### 9.6 The library API is unchanged
+### 9.6 What survives the swap is `render`, not the `run*` family
 
-`render`, `run_program_with_warnings`, `run_dir_with_warnings` and
-`run_file_with_warnings` keep their exact signatures; the `String` is now the
-child's captured stdout and the `u8` its exit status.
+**This section originally said the opposite, and the reasoning that justified it
+did not survive §9.5.** It claimed `run_program_with_warnings`,
+`run_dir_with_warnings` and `run_file_with_warnings` would keep their signatures,
+re-implemented over the compiled path, so that the fixture runner "calls what it
+calls today" and `conformance.rs` needs no edit.
 
-This is the move that lets the corpus tooling survive the backend swap: the
-fixture runner calls what it calls today and receives what it receives today, so
-fixture discovery, comparison, blessing and the diagnostic catalogue all keep
-working unchanged, and `conformance.rs` needs no edit at all.
+That premise is gone. Warnings are a front-end product, emitted by the **parent
+before spawning** (§9.5), so the fixture runner must route through **`liss run`**
+— a raw image has no parent to emit them, and comparing against a blessed
+`nuntii` that contains them would then require subtracting on one side, which is
+exactly how a compiled path that wrongly omits warnings passes. Once the harness
+goes through the CLI, the `run*` family has no caller left in the tooling it was
+being preserved for.
+
+What would remain is a library function that spawns a compiler and forks a
+child: a smaller `liss run` with a worse interface. **They are deleted with the
+interpreter.**
+
+**`render` does survive**, and it is what actually carries the corpus tooling
+across: `support::compare`, the bless machinery and `catalogus.rs` all speak
+`Rendered { stdout, stderr, code }`, and that shape is unchanged whether the
+bytes came from a tree-walk or from a spawned child. The thing that made the
+swap cheap was the *output shape*, not a preserved entry point.
 
 ## 10. Testing
 
