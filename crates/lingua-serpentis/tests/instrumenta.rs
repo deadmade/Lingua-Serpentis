@@ -21,6 +21,30 @@ fn musl_std_exists_for_both_targets() {
     }
 }
 
+/// `qemu-aarch64` is how the **second** target stops being a compiled-but-unrun
+/// one: `liss-codegen/tests/aemulatio.rs` runs cross-built aarch64 images under
+/// it. Task 1 put it in the dev shell.
+///
+/// It is asserted here, beside the toolchain, rather than skipped there. A
+/// cross-architecture test that quietly does not run is worse than none — the
+/// suite reports green either way, and only one of those greens means the
+/// second architecture works.
+#[test]
+fn qemu_aarch64_is_on_the_path() {
+    let out = Command::new("qemu-aarch64").arg("--version").output();
+    let out = out.unwrap_or_else(|e| {
+        panic!(
+            "qemu-aarch64 did not run ({e}). It is `pkgs.qemu` in flake.nix; \
+             without it the aarch64 target can be built but never executed"
+        )
+    });
+    assert!(
+        out.status.success(),
+        "qemu-aarch64 --version exited {:?}",
+        out.status.code(),
+    );
+}
+
 #[test]
 fn the_self_contained_crt_objects_are_present() {
     for t in ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"] {

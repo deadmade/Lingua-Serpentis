@@ -257,6 +257,111 @@ mod tests {
         inventa
     }
 
+    /// The section-relative span of one defined function: `(ab, ad)`.
+    fn spatium(fasciculus: &object::File<'_>, nomen: &str) -> (u64, u64) {
+        let signum = fasciculus
+            .symbol_by_name(nomen)
+            .unwrap_or_else(|| panic!("the runtime object defines `{nomen}`"));
+        let ab = signum.address();
+        (ab, ab + signum.size())
+    }
+
+    /// **Every** offset inside `nomen`'s body at which a relocation names
+    /// `petitum`, relative to the start of that body.
+    ///
+    /// [`vocationes`] answers "which symbols, and how early"; this answers "how
+    /// many times, and where" — which is the question `sigaction` needs, since
+    /// installing one disposition and forgetting the other is exactly the
+    /// failure spec §8.2's table warns about and a first-offset map cannot see.
+    fn loci(fasciculus: &object::File<'_>, nomen: &str, petitum: &str) -> Vec<u64> {
+        let (ab, ad) = spatium(fasciculus, nomen);
+        let index = fasciculus
+            .symbol_by_name(nomen)
+            .and_then(|s| s.section_index())
+            .expect("the function is defined in a section");
+        let sectio = fasciculus
+            .section_by_index(index)
+            .expect("that section exists");
+        let mut inventa = Vec::new();
+        for (locus, relocatio) in sectio.relocations() {
+            if locus < ab || locus >= ad {
+                continue;
+            }
+            let RelocationTarget::Symbol(idx) = relocatio.target() else {
+                continue;
+            };
+            let Ok(signum) = fasciculus.symbol_by_index(idx) else {
+                continue;
+            };
+            if signum.name() == Ok(petitum) {
+                inventa.push(locus - ab);
+            }
+        }
+        inventa.sort_unstable();
+        inventa
+    }
+
+    /// The machine code of one defined function.
+    fn machina_corporis<'a>(fasciculus: &'a object::File<'a>, nomen: &str) -> Vec<u8> {
+        let (ab, ad) = spatium(fasciculus, nomen);
+        let index = fasciculus
+            .symbol_by_name(nomen)
+            .and_then(|s| s.section_index())
+            .expect("the function is defined in a section");
+        let sectio = fasciculus
+            .section_by_index(index)
+            .expect("that section exists");
+        let data = sectio.data().expect("the section has contents");
+        let ab = usize::try_from(ab - sectio.address()).expect("an offset");
+        let ad = usize::try_from(ad - sectio.address()).expect("an offset");
+        data[ab..ad].to_vec()
+    }
+
+    /// aarch64 `MOVZ w<Rd>, #imm16` with `hw == 0` — the instruction that puts a
+    /// small constant into an argument register. `0x5280_0000 | imm16 << 5 | Rd`.
+    ///
+    /// Returns `(Rd, imm16)`.
+    fn movz_w(instructio: u32) -> Option<(u32, u32)> {
+        (instructio & 0xFFE0_0000 == 0x5280_0000)
+            .then_some((instructio & 0x1F, (instructio >> 5) & 0xFFFF))
+    }
+
+    /// What aarch64 code most recently put in `w0` before the instruction at
+    /// `locus`, looked for over the preceding [`RETRO`] instructions.
+    ///
+    /// This is how a *call's argument* is read off a stripped object with no
+    /// disassembler in the dependency list: on aarch64 every instruction is
+    /// four bytes, a relocation against a `bl` sits on the `bl` itself, and the
+    /// first argument of a C call is `w0`.
+    fn argumentum_primum(corpus: &[u8], locus: u64) -> Option<u32> {
+        let locus = usize::try_from(locus).ok()?;
+        let mut retro = 1;
+        while retro <= RETRO {
+            let inceptum = locus.checked_sub(retro * 4)?;
+            let quattuor: [u8; 4] = corpus.get(inceptum..inceptum + 4)?.try_into().ok()?;
+            if let Some((0, imm)) = movz_w(u32::from_le_bytes(quattuor)) {
+                return Some(imm);
+            }
+            retro += 1;
+        }
+        None
+    }
+
+    /// How far back [`argumentum_primum`] looks. Eight instructions; the
+    /// shipped code sets `w0` one or two before the call.
+    const RETRO: usize = 8;
+
+    /// `_SC_PAGESIZE`, the `sysconf` request number. 30 on Linux, in musl and
+    /// glibc alike.
+    const SC_PAGESIZE: u32 = 30;
+
+    /// The two signal numbers spec §8.2 requires. Both are in the
+    /// architecture-independent half of the Linux signal table, so they are the
+    /// same on x86_64 and aarch64 — which is what lets §8 need "no per-target
+    /// code beyond the two signal numbers" and then have them be the same two.
+    const SIGSEGV: u32 = 11;
+    const SIGBUS: u32 = 7;
+
     #[test]
     fn every_blob_is_present_and_is_this_target_s_architecture() {
         for meta in Target::OMNES {
@@ -460,6 +565,135 @@ mod tests {
                  the guard only at +{custos:#x}. Everything expensive happens \
                  before the program runs (spec §8.2), and a handler installed \
                  afterwards protects nothing that recursed in between",
+                meta.triple(),
+            );
+        }
+    }
+
+    /// **Spec §8.2's first per-architecture row, asserted against the shipped
+    /// bytes.** "signal delivered: `SIGSEGV` on x86_64; `SIGSEGV`, occasionally
+    /// `SIGBUS`, on aarch64 — both are trapped."
+    ///
+    /// `tests/custos.rs` in `liss-abi` proves the handler *works*, but only for
+    /// the signal it can provoke, and only on the host. A `SIGBUS` cannot be
+    /// provoked reliably from a Lingua Serpentis program on any architecture,
+    /// and on this 4 KiB-page x86_64 host under `qemu-aarch64` it cannot be
+    /// provoked at all — so the aarch64 half of that row is checked here, by
+    /// reading the *installer* out of the runtime this compiler embeds rather
+    /// than by arranging a fault.
+    ///
+    /// Two things are asserted, and the second is the one that matters:
+    ///
+    /// - `liss_custos_institue` calls `sigaction` **twice**, on both targets.
+    ///   One call is what a `custos.rs` that had quietly lost its `SIGBUS` line
+    ///   would leave, and every existing test would still pass, because every
+    ///   existing test faults with `SIGSEGV`.
+    /// - on aarch64, the two signal numbers handed to those calls are
+    ///   **7 and 11** — `SIGBUS` and `SIGSEGV` — read out of the `movz w0`
+    ///   that precedes each `bl`.
+    ///
+    /// # What this assumes, for whoever it breaks on
+    ///
+    /// It reads instruction encodings, so it is a statement about *this* code
+    /// generator's output. Three legitimate changes would fail it: setting `w0`
+    /// more than [`RETRO`] instructions before the call, materialising a signal
+    /// number some way other than a `MOVZ` (a shared constant register, say),
+    /// and routing the two calls through a loop over an array of signal numbers
+    /// — which would be a perfectly good refactor and would leave one `bl` and
+    /// no immediates at all. All three are fail-safe, none is a bug, and a
+    /// failure here is a prompt to re-establish the property, never to delete a
+    /// disposition.
+    #[test]
+    fn the_guard_traps_both_sigsegv_and_sigbus() {
+        for meta in Target::OMNES {
+            let octeti = meta.runtime().nucleus;
+            let fasciculus = object::File::parse(octeti).expect("an object file");
+            let sedes = loci(&fasciculus, "liss_custos_institue", "sigaction");
+            assert_eq!(
+                sedes.len(),
+                2,
+                "{}: `liss_custos_institue` calls sigaction {} time(s). Spec \
+                 §8.2 requires both SIGSEGV and SIGBUS, because on aarch64 a \
+                 stack fault may arrive as either, and every test that provokes \
+                 one provokes SIGSEGV",
+                meta.triple(),
+                sedes.len(),
+            );
+
+            if meta != Target::Aarch64 {
+                continue;
+            }
+            let corpus = machina_corporis(&fasciculus, "liss_custos_institue");
+            let mut signa: Vec<u32> = sedes
+                .iter()
+                .map(|locus| {
+                    argumentum_primum(&corpus, *locus).unwrap_or_else(|| {
+                        panic!(
+                            "{}: no `movz w0, #imm` within {RETRO} instructions \
+                             before the sigaction call at +{locus:#x}",
+                            meta.triple(),
+                        )
+                    })
+                })
+                .collect();
+            signa.sort_unstable();
+            assert_eq!(
+                signa,
+                vec![SIGBUS, SIGSEGV],
+                "{}: the guard is installed for signals {signa:?}, not for \
+                 SIGBUS ({SIGBUS}) and SIGSEGV ({SIGSEGV})",
+                meta.triple(),
+            );
+        }
+    }
+
+    /// **Spec §8.2's second per-architecture row**: "page size — 4 KiB on
+    /// x86_64; 4, 16 or 64 KiB on aarch64 — `sysconf(_SC_PAGESIZE)`, never a
+    /// literal."
+    ///
+    /// This host reports 4096 and `qemu-aarch64` inherits it, so a runtime that
+    /// hardcoded 4096 would behave identically to a correct one everywhere this
+    /// suite can reach. The property therefore has to be checked as a property
+    /// of the code rather than of a run: `liss_custos_institue` asks `sysconf`,
+    /// and on aarch64 it asks it for `_SC_PAGESIZE` specifically.
+    ///
+    /// What this does **not** establish is in the report and worth repeating:
+    /// nothing here or anywhere in this suite has ever executed the handler on
+    /// a kernel whose pages are 16 or 64 KiB. The call is proven; the arithmetic
+    /// downstream of a 16384 is not.
+    #[test]
+    fn the_page_size_is_asked_of_sysconf_and_never_assumed() {
+        for meta in Target::OMNES {
+            let octeti = meta.runtime().nucleus;
+            let fasciculus = object::File::parse(octeti).expect("an object file");
+            let sedes = loci(&fasciculus, "liss_custos_institue", "sysconf");
+            assert_eq!(
+                sedes.len(),
+                1,
+                "{}: `liss_custos_institue` calls sysconf {} time(s); the page \
+                 size is asked for once, at initialisation, and never in the \
+                 handler (spec §8.2)",
+                meta.triple(),
+                sedes.len(),
+            );
+
+            if meta != Target::Aarch64 {
+                continue;
+            }
+            let corpus = machina_corporis(&fasciculus, "liss_custos_institue");
+            let quaesitum = argumentum_primum(&corpus, sedes[0]).unwrap_or_else(|| {
+                panic!(
+                    "{}: no `movz w0, #imm` within {RETRO} instructions before \
+                     the sysconf call at +{:#x}",
+                    meta.triple(),
+                    sedes[0],
+                )
+            });
+            assert_eq!(
+                quaesitum,
+                SC_PAGESIZE,
+                "{}: sysconf is asked for request {quaesitum}, not \
+                 _SC_PAGESIZE ({SC_PAGESIZE})",
                 meta.triple(),
             );
         }
