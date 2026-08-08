@@ -168,7 +168,7 @@ mod tests {
     use super::*;
     use object::read::elf::FileHeader;
     use object::{Object, ObjectSection, ObjectSymbol, RelocationTarget};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     /// The ELF `e_machine` of a blob, read from the header rather than inferred
     /// from `object`'s `Architecture` enum: the assertion is about the number in
@@ -272,7 +272,14 @@ mod tests {
     /// [`vocationes`] answers "which symbols, and how early"; this answers "how
     /// many times, and where" — which is the question `sigaction` needs, since
     /// installing one disposition and forgetting the other is exactly the
-    /// failure spec §8.2's table warns about and a first-offset map cannot see.
+    /// failure spec §8.2 warns about and a first-offset map cannot see.
+    ///
+    /// **Scoped to `nomen`'s own bytes, and deliberately so**: its two callers
+    /// read *instruction operands* at the offsets it returns, which only means
+    /// anything within one function's body. Anything asking "what can this code
+    /// reach" wants [`clausura`] instead — this function stopping at the symbol
+    /// boundary was a real hole in `the_handler_asks_nothing_and_allocates_
+    /// nothing` before that existed.
     fn loci(fasciculus: &object::File<'_>, nomen: &str, petitum: &str) -> Vec<u64> {
         let (ab, ad) = spatium(fasciculus, nomen);
         let index = fasciculus
@@ -299,6 +306,189 @@ mod tests {
         }
         inventa.sort_unstable();
         inventa
+    }
+
+    /// How many functions the reachable set may hold before [`clausura`] gives
+    /// up rather than quietly scanning the object.
+    ///
+    /// Measured today: **4 on both targets** — `manus`, `discerne`, `erratum`
+    /// and `effunde`. 32 leaves room for a refactor and still fails loudly if
+    /// the handler ever calls into something large, which would itself be the
+    /// finding, since §8.2 wants the handler tiny.
+    const LIMES_CLAUSURAE: usize = 32;
+
+    /// The trailing identifier of a v0-mangled symbol, for a readable message:
+    /// `_RNvNtCs…_8liss_abi6custos8discerne` → `discerne`. Unmangled names come
+    /// back whole.
+    fn nomen_breve(nomen: &str) -> &str {
+        let cauda = nomen
+            .rfind(|c: char| !(c.is_ascii_alphabetic() || c == '_'))
+            .map_or(0, |i| i + 1);
+        nomen
+            .get(cauda..)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(nomen)
+    }
+
+    /// Every **named** relocation reachable from `radix`, mapped to the function
+    /// that makes it — following *local, section-relative* relocations
+    /// transitively through the object.
+    ///
+    /// # Why the transitive part is the whole point
+    ///
+    /// After `ld -r`, a call to a private Rust `fn` in the same object is a
+    /// relocation against a **section symbol** with an addend, carrying no name
+    /// at all. [`loci`] therefore never matches one, and a scan bounded by a
+    /// single symbol's byte range cannot see anything the function calls. On
+    /// aarch64 that hid three hops — `manus` reaches `discerne`, `erratum` and
+    /// `effunde` that way, and `erratum`/`effunde` are where `write` and
+    /// `__errno_location` actually live. A forbidden call added to `discerne`,
+    /// which is the discriminator and arguably the component §8.2's "never in
+    /// the handler" is *most* about, passed the un-closed check silently.
+    ///
+    /// # Where it stops, which is a real limit and not an oversight
+    ///
+    /// Traversal follows local (unnamed) targets, and **named** ones only when
+    /// the name begins with `liss_` — our own runtime, which is
+    /// `#[unsafe(no_mangle)]` and so appears by name the moment the optimiser
+    /// declines to inline it. `liss_scribe_erratum` is exactly that case and
+    /// would otherwise be a second hole of the same shape.
+    ///
+    /// It does **not** descend into musl. `write` is defined in this object
+    /// because §9.2 prelinks `libc.a`, and following it would drag in the
+    /// syscall layer and much of the C library — the "whole-object scan nobody
+    /// can reason about". So the result describes the **boundary the handler
+    /// presents to libc**, and the denylist is a check on that boundary. What a
+    /// permitted callee does once entered is musl's business, not this test's.
+    fn clausura(fasciculus: &object::File<'_>, radix: &str) -> (BTreeMap<String, String>, usize) {
+        // (section, address) → (name, size), for every function in the object,
+        // so a (section, offset) landing site can be resolved to what contains it.
+        let mut munera: BTreeMap<(usize, u64), (String, u64)> = BTreeMap::new();
+        for signum in fasciculus.symbols() {
+            if signum.kind() != object::SymbolKind::Text || signum.size() == 0 {
+                continue;
+            }
+            let (Some(index), Ok(nomen)) = (signum.section_index(), signum.name()) else {
+                continue;
+            };
+            munera.insert(
+                (index.0, signum.address()),
+                (nomen.to_owned(), signum.size()),
+            );
+        }
+
+        // **The addend of a PC-relative relocation carries an architecture's own
+        // bias, and getting this wrong fails silently.** x86_64's `R_X86_64_PLT32`
+        // stores `S + A - P`, so a call to a function at section offset `X` is
+        // emitted against the *section* symbol with `A = X - 4` — the four bytes
+        // between the field and the end of the instruction. aarch64's
+        // `R_AARCH64_CALL26` carries no such bias and uses `A = X`.
+        //
+        // An earlier version added the addend to the symbol address in unsigned
+        // arithmetic. On aarch64, where `A` is 0, it worked. On x86_64 every
+        // `0 + (-4)` wrapped to `u64::MAX - 3`, resolved to nothing, and the
+        // traversal stopped at the handler's own body — so the whole closure was
+        // one node and the x86_64 half of this check was inert while looking
+        // exactly like the aarch64 half. Signed arithmetic clamped at zero is
+        // what makes the bias harmless.
+        //
+        // Clamping is exact rather than approximate only because rustc gives
+        // every function its own section, so each landing site is offset 0 of a
+        // section holding one function — verified below, loudly, rather than
+        // assumed, because the moment two functions share a section the bias has
+        // to be undone properly instead of clamped away.
+        let continens =
+            |sectio: usize, addendum: i64, basis: u64| -> Option<(usize, u64, String, u64)> {
+                let locus = u64::try_from((basis as i64).saturating_add(addendum).max(0)).ok()?;
+                let ((index, ab), (nomen, mensura)) =
+                    munera.range(..=(sectio, locus)).next_back()?;
+                if *index != sectio || locus >= ab + mensura {
+                    return None;
+                }
+                let comites = munera.range((sectio, 0)..=(sectio, u64::MAX)).count();
+                assert_eq!(
+                    comites,
+                    1,
+                    "section {sectio} holds {comites} functions, so a landing site \
+                 can no longer be resolved by clamping a PC-relative addend to \
+                 zero — the architecture's bias has to be undone exactly. \
+                 `{}` is where the traversal stopped being sound",
+                    nomen_breve(nomen),
+                );
+                Some((*index, *ab, nomen.clone(), *mensura))
+            };
+
+        let principium = fasciculus
+            .symbols()
+            .find(|s| s.name().is_ok_and(|n| n == radix || n.ends_with(radix)))
+            .unwrap_or_else(|| panic!("the runtime object has no `{radix}`"));
+        let index = principium
+            .section_index()
+            .expect("the root is defined in a section");
+
+        let mut restant = vec![(
+            index.0,
+            principium.address(),
+            principium.size(),
+            principium.name().unwrap_or(radix).to_owned(),
+        )];
+        let mut visitata: BTreeSet<(usize, u64)> = BTreeSet::new();
+        let mut inventa: BTreeMap<String, String> = BTreeMap::new();
+
+        while let Some((sectio_index, ab, mensura, nomen)) = restant.pop() {
+            if !visitata.insert((sectio_index, ab)) {
+                continue;
+            }
+            assert!(
+                visitata.len() <= LIMES_CLAUSURAE,
+                "the set reachable from `{radix}` exceeds {LIMES_CLAUSURAE} \
+                 functions. Either the handler grew a call into something large \
+                 — which spec §8.2 forbids on its own — or this traversal has \
+                 started following something it should stop at",
+            );
+            let Ok(sectio) = fasciculus.section_by_index(object::SectionIndex(sectio_index)) else {
+                continue;
+            };
+            for (locus, relocatio) in sectio.relocations() {
+                if locus < ab || locus >= ab + mensura {
+                    continue;
+                }
+                let RelocationTarget::Symbol(idx) = relocatio.target() else {
+                    continue;
+                };
+                let Ok(signum) = fasciculus.symbol_by_index(idx) else {
+                    continue;
+                };
+                let Ok(petitum) = signum.name() else { continue };
+
+                if !petitum.is_empty() {
+                    // A named **data** target is a message constant or a static,
+                    // not something the handler *calls*. `.Lanon.*` string
+                    // literals arrive here in quantity and say nothing about
+                    // §8.2's question, which is what code runs at fault time.
+                    if signum.kind() != object::SymbolKind::Text {
+                        continue;
+                    }
+                    inventa
+                        .entry(petitum.to_owned())
+                        .or_insert_with(|| nomen_breve(&nomen).to_owned());
+                    if !petitum.starts_with("liss_") {
+                        continue;
+                    }
+                }
+                // A section symbol (unnamed), or one of our own `liss_*`
+                // entry points: resolve where it lands and keep walking.
+                let Some(destinatio) = signum.section_index() else {
+                    continue;
+                };
+                if let Some((si, sub_ab, sub_nomen, sub_mensura)) =
+                    continens(destinatio.0, relocatio.addend(), signum.address())
+                {
+                    restant.push((si, sub_ab, sub_mensura, sub_nomen));
+                }
+            }
+        }
+        (inventa, visitata.len())
     }
 
     /// The machine code of one defined function.
@@ -755,23 +945,56 @@ mod tests {
     /// the installer into the handler is precisely the regression §8.2 is
     /// written to prevent, and no test in the workspace could see it.
     ///
-    /// Measured on the shipped objects: the handler's only named relocation, on
-    /// both targets, is `_exit`. The denylist below is therefore satisfied with
-    /// room, and it is a denylist rather than an exact allowlist because
-    /// `liss_scribe_erratum` is `#[unsafe(no_mangle)]` and would appear by name
-    /// the moment the optimiser stopped inlining it — which is legal, and not a
-    /// defect.
+    /// # The scan follows calls, and the first version did not
+    ///
+    /// An earlier version of this test asked only which symbols `manus`'s own
+    /// bytes name, and its prose — "the handler must reference none of…" —
+    /// promised more than that. After `ld -r` a call to a private Rust `fn` is a
+    /// relocation against an unnamed *section* symbol, so on aarch64 the three
+    /// functions the handler actually delegates to (`discerne`, `erratum`,
+    /// `effunde`) were one hop away and invisible. A `sysconf` added to
+    /// `discerne` — the discriminator, the component §8.2's "never in the
+    /// handler" is most about — passed. [`clausura`] closes over that, and the
+    /// mutation is now run at the new depth rather than against `manus` itself.
+    ///
+    /// Measured on the shipped objects: the reachable set is **4 functions on
+    /// both targets** — `manus`, `discerne`, `erratum`, `effunde` — and the
+    /// code it calls beyond them is exactly `write`, `__errno_location` and
+    /// `_exit`. All three are permitted: §8.2 names raw `write(2)` as the
+    /// handler's only output mechanism, and `__errno_location` is how musl
+    /// reports that call's result.
+    ///
+    /// A denylist rather than an exact allowlist, because the boundary can
+    /// legitimately gain a name: `liss_scribe_erratum` is
+    /// `#[unsafe(no_mangle)]` and appears the moment the optimiser stops
+    /// inlining it. [`clausura`] walks *into* `liss_*` names for that reason,
+    /// so such a change moves the boundary without blinding the test.
     #[test]
     fn the_handler_asks_nothing_and_allocates_nothing() {
         for meta in Target::OMNES {
             let octeti = meta.runtime().nucleus;
             let fasciculus = object::File::parse(octeti).expect("an object file");
-            let manus = fasciculus
-                .symbols()
-                .filter_map(|s| s.name().ok())
-                .find(|n| n.ends_with(MANUS))
-                .unwrap_or_else(|| panic!("{}: the runtime object has no `{MANUS}`", meta.triple()))
-                .to_owned();
+            let (attingibilia, munera) = clausura(&fasciculus, MANUS);
+            println!(
+                "{}: the handler is {munera} function(s) and reaches {:?}",
+                meta.triple(),
+                attingibilia
+                    .iter()
+                    .map(|(quid, unde)| format!("{quid} (via {unde})"))
+                    .collect::<Vec<_>>(),
+            );
+            // The closure must actually have closed. A traversal that resolved
+            // nothing would report the handler's own body, find only `_exit`,
+            // and pass — which is precisely the state this test was in before
+            // the addend bias was handled.
+            assert!(
+                munera > 1,
+                "{}: the reachable set is {munera} function(s). Either the \
+                 handler genuinely calls nothing — in which case `write` could \
+                 not be at its boundary — or the traversal is resolving no \
+                 landing sites and this check is inert",
+                meta.triple(),
+            );
 
             // Allocation — no stack to allocate on, and the allocator's own
             // locks may be held by the faulting thread. Initialisation-time
@@ -794,18 +1017,19 @@ mod tests {
                 "exit",
             ] {
                 assert!(
-                    loci(&fasciculus, &manus, vetitum).is_empty(),
-                    "{}: the signal handler calls `{vetitum}`. Everything \
-                     expensive happens at initialisation, before `liss_initium` \
-                     (spec §8.2); by the time the handler runs there is no stack \
-                     left and no allocator it can trust",
+                    !attingibilia.contains_key(vetitum),
+                    "{}: the signal handler reaches `{vetitum}`, from `{}`. \
+                     Everything expensive happens at initialisation, before \
+                     `liss_initium` (spec §8.2); by the time the handler runs \
+                     there is no stack left and no allocator it can trust",
                     meta.triple(),
+                    attingibilia.get(vetitum).map_or("?", String::as_str),
                 );
             }
 
             assert!(
-                !loci(&fasciculus, &manus, "_exit").is_empty(),
-                "{}: the signal handler never calls `_exit` — it must not \
+                attingibilia.contains_key("_exit"),
+                "{}: the signal handler never reaches `_exit` — it must not \
                  return, and it must not run `atexit` handlers on a corrupted \
                  stack (spec §8.2)",
                 meta.triple(),
