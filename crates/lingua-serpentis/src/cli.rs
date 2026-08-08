@@ -325,25 +325,17 @@ fn destination(inv: &Invocation, single: bool) -> PathBuf {
     } else {
         path.canonicalize().ok().and_then(|p| p.file_name().map(std::ffi::OsString::from))
     };
-    match base {
+    let via = match base {
         Some(b) => PathBuf::from(b),
         None => {
             eprintln!("Error: nomen exitus statui non potest; viam per '--exi' da");
             exit(1);
         }
-    }
-}
-
-/// Write the finished image and exit.
-///
-/// Mode 0755: a built artefact is a program someone will hand to someone else,
-/// unlike `run`'s temporary, which is 0700 and nameless. Permissions are set
-/// after the write as well as at creation, because `mode()` applies only when
-/// the file is created and `--exi` may well name one that already exists.
-fn build(via: &Path, imago: &[u8]) -> ! {
-    // The one shape that cannot work and is easy to reach: run from the parent
-    // of a program folder, `liss build ./computatrum` resolves its default
-    // output to the input directory itself.
+    };
+    // **Refused here rather than at the write**, which is several seconds of
+    // code generation and linking later. The one shape that cannot work and is
+    // easy to reach: run from the parent of a program folder, `liss build
+    // ./computatrum` resolves its default output to the input directory itself.
     if via.is_dir() {
         eprintln!(
             "Error: exitus '{}' directorium est; aliam viam per '--exi' da",
@@ -351,20 +343,49 @@ fn build(via: &Path, imago: &[u8]) -> ! {
         );
         exit(1);
     }
-    let scribere = || -> std::io::Result<()> {
-        let mut f = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o755)
-            .open(via)?;
-        f.write_all(imago)?;
-        f.flush()?;
-        std::fs::set_permissions(via, std::fs::Permissions::from_mode(0o755))
-    };
-    match scribere() {
+    via
+}
+
+/// Write the image, distinguishing a failure that **truncated the destination**
+/// from one that never opened it: `Err(true)` means bytes were already lost.
+///
+/// The distinction decides whether the caller removes the file. Removing on
+/// `Err(false)` would delete a file this process never managed to open — an
+/// existing program in a writable directory, say, whose own mode refuses us —
+/// which would turn a refusal to write into a deletion.
+fn write_image(via: &Path, imago: &[u8]) -> Result<(), bool> {
+    let mut f = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o755)
+        .open(via)
+        .map_err(|_| false)?;
+    f.write_all(imago)
+        .and_then(|()| f.flush())
+        // Mode 0755 twice, and the second is the one that holds: `mode()`
+        // applies only when the file is created and is masked by the umask,
+        // and `--exi` may well name a file that already exists with some
+        // other mode entirely.
+        .and_then(|()| f.set_permissions(std::fs::Permissions::from_mode(0o755)))
+        .map_err(|_| true)
+}
+
+/// Write the finished image and exit.
+///
+/// Mode 0755: a built artefact is a program someone will hand to someone else,
+/// unlike `run`'s temporary, which is 0700 and nameless.
+fn build(via: &Path, imago: &[u8]) -> ! {
+    match write_image(via, imago) {
         Ok(()) => exit(0),
-        Err(_) => {
+        Err(truncata) => {
+            // A truncated 0755 file where a working program used to be is
+            // worse than no file at all: it still looks like a program, and
+            // fails to load. `create_exclusive` removes its partial write for
+            // the same reason.
+            if truncata {
+                let _ = std::fs::remove_file(via);
+            }
             eprintln!("Error: scida '{}' scribi non potest", via.display());
             exit(1);
         }
@@ -379,8 +400,23 @@ struct Statio {
     /// before the child has been waited for would be a bug on the primary
     /// path, which is why it is carried rather than let go.
     _custos: Option<File>,
-    /// A name still on disk, on the fallback path only.
+    /// A name still on disk: the fallback path, or a primary path whose unlink
+    /// failed.
     nomen: Option<PathBuf>,
+}
+
+impl Statio {
+    /// What `run` does once `wait` has returned. On the primary path there has
+    /// been no name since before the exec and this does nothing at all.
+    ///
+    /// A method rather than three lines inside `run` so that the fallback's
+    /// cleanup is the code a test can call, instead of a second spelling of it
+    /// that could agree with a broken original.
+    fn purga(&self) {
+        if let Some(n) = &self.nomen {
+            let _ = std::fs::remove_file(n);
+        }
+    }
 }
 
 /// Create the temporary image `O_EXCL` with mode 0700 and write it. The
@@ -408,9 +444,10 @@ fn create_exclusive(imago: &[u8]) -> std::io::Result<PathBuf> {
                 let scriptum = f
                     .write_all(imago)
                     .and_then(|()| f.flush())
-                    .and_then(|()| {
-                        std::fs::set_permissions(&via, std::fs::Permissions::from_mode(0o700))
-                    });
+                    // Through the handle, not the name: by-path it would be a
+                    // second lookup of a path in a world-writable directory,
+                    // and there is no reason to look twice.
+                    .and_then(|()| f.set_permissions(std::fs::Permissions::from_mode(0o700)));
                 if let Err(e) = scriptum {
                     drop(f);
                     let _ = std::fs::remove_file(&via);
@@ -418,7 +455,14 @@ fn create_exclusive(imago: &[u8]) -> std::io::Result<PathBuf> {
                 }
                 return Ok(via);
             }
-            // `O_EXCL` lost a race with another `liss run`. Try another name.
+            // **`create_new` is not about collisions.** The name carries this
+            // process's own pid, so no second `liss run` can propose it; what
+            // `O_CREAT|O_EXCL` buys is that the open refuses an existing file
+            // *and refuses to follow a symlink*, which is the whole defence
+            // against a name pre-planted in a world-writable `TMPDIR`.
+            // Weakening this to `create` would silently reintroduce the
+            // clobber. The retry is for the residue of a previous run of this
+            // same pid, or anything else already sitting on the name.
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => last = Some(e),
             Err(e) => return Err(e),
         }
@@ -463,9 +507,22 @@ fn create_exclusive(imago: &[u8]) -> std::io::Result<PathBuf> {
 /// widening of an already-documented gap on a path that requires `/proc` to be
 /// absent to be reached at all, not a new one.
 fn stage(imago: &[u8]) -> std::io::Result<Statio> {
+    stage_in(imago, Path::new("/proc/self/fd"))
+}
+
+/// [`stage`], with the descriptor directory named rather than hardcoded.
+///
+/// The parameter exists **only** so the fallback has automated coverage: both
+/// branches are otherwise unreachable in a test suite, since every host that
+/// runs these tests mounts `/proc`, and a refactor that stopped keeping the
+/// name or stopped removing it would leak one 0700 image per `liss run` on
+/// every host without `/proc` — containers, chroots, some sandboxes — with the
+/// whole suite green. Passing a directory that does not exist forces the
+/// fallback exactly as an unmounted `/proc` would.
+fn stage_in(imago: &[u8], proc_fd: &Path) -> std::io::Result<Statio> {
     let via = create_exclusive(imago)?;
 
-    if !Path::new("/proc/self/fd").is_dir() {
+    if !proc_fd.is_dir() {
         return Ok(Statio { via: via.clone(), _custos: None, nomen: Some(via) });
     }
 
@@ -476,11 +533,28 @@ fn stage(imago: &[u8]) -> std::io::Result<Statio> {
             return Err(e);
         }
     };
-    std::fs::remove_file(&via)?;
+    // **A failed unlink degrades to the fallback's contract rather than to a
+    // failure.** The descriptor is open and the image is perfectly runnable, so
+    // refusing to start the program because a directory entry could not be
+    // removed would be the worst of the three outcomes — and returning `Err`
+    // here would leave the name behind, which is the one thing the two error
+    // paths on either side of this both take care not to do. Remembering the
+    // name instead means `run` removes it after `wait`, exactly as it does
+    // where `/proc` is absent.
+    //
+    // Spelled as a `match` rather than as `Result::err` composed with `map`,
+    // because a dotted call to `err` is one of `catalogus.rs`'s diagnostic
+    // markers: the shorter form adds a phantom UNPARSED row to the ratchet for
+    // a call that raises nothing. (Nor may this comment spell it, for the same
+    // reason — the scanner reads comments too.)
+    let nomen = match std::fs::remove_file(&via) {
+        Ok(()) => None,
+        Err(_) => Some(via),
+    };
     Ok(Statio {
-        via: PathBuf::from(format!("/proc/self/fd/{}", custos.as_raw_fd())),
+        via: proc_fd.join(custos.as_raw_fd().to_string()),
         _custos: Some(custos),
-        nomen: None,
+        nomen,
     })
 }
 
@@ -504,29 +578,59 @@ fn run(imago: &[u8]) -> ! {
         .stderr(Stdio::inherit())
         .status();
 
-    // Fallback path only; on the primary path there has been no name since
-    // before the exec.
-    if let Some(n) = &statio.nomen {
-        let _ = std::fs::remove_file(n);
-    }
+    statio.purga();
 
     match effectus {
         Err(_) => {
             eprintln!("Error: programma incipi non potest");
             exit(1);
         }
-        // `code()` is `None` exactly when a signal ended the child. With §8's
-        // handler installed and `SIGPIPE` ignored, no ordinary failure reaches
-        // here: it is a genuine external kill, or a defect in this compiler.
-        // Without it such a child exits 139 and the robustness harness accepts
-        // it silently.
-        Ok(s) => match s.code() {
-            Some(c) => exit(c),
-            None => {
+        Ok(s) => match finis(s) {
+            Finis::Status(c) => exit(c),
+            Finis::Signum => {
                 eprintln!("Error: programma abrupte cessavit");
                 exit(1);
             }
         },
+    }
+}
+
+/// How a child ended, as far as `liss run` is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Finis {
+    /// It exited on its own; this status passes through unchanged.
+    Status(i32),
+    /// A signal ended it.
+    Signum,
+}
+
+/// Classify a finished child.
+///
+/// `ExitStatus::code()` is `None` **exactly** when a signal ended the process,
+/// and this is where that becomes a Latin sentence and exit 1 instead of the
+/// shell's bare `139`. With §8's handler installed and `SIGPIPE` ignored, no
+/// ordinary failure reaches the `Signum` arm: it is a genuine external kill, or
+/// a defect in this compiler.
+///
+/// **What this branch buys, stated accurately.** Spec §9.5 justifies it by
+/// saying that without it a signalled child "exits 139 and the robustness
+/// harness silently accepts it". The second half is not true and the reasoning
+/// should not be repeated: `judge` reaches `Outcome::Signalled` only when the
+/// process *it* spawned was signalled, which under `liss run` is the parent,
+/// never the child. A parent exiting 139 takes `judge`'s `code != 1` arm and is
+/// `Acceptable`; a parent exiting 1 with this sentence parses as a well-formed
+/// structural diagnostic and is *also* `Acceptable`. Both are accepted, so the
+/// mapping closes no hole in the harness.
+///
+/// What it does buy is the person holding the terminal: a Latin diagnostic
+/// saying the program was killed, rather than a bare number they must decode.
+/// Enforcing §8's "never a signal" guarantee needs a `judge` rule that maps this
+/// sentence to `no abort`, and that belongs to the task that points the harness
+/// at this binary.
+fn finis(status: std::process::ExitStatus) -> Finis {
+    match status.code() {
+        Some(c) => Finis::Status(c),
+        None => Finis::Signum,
     }
 }
 
@@ -584,5 +688,77 @@ mod tests {
         assert!(parse(&args(&["build", "a.liss", "--exi"])).is_none());
         assert!(parse(&args(&["build", "a.liss", "--exi", "b", "--exi", "c"])).is_none());
         assert!(parse(&args(&["build", "a.liss", "b.liss"])).is_none());
+    }
+
+    /// **The signalled child.** `Error: programma abrupte cessavit` had no test
+    /// at all: collapsing the whole match to `exit(code().unwrap_or(139))` left
+    /// the suite green. The decision is lifted out of `run` so it can be made
+    /// against real `ExitStatus` values rather than against a re-encoding of
+    /// them — `from_raw` takes a `wait(2)` status, where an ordinary exit is
+    /// `code << 8` and a signal death is the signal number itself.
+    #[test]
+    fn a_signalled_child_is_told_apart_from_one_that_exited() {
+        use std::os::unix::process::ExitStatusExt;
+        use std::process::ExitStatus;
+
+        assert_eq!(finis(ExitStatus::from_raw(0)), Finis::Status(0));
+        assert_eq!(finis(ExitStatus::from_raw(3 << 8)), Finis::Status(3));
+        assert_eq!(finis(ExitStatus::from_raw(1 << 8)), Finis::Status(1));
+        // SIGSEGV — the case that would otherwise reach a shell as 139, and
+        // the shape a compiler defect or a missing §8 guard would produce.
+        assert_eq!(finis(ExitStatus::from_raw(11)), Finis::Signum);
+        // SIGKILL, and SIGSEGV with the core-dump bit set.
+        assert_eq!(finis(ExitStatus::from_raw(9)), Finis::Signum);
+        assert_eq!(finis(ExitStatus::from_raw(11 | 0x80)), Finis::Signum);
+    }
+
+    /// **The `/proc`-less fallback**, which no host running this suite can
+    /// otherwise reach. A directory that does not exist stands in for an
+    /// unmounted `/proc`, and the two things the fallback owes are asserted:
+    /// it execs the *name*, and the name is still there to be removed after
+    /// `wait`.
+    #[test]
+    fn without_proc_the_name_is_kept_and_is_removable_afterwards() {
+        let statio = stage_in(b"non vera imago", Path::new("/nusquam/self/fd"))
+            .expect("the image is staged");
+        let nomen = statio.nomen.clone().expect("the fallback keeps the name");
+        assert_eq!(statio.via, nomen, "the fallback execs the path, not a descriptor");
+        assert!(nomen.is_file(), "{} is gone", nomen.display());
+        assert_eq!(
+            std::fs::metadata(&nomen).expect("stat").permissions().mode() & 0o7777,
+            0o700,
+        );
+        // `run`'s own cleanup, called rather than re-spelled.
+        statio.purga();
+        assert!(!nomen.exists(), "the fallback left {} behind", nomen.display());
+    }
+
+    /// And the primary path, asserted where it is actually visible: the magic
+    /// link resolves to a path the kernel marks `(deleted)`, which is the
+    /// inode saying it has no name left. Nothing else in the suite can see
+    /// this — from outside the process there is only an absence.
+    #[test]
+    fn with_proc_the_name_is_gone_before_anything_is_executed() {
+        let statio =
+            stage_in(b"non vera imago", Path::new("/proc/self/fd")).expect("the image is staged");
+        assert!(statio.nomen.is_none(), "nothing is left for `run` to remove");
+        assert!(statio.via.starts_with("/proc/self/fd/"), "{:?}", statio.via);
+        let target = std::fs::read_link(&statio.via).expect("the magic link resolves");
+        assert!(
+            target.to_string_lossy().ends_with(" (deleted)"),
+            "the inode still has a name: {target:?}",
+        );
+    }
+
+    /// A write that already truncated the destination must be told apart from
+    /// one that never opened it — the first is removed, the second must not be,
+    /// or a refusal to write becomes a deletion.
+    #[test]
+    fn a_truncating_failure_is_told_apart_from_one_that_never_opened() {
+        // `/dev/full` opens, truncates, and then refuses every write with
+        // ENOSPC: exactly the shape of a disk filling up mid-build.
+        assert_eq!(write_image(Path::new("/dev/full"), b"imago"), Err(true));
+        // A path whose directory does not exist never gets that far.
+        assert_eq!(write_image(Path::new("/nusquam/omnino/imago"), b"imago"), Err(false));
     }
 }

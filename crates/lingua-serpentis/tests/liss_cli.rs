@@ -456,6 +456,78 @@ fn build_cross_compiles_for_the_other_machine() {
 }
 
 #[test]
+fn a_build_that_cannot_write_its_output_says_so() {
+    // `/dev/full` opens and truncates and then refuses every write with
+    // ENOSPC, which is the disk-filling-up shape reached end to end.
+    let d = temp_dir("liss-plenum");
+    let p = source(&d, "salve.liss", SALVE);
+    let r = liss(&["build", p.to_str().unwrap(), "--exi", "/dev/full"]);
+    assert_eq!(r.code, Some(1));
+    assert_eq!(r.stderr, "Error: scida '/dev/full' scribi non potest\n");
+}
+
+// ------------------------------------------------- the signalled child
+
+/// The first child of `pid`, read off `/proc`. `None` until one exists.
+fn child_of(pid: u32) -> Option<u32> {
+    for task in std::fs::read_dir(format!("/proc/{pid}/task")).ok()?.flatten() {
+        let Ok(s) = std::fs::read_to_string(task.path().join("children")) else { continue };
+        if let Some(first) = s.split_whitespace().next() {
+            return first.parse().ok();
+        }
+    }
+    None
+}
+
+/// **The signalled child, end to end.** Nothing an ordinary program does
+/// reaches this branch — §8's handler and an ignored `SIGPIPE` see to that —
+/// so the only way to provoke the sentence is to kill the child from outside,
+/// which is exactly the case the branch exists for.
+#[test]
+fn a_child_killed_by_a_signal_is_reported_in_latin() {
+    let d = temp_dir("liss-signum");
+    // Several seconds of arithmetic and no output, so the child is reliably
+    // still alive when the signal arrives.
+    let src = "munus initium reddit ni {\n  ni s = nullus;\n  \
+               dum (ni i = nullus; i minor_est \u{b0}MM; i = i + \u{b0}I) {\n    \
+               dum (ni j = nullus; j minor_est \u{b0}M; j = j + \u{b0}I) {\n      \
+               s = s + \u{b0}I;\n    }\n  }\n  scribe(s);\n  redde nullus;\n}";
+    let p = source(&d, "longum.liss", src);
+
+    let parent = Command::new(LISS)
+        .args(["run", p.to_str().unwrap()])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn liss");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let kid = loop {
+        if let Some(k) = child_of(parent.id()) {
+            break k;
+        }
+        assert!(std::time::Instant::now() < deadline, "liss never spawned an image");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+
+    // `kill` is a POSIX shell builtin, so this needs no binary beyond /bin/sh.
+    let killed = Command::new("sh")
+        .arg("-c")
+        .arg(format!("kill -9 {kid}"))
+        .status()
+        .expect("run sh");
+    assert!(killed.success(), "could not signal the child");
+
+    let out = parent.wait_with_output().expect("reap liss");
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "Error: programma abrupte cessavit\n"
+    );
+}
+
+#[test]
 fn an_unknown_machine_is_refused_in_latin() {
     let d = temp_dir("liss-machina");
     let p = source(&d, "salve.liss", SALVE);

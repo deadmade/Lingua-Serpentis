@@ -52,11 +52,11 @@ crates/lingua-serpentis/src/cli.rs:175  Error: nomen scidae in '.liss' desinere 
 crates/lingua-serpentis/src/cli.rs:265  Error: machina '{}' ignota est  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:272  Error: machina huius computatri ignota est  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:331  Error: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:348  Error: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:368  Error: scida '{}' scribi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:496  Error: scida temporaria creari non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:515  Error: programma incipi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:526  Error: programma abrupte cessavit  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:340  Error: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:389  Error: scida '{}' scribi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:570  Error: scida temporaria creari non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:585  Error: programma incipi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:591  Error: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/error.rs:2  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/error.rs:14  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/error.rs:20  Monitum in '{}', linea {}: {}  → UNCOVERED
