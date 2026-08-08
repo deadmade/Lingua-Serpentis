@@ -1,31 +1,37 @@
 //! Every scalar type and every operator, compiled and **run** (Task 12).
 //!
-//! # The oracle is the interpreter, not a hand-written expectation
+//! # The oracle was the interpreter, and the answers were recorded before it died
 //!
-//! Almost every test here is [`support::par_est`]: one source, run both ways,
-//! the two renderings required equal. That is spec §10.1's property applied to
-//! a program instead of a fixture, and it is the only oracle that can be trusted
-//! at this size — thirty-odd operator results transcribed by hand would be
-//! thirty-odd chances to bless a miscompile. `tests/compilata.rs` (Task 17)
-//! generalises it to the whole corpus.
+//! Almost every test here is [`support::par_est`]: one source, compiled, linked,
+//! run, and its three streams required to match a recorded expectation. Those
+//! expectations are **not** hand-transcribed — thirty-odd operator results
+//! written out by hand would be thirty-odd chances to bless a miscompile — and
+//! they are not the compiler's own output either. Every one was captured from
+//! the **interpreter** on 2026-08-08, while both backends still stood, and only
+//! then written down (spec §10.4; see `support`'s header).
 //!
-//! The interpreter's **warnings are cleared before the comparison**, because a
-//! compiled program never prints them: the CLI writes Latinity warnings before
-//! spawning the child (spec §9.5), which is Task 16. Everything else — stdout
-//! byte for byte, stderr byte for byte, the exit status — must agree.
+//! Until that capture this file was a live differential: `par_est` ran each
+//! source both ways and required the two `Rendered` values equal. The oracle is
+//! unchanged; it is a recorded fact now rather than a re-derived one, which is
+//! the only form it can take once spec §3.1 leaves one backend.
 //!
-//! # The one thing here that is not a differential
+//! A compiled image writes **no Latinity warnings** — the CLI writes those and
+//! then spawns the child (spec §9.5) — so `nuntii` is empty here unless the
+//! program itself raises. That was true of the differential too, which cleared
+//! the interpreter's warnings before comparing, and it is why none appear below.
 //!
-//! `et` and `vel` **evaluate both operands** (spec §3.5). The interpreter does,
-//! the corpus is blessed against it, and so the differential above would already
-//! catch a short-circuiting compiler. It is nonetheless asserted separately and
-//! explicitly, with the reason spelled out, because it is the single easiest
-//! silent divergence in the project and a test that only fails as a by-product
-//! is a test whose failure message says the wrong thing.
+//! # The one thing here that was never a differential
+//!
+//! `et` and `vel` **evaluate both operands** (spec §3.5). The interpreter did,
+//! the corpus is blessed against it, and so the recorded answers above would
+//! already catch a short-circuiting compiler. It is nonetheless asserted
+//! separately and explicitly, with the reason spelled out, because it is the
+//! single easiest silent divergence in the project and a test that only fails as
+//! a by-product is a test whose failure message says the wrong thing.
 
 mod support;
 
-use support::{curre, par_est, radix};
+use support::{curre, par_est, par_est_plene, radix};
 
 /// Every one of the six scalar types, printed.
 #[test]
@@ -42,6 +48,7 @@ fn omnes_typi_scribuntur() {
 }
 "#,
         "typi",
+        "verus\nfalsus\nx\nXLII\nI et triens\nsalve, munde\n",
     );
 }
 
@@ -67,6 +74,7 @@ fn numeri_omnem_operatorem_ferunt() {
 }
 "#,
         "numeri",
+        "XXII\nXII\nLXXXV\nIII\nII\n-XVII\n-XII\nfalsus\nverus\nverus\nfalsus\n",
     );
 }
 
@@ -100,6 +108,7 @@ fn fractiones_utroque_grano_computantur() {
 }
 "#,
         "fractiones",
+        "III et dodrans\nI et quadrans\nIII et uncia\nII\n-II et semis\nverus\nfalsus\nIII et semis et semuncia\nI et quincunx et semuncia\nII et septunx et sicilicus\nII et triens et semuncia et sicilicus et scripulum\n-II et semis\nfalsus\nverus\n",
     );
 }
 
@@ -122,6 +131,7 @@ fn voces_iunguntur_et_comparantur() {
 }
 "#,
         "voces",
+        "salvemunde\nsalve\nfalsus\nverus\nverus\nfalsus\nverus\n",
     );
 }
 
@@ -154,6 +164,7 @@ fn litterae_et_veritates_immediatae_sunt() {
 }
 "#,
         "immediata",
+        "falsus\nverus\nfalsus\nverus\nfalsus\nverus\nverus\nfalsus\nfalsus\nverus\nfalsus\nverus\nverus\nfalsus\n",
     );
 }
 
@@ -165,7 +176,7 @@ fn litterae_et_veritates_immediatae_sunt() {
 /// make the runtime say `memoria non liberata est` and exit 1 instead.
 #[test]
 fn sedes_reguntur_et_liberantur() {
-    par_est(
+    par_est_plene(
         r#"munus initium reddit ni {
     ni numerus = °I;
     numerus = numerus + °I;
@@ -185,6 +196,9 @@ fn sedes_reguntur_et_liberantur() {
 }
 "#,
         "sedes",
+        "XX\nabababab\nIII\nfalsus\n",
+        "",
+        20,
     );
 }
 
@@ -299,7 +313,7 @@ fn et_dextrum_latus_quoque_aestimat() {
 /// canonical, non-negative zero.
 #[test]
 fn numeri_negativi_in_constantes_conflantur() {
-    par_est(
+    par_est_plene(
         r#"munus initium reddit ni {
     scribe(-°V);
     scribe(-nullus);
@@ -310,6 +324,9 @@ fn numeri_negativi_in_constantes_conflantur() {
 }
 "#,
         "negativi",
+        "-V\nnullus\nnullus\n-I et semis\nV\n",
+        "",
+        123,
     );
 }
 
@@ -337,7 +354,7 @@ fn constans_negata_nullam_vocationem_relinquit() {
 }
 
 /// **The checkpoint.** `conformance/currunt/exemplum-praecisio`, compiled and
-/// run, against the same `emissio` the interpreted path is held to.
+/// run, against the `emissio` the fixture is blessed with.
 ///
 /// The fixture's `nuntii` are the *checker's* Latinity warnings, which a
 /// compiled program never prints — the CLI writes them before spawning the
@@ -399,8 +416,7 @@ fn error_in_programmate_scidam_nominat() {
 /// whether the last one does — `checker.rs:128-131` says so outright: "`any`,
 /// not 'the last statement': a `redde` followed by unreachable code still
 /// returns, and this language has no dead-code lint to disagree with." So this
-/// program type-checks, and the interpreter runs it to an empty stdout and
-/// exit 0.
+/// program type-checks, and it runs to an empty stdout and exit 0.
 ///
 /// Codegen used to walk every statement in a block unconditionally, so `redde`
 /// filled the Cranelift block and the next statement tried to add an
@@ -421,6 +437,7 @@ fn sententia_post_redditum_neglegitur() {
 }
 "#,
         "post-redditum",
+        "",
     );
 }
 
@@ -431,7 +448,7 @@ fn sententia_post_redditum_neglegitur() {
 /// is exactly what spec §5.4's "freeing null is a no-op" buys.
 #[test]
 fn sedes_post_redditum_semel_liberantur() {
-    par_est(
+    par_est_plene(
         r#"munus initium reddit ni {
     voc nomen = "salve";
     redde °VII;
@@ -439,5 +456,8 @@ fn sedes_post_redditum_semel_liberantur() {
 }
 "#,
         "post-redditum-sedes",
+        "",
+        "",
+        7,
     );
 }

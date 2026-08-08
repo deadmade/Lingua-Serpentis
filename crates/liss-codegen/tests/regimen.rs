@@ -124,6 +124,7 @@ munus initium reddit ni {
 }
 "#,
         "radix-sententiae",
+        "factum\n",
     );
 }
 
@@ -225,6 +226,7 @@ fn assignatio_in_ansa_libratur() {
 }
 "#,
         "assignatio-vetus",
+        "abababab\n",
     );
 }
 
@@ -265,6 +267,7 @@ munus initium reddit ni {
 }
 "#,
         "redditus-ambitus",
+        "radix-!\n",
     );
 }
 
@@ -305,6 +308,7 @@ fn abrumptio_et_continuatio_caput_dum_non_liberant() {
 }
 "#,
         "abrumptio-caput",
+        "ci\nci\nci\n",
     );
 }
 
@@ -342,6 +346,7 @@ fn continuatio_ad_gradum_et_ad_condicionem_salit() {
 }
 "#,
         "continuatio-saltus",
+        "XXI\n",
     );
 }
 
@@ -376,6 +381,7 @@ munus initium reddit ni {
 }
 "#,
         "utrumque-bracchium",
+        "parvum!\nmagnum!\n",
     );
 }
 
@@ -400,6 +406,7 @@ fn bracchium_vacuum_compilatur() {
 }
 "#,
         "bracchium-vacuum",
+        "parvum\n",
     );
 }
 
@@ -433,6 +440,7 @@ fn sententia_post_abrumpe_neglegitur() {
 }
 "#,
         "post-abrumpe",
+        "factum\n",
     );
 }
 
@@ -550,7 +558,8 @@ fn regimen_utrique_machinae_componitur() {
 ///
 /// A loop stack that recorded one target rather than a stack of them compiles
 /// fine and jumps to the wrong block, which is a wrong answer rather than a
-/// crash — so the differential against the interpreter is the whole assertion.
+/// crash — so the recorded answer, which is the interpreter's, is the whole
+/// assertion.
 #[test]
 fn ansae_nidificatae_intimam_petunt() {
     par_est(
@@ -573,5 +582,6 @@ fn ansae_nidificatae_intimam_petunt() {
 }
 "#,
         "ansae-nidificatae",
+        "CCCLXVI\n",
     );
 }

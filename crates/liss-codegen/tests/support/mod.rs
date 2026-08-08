@@ -2,12 +2,30 @@
 //! and a temporary directory to `execve` out of.
 //!
 //! Shared by `salve.rs` and `scalares.rs` so the pipeline is spelled once. The
-//! interesting helper is [`differentia`], which runs one source **both** ways —
-//! interpreted and compiled — and returns the pair. That is spec §10.1's
-//! property in miniature, three tasks before `tests/compilata.rs` makes it the
-//! whole suite's job, and it is what makes a scalar test cheap enough to write
-//! one per operator: the oracle is the interpreter the corpus is blessed
-//! against, not a hand-copied expectation.
+//! interesting helper is [`par_est`], which compiles and runs one source and
+//! requires its three streams to match a **recorded** expectation.
+//!
+//! # The expectations here were recorded from the interpreter, and when
+//!
+//! Until Task 19 this was a *differential*: `par_est` ran each source both ways
+//! and required the two `Rendered` values equal, so the oracle was the live
+//! interpreter the corpus is blessed against rather than a hand-copied string.
+//! That is what made one test per operator cheap enough to write, and it is
+//! why forty-seven of them exist.
+//!
+//! Task 19 deletes the interpreter (spec §3.1), so on **2026-08-08**, with both
+//! backends still standing, every one of those forty-seven answers was captured
+//! from the interpreter and written into its call site. The oracle did not
+//! change; it stopped being re-derived on every run and became a recorded fact.
+//! That is spec §10.4's discipline — *"everything that uses the interpreter as a
+//! source of truth happens while it still exists"* — applied to this file
+//! rather than to the corpus.
+//!
+//! **So no expectation below was ever produced by the compiler.** Not one was
+//! blessed from the backend under test, which is the property that would have
+//! been silently lost by re-blessing these after the deletion, and the reason
+//! the capture had to precede it. A later reader may treat every string here as
+//! the tree-walker's own answer.
 
 #![allow(dead_code)] // each test target uses a different subset
 
@@ -369,30 +387,7 @@ pub fn curre_fasciculos(
     exsequere(&imago(&ir_fasciculorum(scidae), machina), nomen)
 }
 
-/// What the interpreter makes of one pipeline result, with its **warnings
-/// cleared**.
-///
-/// Clearing them is not a convenience: a compiled program never prints them.
-/// The checker's Latinity warnings are written by the CLI, before it spawns the
-/// child (spec §9.5), so the child's stderr carries its own diagnostics and
-/// nothing else. Clearing them is what makes stderr comparable byte for byte
-/// rather than merely comparable when the source happens to draw none — which
-/// would have quietly excluded every program with a non-Latin identifier in it,
-/// and cross-package tests are exactly where those live.
-fn interpretatum(
-    mut effectus: Result<
-        (String, u8, Vec<lingua_serpentis::Warning>),
-        lingua_serpentis::ProgramError,
-    >,
-) -> lingua_serpentis::Rendered {
-    match &mut effectus {
-        Ok((_, _, monita)) => monita.clear(),
-        Err(e) => e.warnings.clear(),
-    }
-    lingua_serpentis::render(effectus)
-}
-
-/// What a linked image made of the same program.
+/// What a linked image made of one program.
 fn compilatum(exitus: (Option<i32>, String, String)) -> lingua_serpentis::Rendered {
     let (code, stdout, stderr) = exitus;
     lingua_serpentis::Rendered {
@@ -402,40 +397,74 @@ fn compilatum(exitus: (Option<i32>, String, String)) -> lingua_serpentis::Render
     }
 }
 
-/// **The differential.** One source, run interpreted and compiled, both
-/// renderings returned as `(interpretatum, compilatum)`.
-pub fn differentia(
-    fons: &str,
-    nomen: &str,
-) -> (lingua_serpentis::Rendered, lingua_serpentis::Rendered) {
-    (
-        interpretatum(lingua_serpentis::run_file_with_warnings(fons)),
-        compilatum(curre(fons, nomen)),
-    )
+/// The recorded answer, as a `Rendered`, so the comparison is one `assert_eq!`
+/// over all three streams rather than three that can be forgotten separately.
+fn exspectatum(emissio: &str, nuntii: &str, exitus: i32) -> lingua_serpentis::Rendered {
+    lingua_serpentis::Rendered {
+        stdout: emissio.to_owned(),
+        stderr: nuntii.to_owned(),
+        code: exitus,
+    }
 }
 
-/// Assert that a source produces byte-identical output, stderr and status from
-/// both backends.
-pub fn par_est(fons: &str, nomen: &str) {
-    let (i, c) = differentia(fons, nomen);
+/// **Compile, link and run one source; require all three streams to match the
+/// recorded expectation.**
+///
+/// `emissio` is the whole of stdout. A compiled image writes **no** Latinity
+/// warnings — the CLI writes those and then spawns the child (spec §9.5) — so
+/// stderr is empty and the status is 0 unless the program says otherwise; the
+/// two shapes that do are [`par_est_erroris`] and [`par_est_plene`].
+///
+/// See this module's header for where every `emissio` below came from: the
+/// interpreter, on 2026-08-08, while it still existed.
+pub fn par_est(fons: &str, nomen: &str, emissio: &str) {
+    par_est_plene(fons, nomen, emissio, "", 0)
+}
+
+/// [`par_est`] for a program that **fails at run time**: nothing on stdout, the
+/// diagnostic on stderr, exit 1.
+///
+/// A shape of its own rather than a `par_est_plene` call with two constants,
+/// because a runtime diagnostic is what most of `series.rs` is about and the
+/// reader should be able to see at a glance which tests expect one.
+pub fn par_est_erroris(fons: &str, nomen: &str, nuntii: &str) {
+    par_est_plene(fons, nomen, "", nuntii, 1)
+}
+
+/// [`par_est`] with all three streams given: for the handful of programs whose
+/// `initium` returns a status of its own.
+pub fn par_est_plene(fons: &str, nomen: &str, emissio: &str, nuntii: &str, exitus: i32) {
+    let c = compilatum(curre(fons, nomen));
     assert_eq!(
-        i, c,
-        "the two backends disagree on:\n{fons}\ninterpretatum: {i:?}\ncompilatum:    {c:?}",
+        exspectatum(emissio, nuntii, exitus),
+        c,
+        "the compiled program does not reproduce the recorded answer for:\n{fons}",
     );
 }
 
 /// [`par_est`] for a **multi-file** program.
-///
-/// **The interpreter is only an oracle 64 frames deep** (`interp.rs`'s
-/// `VOCATIONES_MAXIMAE`), so nothing that recurses further may come through
-/// here — that is `curre_fasciculos` and a written expectation, because the two
-/// backends are *meant* to disagree about depth until the interpreter is gone.
-pub fn par_est_fasciculorum(scidae: &[(&str, &str)], nomen: &str) {
-    let i = interpretatum(lingua_serpentis::run_program_with_warnings(scidae));
+pub fn par_est_fasciculorum(scidae: &[(&str, &str)], nomen: &str, emissio: &str) {
+    par_est_fasciculorum_plene(scidae, nomen, emissio, "", 0)
+}
+
+/// [`par_est_erroris`] for a **multi-file** program. The diagnostic names the
+/// package file it came from, which is the whole point of having one.
+pub fn par_est_fasciculorum_erroris(scidae: &[(&str, &str)], nomen: &str, nuntii: &str) {
+    par_est_fasciculorum_plene(scidae, nomen, "", nuntii, 1)
+}
+
+/// [`par_est_plene`] for a **multi-file** program.
+pub fn par_est_fasciculorum_plene(
+    scidae: &[(&str, &str)],
+    nomen: &str,
+    emissio: &str,
+    nuntii: &str,
+    exitus: i32,
+) {
     let c = compilatum(curre_fasciculos(scidae, nomen));
     assert_eq!(
-        i, c,
-        "the two backends disagree on {scidae:?}\n\
-         interpretatum: {i:?}\ncompilatum:    {c:?}",
+        exspectatum(emissio, nuntii, exitus),
+        c,
+        "the compiled program does not reproduce the recorded answer for {scidae:?}",
     );
 }

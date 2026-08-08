@@ -42,6 +42,7 @@ use liss_codegen::target::Target;
 use object::{Object, ObjectSymbol};
 use support::{
     curre, curre_fasciculos, imago, ir_fasciculorum, par_est, par_est_fasciculorum,
+    par_est_fasciculorum_erroris,
 };
 
 /// The exact sentence spec §8.2 has the guard handler write, and the whole of
@@ -439,14 +440,14 @@ fn imago_coniuncta_symbola_servat() {
 /// a call to the package's own `initium`.
 #[test]
 fn programma_trium_fasciculorum_currit() {
-    par_est_fasciculorum(&TRES, "tres-fasciculi");
+    par_est_fasciculorum(&TRES, "tres-fasciculi", "LXXXIV\nVII\n");
 }
 
 /// The same, with the identifiers spelled with macrons — through the linker and
 /// out the other side.
 #[test]
 fn nomina_non_ascii_coniunguntur_et_currunt() {
-    par_est_fasciculorum(&MACRA, "nomina-macra");
+    par_est_fasciculorum(&MACRA, "nomina-macra", "XLIX\n");
 }
 
 /// **A bare call inside a package resolves in that package**, even when the
@@ -468,7 +469,7 @@ fn nomina_non_ascii_coniunguntur_et_currunt() {
 /// goes quiet: the program links, runs and prints the other function's answer.
 #[test]
 fn vocatio_nuda_in_fasciculo_in_fasciculo_suo_solvitur() {
-    par_est_fasciculorum(&UMBRA, "umbra");
+    par_est_fasciculorum(&UMBRA, "umbra", "IX\n");
 }
 
 /// **A raise inside a package names the package's file.**
@@ -485,7 +486,11 @@ fn vocatio_nuda_in_fasciculo_in_fasciculo_suo_solvitur() {
 /// one file to name.
 #[test]
 fn error_in_fasciculo_scidam_fasciculi_nominat() {
-    par_est_fasciculorum(&DIVISIO, "divisio-in-fasciculo");
+    par_est_fasciculorum_erroris(
+        &DIVISIO,
+        "divisio-in-fasciculo",
+        "Error in 'alpha/porta.liss', linea 2: divisio per nullum\n",
+    );
 }
 
 /// Two packages calling each other, twenty levels of alternation. A circular
@@ -494,7 +499,7 @@ fn error_in_fasciculo_scidam_fasciculi_nominat() {
 /// function declared in another that has not been lowered yet.
 #[test]
 fn fasciculi_se_invicem_vocant() {
-    par_est_fasciculorum(&ALTERNA, "alterna");
+    par_est_fasciculorum(&ALTERNA, "alterna", "XX\n");
 }
 
 /// **Ownership across the boundary** (spec §5.4, §7.3). Two `voc` arguments are
@@ -510,7 +515,7 @@ fn fasciculi_se_invicem_vocant() {
 /// one that leaks.
 #[test]
 fn argumenta_per_fasciculum_mota_semel_liberantur() {
-    par_est_fasciculorum(&VERBA, "verba-iuncta");
+    par_est_fasciculorum(&VERBA, "verba-iuncta", "a-b-b-b-b-b\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -630,5 +635,6 @@ munus initium reddit ni {
 }
 "#,
         "factorial",
+        "M\u{305}\u{305}\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}\u{305}\u{305}C\u{305}\u{305}\u{305}\u{305}\u{305}D\u{305}\u{305}\u{305}\u{305}\u{305}X\u{305}\u{305}\u{305}\u{305}\u{305}X\u{305}\u{305}\u{305}\u{305}\u{305}X\u{305}\u{305}\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}\u{305}C\u{305}\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}M\u{305}\u{305}\u{305}V\u{305}\u{305}\u{305}M\u{305}\u{305}M\u{305}\u{305}M\u{305}\u{305}C\u{305}\u{305}L\u{305}\u{305}X\u{305}\u{305}X\u{305}\u{305}V\u{305}\u{305}M\u{305}D\u{305}C\u{305}X\u{305}L\u{305}\n",
     );
 }

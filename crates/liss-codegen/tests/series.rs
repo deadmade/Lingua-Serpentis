@@ -21,10 +21,11 @@
 //!
 //! # The oracle, and the one thing it cannot see
 //!
-//! Almost everything here is [`support::par_est`]: one source, run interpreted
-//! and compiled, the two renderings required equal. The interpreter is what the
-//! corpus is blessed against, so it is the only oracle worth having at this
-//! size.
+//! Almost everything here is [`support::par_est`]: one source, compiled and run,
+//! its three streams required to match a recorded expectation. Every expectation
+//! was captured from the **interpreter** on 2026-08-08, before spec §3.1 removed
+//! it — this file was a live differential until then, and the answers are the
+//! tree-walker's, not the compiler's. `support`'s header has the full account.
 //!
 //! What it cannot see is **`liss_list_append`'s steal**. `adde` allocates a
 //! header one longer, `memcpy`s the existing element words, stores the new one
@@ -53,7 +54,9 @@
 
 mod support;
 
-use support::{casus_par_est, par_est, par_est_fasciculorum, vocationes};
+use support::{
+    casus_par_est, par_est, par_est_erroris, par_est_fasciculorum, vocationes,
+};
 
 // ---------------------------------------------------------------------------
 // The checkpoint: `exemplum-series` and every list fixture, compiled
@@ -169,6 +172,7 @@ fn omnis_generis_elementa_in_seriebus_vivunt() {
 }
 "#,
         "genera-elementorum",
+        "[verus, falsus, verus]\n[a, b]\n[I et semis, II et uncia]\n[I et scripulum, II et deunx et semuncia et sicilicus et sextula et scripulum]\n[I, II, III]\n[unum, duo]\n",
     );
 }
 
@@ -203,6 +207,7 @@ fn elementa_angusta_per_verbum_integrum_redeunt() {
 }
 "#,
         "elementa-angusta",
+        "verus\nfalsus\nverus\nverus\nramus verus\nω\nfalsus\nverus\n",
     );
 }
 
@@ -224,6 +229,7 @@ fn nidificatio_quattuor_gradibus_constat() {
 }
 "#,
         "nidificatio-alta",
+        "[[[[I, II]]], [[[III]], [[IV], [V]]]]\nIV\nII\nverus\nverus\n",
     );
 }
 
@@ -252,6 +258,7 @@ fn series_vacuae_sunt_res_verae() {
 }
 "#,
         "series-vacuae",
+        "[]\nnullus\n[]\n[[]]\nnullus\n[[], [unum], []]\nIII\n",
     );
 }
 
@@ -271,7 +278,7 @@ fn series_vacuae_sunt_res_verae() {
 /// reads `longitudo nullus`, not `longitudo 0`.
 #[test]
 fn index_extra_fines_utrimque_clamat() {
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I, °II];
     scribe(numeri[°X]);
@@ -279,8 +286,9 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-supra",
+        "Error in linea 3: index extra fines: X (longitudo II)\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I, °II];
     scribe(numeri[nullus]);
@@ -288,8 +296,9 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-infra",
+        "Error in linea 3: index extra fines: nullus (longitudo II)\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I];
     numeri[°II] = °X;
@@ -297,8 +306,9 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-scriptio-supra",
+        "Error in linea 3: index extra fines: II (longitudo I)\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [];
     scribe(numeri[°I]);
@@ -306,6 +316,7 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-in-vacuum",
+        "Error in linea 3: index extra fines: I (longitudo nullus)\n",
     );
 }
 
@@ -330,7 +341,7 @@ fn index_extra_fines_utrimque_clamat() {
 ///   invisible in every program where neither raises.
 #[test]
 fn ordo_evaluationis_a_fonte_legitur() {
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I / nullus, °II % nullus];
     scribe(numeri);
@@ -338,24 +349,27 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-litteralis",
+        "Error in linea 2: divisio per nullum\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     scribe([°I / nullus][°I % nullus]);
     redde nullus;
 }
 "#,
         "ordo-lectionis",
+        "Error in linea 2: divisio per nullum\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     scribe(adde([°I / nullus], °II % nullus));
     redde nullus;
 }
 "#,
         "ordo-additionis",
+        "Error in linea 2: divisio per nullum\n",
     );
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I];
     numeri[°I % nullus] = °II / nullus;
@@ -363,6 +377,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-scriptionis",
+        "Error in linea 3: modulus per nullum\n",
     );
 }
 
@@ -377,7 +392,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 /// anything.
 #[test]
 fn elementum_quod_clamat_seriem_non_aedificat() {
-    par_est(
+    par_est_erroris(
         r#"munus initium reddit ni {
     ni lista numeri = [°I, °II / nullus, °III];
     scribe(numeri);
@@ -385,6 +400,7 @@ fn elementum_quod_clamat_seriem_non_aedificat() {
 }
 "#,
         "elementum-clamans",
+        "Error in linea 2: divisio per nullum\n",
     );
 }
 
@@ -407,6 +423,7 @@ fn adde_seriem_novam_reddit() {
 }
 "#,
         "adde-nova",
+        "[I, II]\nIII\n[[I], [II, III]]\nIII\n",
     );
 }
 
@@ -437,6 +454,7 @@ fn scriptio_indicis_seriem_ipsam_mutat() {
 }
 "#,
         "scriptio-indicis",
+        "[a, B, c]\n[a, B, aB]\n[[IX, X], [II]]\nX\n",
     );
 }
 
@@ -457,6 +475,7 @@ fn longitudo_argumentum_consumit() {
 }
 "#,
         "longitudo-consumens",
+        "III\nII\nII\nII\nIII\n",
     );
 }
 
@@ -478,6 +497,7 @@ fn aequalitas_alte_recurrit() {
 }
 "#,
         "aequalitas-alta",
+        "verus\nfalsus\nfalsus\nverus\nfalsus\nfalsus\n",
     );
 }
 
@@ -516,6 +536,7 @@ fn series_in_omni_ambitu_moriuntur() {
 }
 "#,
         "series-in-ambitibus",
+        "VI\n",
     );
 }
 
@@ -543,6 +564,7 @@ munus initium reddit ni {
 }
 "#,
         "redditus-seriei",
+        "[III, IV, II]\nIII\n",
     );
 }
 
@@ -570,6 +592,7 @@ munus initium reddit ni {
 }
 "#,
         "series-per-munera",
+        "[I, II, II]\n[V, I]\nV\n[I, II]\n",
     );
 }
 
@@ -623,6 +646,7 @@ munus profunda capit (ni lista lista tabula) reddit ni lista {
             ),
         ],
         "series-trans-fasciculum",
+        "VI\n[IX, X]\n[II, III]\n[I, II, III]\n",
     );
 }
 
@@ -652,6 +676,7 @@ fn series_longa_ad_ultimum_elementum_pertingit() {
 }
 "#,
         "series-longa",
+        "CCC\nI\nX\u{305}C\u{305}\nM\u{305}X\u{305}\u{305}X\u{305}L\u{305}V\u{305}L\n",
     );
 }
 
