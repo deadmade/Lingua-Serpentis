@@ -346,13 +346,39 @@ fn destination(inv: &Invocation, single: bool) -> PathBuf {
     via
 }
 
-/// Write the image, distinguishing a failure that **truncated the destination**
-/// from one that never opened it: `Err(true)` means bytes were already lost.
+/// Whether opening this handle with `O_TRUNC` destroyed anything.
 ///
-/// The distinction decides whether the caller removes the file. Removing on
-/// `Err(false)` would delete a file this process never managed to open — an
-/// existing program in a writable directory, say, whose own mode refuses us —
-/// which would turn a refusal to write into a deletion.
+/// **Only a regular file has content for `O_TRUNC` to discard.** On a device,
+/// FIFO or socket the flag is a no-op: the open succeeds trivially and nothing
+/// is lost. Asked of the open handle rather than by a second `stat` of the
+/// path, so it answers about the object actually opened and cannot be raced.
+fn truncatur(f: &File) -> bool {
+    f.metadata().map(|m| m.is_file()).unwrap_or(false)
+}
+
+/// Write the image, distinguishing a failure that **destroyed the
+/// destination's contents** from one that did not: `Err(true)` means bytes were
+/// already lost.
+///
+/// **The rule, and it is the whole reason this is a function:** remove only
+/// what we truncated, and we truncated only if it was a regular file. This is
+/// the one place `build` touches a user-named path destructively, and the two
+/// ways to get it wrong are opposite.
+///
+/// Removing on `Err(false)` would delete a file this process never managed to
+/// open — an existing program in a writable directory, say, whose own mode
+/// refuses us — turning a refusal to write into a deletion.
+///
+/// Answering `true` merely because the open succeeded is the other, and is
+/// worse. `/dev/full` is exactly the shape that provokes it: the open succeeds,
+/// every write fails `ENOSPC`, and nothing was ever truncated — so a caller
+/// told `true` would unlink the **device node**. Run as root in a container,
+/// that removes `/dev/full` from a devtmpfs which will not repopulate it, and
+/// every later process that touches it breaks.
+///
+/// The same test decides the `chmod`. A device the user named at `--exi` is
+/// left alone in every respect: this must not make `/dev/full` mode 0755
+/// either, and 0755 means nothing on something that is not a program.
 fn write_image(via: &Path, imago: &[u8]) -> Result<(), bool> {
     let mut f = OpenOptions::new()
         .write(true)
@@ -361,14 +387,18 @@ fn write_image(via: &Path, imago: &[u8]) -> Result<(), bool> {
         .mode(0o755)
         .open(via)
         .map_err(|_| false)?;
-    f.write_all(imago)
-        .and_then(|()| f.flush())
+    let regularis = truncatur(&f);
+    let scriptum = f.write_all(imago).and_then(|()| f.flush());
+    if regularis {
         // Mode 0755 twice, and the second is the one that holds: `mode()`
         // applies only when the file is created and is masked by the umask,
         // and `--exi` may well name a file that already exists with some
         // other mode entirely.
-        .and_then(|()| f.set_permissions(std::fs::Permissions::from_mode(0o755)))
-        .map_err(|_| true)
+        return scriptum
+            .and_then(|()| f.set_permissions(std::fs::Permissions::from_mode(0o755)))
+            .map_err(|_| true);
+    }
+    scriptum.map_err(|_| false)
 }
 
 /// Write the finished image and exit.
@@ -750,15 +780,39 @@ mod tests {
         );
     }
 
-    /// A write that already truncated the destination must be told apart from
-    /// one that never opened it — the first is removed, the second must not be,
-    /// or a refusal to write becomes a deletion.
+    /// `O_TRUNC` destroys content only where there is content to destroy.
+    ///
+    /// The distinction `build` unlinks on. A device node opened with
+    /// `O_CREAT|O_TRUNC` loses nothing, so there is nothing to clean up — and
+    /// answering otherwise would have `build` unlink the device.
     #[test]
-    fn a_truncating_failure_is_told_apart_from_one_that_never_opened() {
-        // `/dev/full` opens, truncates, and then refuses every write with
-        // ENOSPC: exactly the shape of a disk filling up mid-build.
-        assert_eq!(write_image(Path::new("/dev/full"), b"imago"), Err(true));
-        // A path whose directory does not exist never gets that far.
+    fn only_a_regular_file_has_content_for_o_trunc_to_destroy() {
+        let via = std::env::temp_dir().join(format!("liss-probatio-{}", std::process::id()));
+        let _ = std::fs::remove_file(&via);
+        let f = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&via)
+            .expect("a regular file");
+        assert!(truncatur(&f), "a regular file is truncated by the open");
+        drop(f);
+        let _ = std::fs::remove_file(&via);
+
+        let dev = OpenOptions::new().write(true).open("/dev/full").expect("/dev/full opens");
+        assert!(!truncatur(&dev), "O_TRUNC destroys nothing on a device node");
+    }
+
+    /// A failure that already destroyed the destination must be told apart from
+    /// one that did not. Get the first wrong and a refusal to write becomes a
+    /// deletion; get the second wrong and `build` unlinks a device node.
+    #[test]
+    fn a_destructive_failure_is_told_apart_from_a_harmless_one() {
+        // `/dev/full` opens and then refuses every write with ENOSPC — the
+        // shape of a disk filling up mid-build — but it is a device, so
+        // `O_TRUNC` destroyed nothing and there is nothing to remove.
+        assert_eq!(write_image(Path::new("/dev/full"), b"imago"), Err(false));
+        // A path whose directory does not exist never gets opened at all.
         assert_eq!(write_image(Path::new("/nusquam/omnino/imago"), b"imago"), Err(false));
     }
 }

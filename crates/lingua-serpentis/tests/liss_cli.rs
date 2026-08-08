@@ -457,13 +457,62 @@ fn build_cross_compiles_for_the_other_machine() {
 
 #[test]
 fn a_build_that_cannot_write_its_output_says_so() {
-    // `/dev/full` opens and truncates and then refuses every write with
-    // ENOSPC, which is the disk-filling-up shape reached end to end.
+    // `/dev/full` opens and then refuses every write with ENOSPC, which is the
+    // disk-filling-up shape reached end to end.
     let d = temp_dir("liss-plenum");
     let p = source(&d, "salve.liss", SALVE);
     let r = liss(&["build", p.to_str().unwrap(), "--exi", "/dev/full"]);
     assert_eq!(r.code, Some(1));
     assert_eq!(r.stderr, "Error: scida '/dev/full' scribi non potest\n");
+    // **And the device is still there.** `build` removes a destination it
+    // truncated, and `O_TRUNC` truncates nothing on a device node — so there
+    // is nothing here to clean up. Reported as `Err(true)` instead, this line
+    // is what fails: as an ordinary user the unlink is refused silently, but
+    // run as root in a container it deletes `/dev/full` from a devtmpfs that
+    // will not put it back.
+    assert!(Path::new("/dev/full").exists(), "the build removed /dev/full");
+}
+
+/// The same hazard, on an object this test **owns** — so the deletion the
+/// device case can only threaten actually happens here, and is caught without
+/// root and without touching anything outside a temporary directory.
+///
+/// `open` follows the symlink to `/dev/full`, so nothing is truncated and every
+/// write fails; `remove_file` on the other hand acts on the **link**, which is
+/// ours. Classify the failure as destructive and the link is gone.
+#[test]
+fn a_failed_write_through_a_symlink_removes_neither_end() {
+    let d = temp_dir("liss-nexus");
+    let p = source(&d, "salve.liss", SALVE);
+    let nexus = d.path().join("plenum");
+    std::os::unix::fs::symlink("/dev/full", &nexus).expect("a symlink to the device");
+
+    let r = liss(&["build", p.to_str().unwrap(), "--exi", nexus.to_str().unwrap()]);
+
+    assert_eq!(r.code, Some(1));
+    assert_eq!(r.stderr, format!("Error: scida '{}' scribi non potest\n", nexus.display()));
+    assert!(
+        nexus.symlink_metadata().is_ok(),
+        "the build removed the symlink it wrote through"
+    );
+    assert!(Path::new("/dev/full").exists());
+}
+
+/// `--exi /dev/null` is the ordinary "compile it but keep nothing" idiom every
+/// other compiler accepts, and the device must come back out exactly as it went
+/// in — not mode 0755, which means nothing on something that is not a program.
+#[test]
+fn building_to_dev_null_succeeds_and_changes_nothing_about_it() {
+    let ante = std::fs::metadata("/dev/null").expect("stat /dev/null").permissions().mode();
+    let d = temp_dir("liss-nihil");
+    let p = source(&d, "salve.liss", SALVE);
+    let r = liss(&["build", p.to_str().unwrap(), "--exi", "/dev/null"]);
+    assert_eq!(r.code, Some(0), "stderr: {}", r.stderr);
+    assert_eq!(
+        std::fs::metadata("/dev/null").expect("stat /dev/null").permissions().mode(),
+        ante,
+        "the build changed the mode of /dev/null",
+    );
 }
 
 // ------------------------------------------------- the signalled child
