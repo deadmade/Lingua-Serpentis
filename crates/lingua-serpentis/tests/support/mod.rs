@@ -151,7 +151,14 @@ pub fn compare(f: &Fixture, got: &Rendered) -> Result<(), String> {
     }
 }
 
-fn diff(label: &str, want: &str, got: &str) -> Option<String> {
+/// One stream's difference, with the first line that differs called out.
+///
+/// `pub` for `compilata.rs`, which compares two *backends* rather than a
+/// backend against a blessing: its "expected" column is the interpreter and its
+/// "actual" is the compiler, and it says so where it prints this. Sharing the
+/// function rather than re-spelling it is what keeps the two targets from
+/// drifting into different ideas of what a first difference is.
+pub fn diff(label: &str, want: &str, got: &str) -> Option<String> {
     if want == got {
         return None;
     }

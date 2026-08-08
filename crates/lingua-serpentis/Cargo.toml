@@ -35,3 +35,10 @@ proptest = "1"
 [[test]]
 name = "conformance"
 harness = false
+
+# The differential (spec §10.1). One named trial per fixture, exactly as
+# `conformance` reports them, so a divergence is filterable by name. Deleted
+# with the interpreter in Task 19.
+[[test]]
+name = "compilata"
+harness = false
