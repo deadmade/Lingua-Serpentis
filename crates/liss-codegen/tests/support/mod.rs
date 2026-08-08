@@ -94,59 +94,93 @@ pub fn ir_fasciculorum(scidae: &[(&str, &str)]) -> liss_ir::Programma {
 /// file (`Error in 'principale.liss', linea N:`), which is the difference
 /// [`ir_solum`] exists to erase for single-file sources.
 fn ir_programmatis(prog: lingua_serpentis::program::Program) -> liss_ir::Programma {
+    let mut parsed = parsata(prog);
+    check_program_typed(&mut parsed).expect("the fixture type-checks")
+}
+
+/// Lex and parse every file of a loaded program, stopping short of the checker
+/// — which is exactly where `lingua_serpentis::run_loaded` runs the Latinity
+/// lint, and therefore the state [`monita`] needs.
+fn parsata(prog: lingua_serpentis::program::Program) -> ParsedProgram {
     let uno = |f: lingua_serpentis::program::SourceFile| {
         let tokens = tokenize(&f.src).expect("the fixture lexes");
         let ast = parse_file(&tokens).expect("the fixture parses");
         ParsedFile { path: f.path, ast }
     };
-    let mut parsed = ParsedProgram {
+    ParsedProgram {
         root: prog.root.into_iter().map(uno).collect(),
         packages: prog
             .packages
             .into_iter()
             .map(|(n, fs)| (n, fs.into_iter().map(uno).collect()))
             .collect(),
+    }
+}
+
+/// **The checker's Latinity warnings for one conformance case, obtained
+/// structurally** — the exact `Vec<Warning>` `run_loaded` would attach, from
+/// the same `latinity::lint_program` call on the same `ParsedProgram`.
+///
+/// This exists because a compiled program never prints one of these, and the
+/// blessed `nuntii` files record the interpreter's stderr, where there is only
+/// one process and so only one stream. Spec §9.5 has the CLI write the Latinity
+/// warnings itself and *then* spawn the child; the child's stderr carries its
+/// own diagnostics and nothing else. [`casus_par_est`] therefore subtracts
+/// exactly these lines from the expectation before comparing.
+///
+/// # Why this is not a `Monitum` prefix filter, which is what it used to be
+///
+/// Because **the runtime writes `Monitum` lines too, and they are the child's
+/// own.** `liss-abi`'s `ingressus.rs` defines `MONITUM_PRAEFIXUM: &[u8] =
+/// b"Monitum: "` and its `main` writes the D-10 truncated-exit-status note
+/// through it at run time — `conformance/monita/status-exitus-redactus` is
+/// precisely that line, and `munus initium reddit ni { redde °CCC; }` produces
+/// it from a compiled image today. A filter keyed on the word would have
+/// deleted a diagnostic the compiled program is *required* to emit, and the
+/// earlier comment here claimed the opposite was exact. It was not.
+///
+/// The subtraction is now by identity rather than by shape: whatever
+/// `lint_program` returns comes out, and everything else — the D-10 note
+/// included — stays in the expectation and must be matched byte for byte.
+///
+/// The two loading modes have to be mirrored exactly, because the rendered
+/// text differs. A **folder** program's warnings name their file
+/// (`Monitum in 'principale.liss', linea 2: …`); a **single-source** program's
+/// do not, because `run_file_with_warnings` parses it as `fons.liss` and then
+/// clears `Warning::file` — which is the same distinction [`ir_solum`] draws
+/// for `Func::file`.
+fn monita(via: &Path) -> Vec<lingua_serpentis::Warning> {
+    use lingua_serpentis::program::{Program, SourceFile};
+
+    if via.is_dir() {
+        let prog = lingua_serpentis::program::load_dir(via).expect("the folder loads");
+        return lingua_serpentis::latinity::lint_program(&parsata(prog));
+    }
+    let src = std::fs::read_to_string(via)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", via.display()));
+    let prog = Program {
+        root: vec![SourceFile { path: "fons.liss".to_owned(), src }],
+        packages: BTreeMap::new(),
     };
-    check_program_typed(&mut parsed).expect("the fixture type-checks")
+    let mut monita = lingua_serpentis::latinity::lint_program(&parsata(prog));
+    for m in &mut monita {
+        m.file = None;
+    }
+    monita
 }
 
 /// One conformance case's blessed expectation, read the way
-/// `tests/support::Fixture` reads it: a missing stream file is an empty stream,
-/// a missing `exitus` is status 0 — **less the checker's warnings**.
-///
-/// # Why the `Monitum` lines come out, and why that is not weakening the
-/// assertion
-///
-/// A compiled program never prints one. The checker's Latinity warnings are a
-/// **compile-time** diagnostic: spec §9.5 has the CLI write them to its own
-/// stderr and *then* spawn the child, so the child's stderr carries its own
-/// runtime diagnostics and nothing else. The blessed `nuntii` files record the
-/// interpreter's stderr, where the two streams are one because there is only
-/// one process.
-///
-/// This is the same subtraction [`interpretatum`] already makes for
-/// [`differentia`], and for the same stated reason — without it the comparison
-/// would quietly exclude every program with a non-Latin identifier in it, which
-/// is three of the five `lista-*` fixtures. **No fixture is edited**: the
-/// expectation on disk stays the interpreter's, because the corpus asserts
-/// interpreter behaviour and `conformance.rs` still reads it whole.
-///
-/// The filter is by line prefix, and it is exact: `Warning::fmt` writes one of
-/// four forms and all four begin `Monitum`, while `LinguaError`'s begin `Error`.
-/// A case whose stderr carries a warning *and* a diagnostic keeps the
-/// diagnostic.
+/// `tests/support::Fixture` reads it and **byte for byte**: a missing stream
+/// file is an empty stream, a missing `exitus` is status 0. Nothing is
+/// filtered, normalised or re-line-ended here — see [`casus_par_est`] for the
+/// one subtraction that happens, and why it is applied there rather than here.
 pub fn expectatum(casus: &str) -> lingua_serpentis::Rendered {
     let dir = radix().join("conformance/currunt").join(casus);
     let lege = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_default();
     let exitus = lege("exitus");
-    let nuntii: String = lege("nuntii")
-        .lines()
-        .filter(|l| !l.starts_with("Monitum"))
-        .flat_map(|l| [l, "\n"])
-        .collect();
     lingua_serpentis::Rendered {
         stdout: lege("emissio"),
-        stderr: nuntii,
+        stderr: lege("nuntii"),
         code: exitus.trim().parse().unwrap_or(0),
     }
 }
@@ -179,6 +213,22 @@ pub fn casus_via(casus: &str) -> PathBuf {
 /// exactly once", with one exception: a redundant free of a **slot** is a no-op,
 /// because `Corpus::libera` leaves the slot null. Only a redundant free of a
 /// temporary reaches the magic.
+///
+/// # The one subtraction, and it is by identity
+///
+/// The blessed `nuntii` is the *interpreter's* stderr, which begins with the
+/// checker's Latinity warnings; a compiled image never writes one, because the
+/// CLI writes them and then spawns the child (spec §9.5). So exactly those
+/// lines — the ones [`monita`] derives from the same `lint_program` call the
+/// interpreter makes, rendered the way `lingua_serpentis::render` renders them
+/// — are stripped from the **front** of the expectation, which is where
+/// `render` puts them.
+///
+/// `strip_prefix` rather than a filter, and the failure is the assertion's:
+/// if those exact lines are not the beginning of the blessed stderr, nothing is
+/// removed and the comparison fails loudly with both strings in view. Every
+/// byte after them, the runtime's own `Monitum: ` note (D-10) included, stays
+/// and must match.
 pub fn casus_par_est(casus: &str) {
     let machina = Target::hospes().expect("the host is x86_64 or aarch64");
     let via = casus_via(casus);
@@ -195,10 +245,19 @@ pub fn casus_par_est(casus: &str) {
         stderr,
         code: code.expect("the image was not killed by a signal"),
     };
+
+    let mut expectatum = expectatum(casus);
+    let praefixum: String =
+        monita(&via).iter().map(|m| format!("{m}\n")).collect();
+    if let Some(reliquum) = expectatum.stderr.strip_prefix(&praefixum) {
+        expectatum.stderr = reliquum.to_owned();
+    }
     assert_eq!(
-        expectatum(casus),
+        expectatum,
         compilatum,
-        "compiled `{casus}` does not match its blessed expectation",
+        "compiled `{casus}` does not match its blessed expectation, less the \
+         {} Latinity warning(s) the CLI writes rather than the child",
+        praefixum.lines().count(),
     );
 }
 

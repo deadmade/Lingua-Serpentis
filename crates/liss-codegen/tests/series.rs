@@ -686,8 +686,14 @@ const SPECTANDA: &[&str] = &[
 /// reaches that entry point directly — one call, no per-element copy, no
 /// rebuild — so the linearity is not thrown away on the way in. A codegen that
 /// implemented `adde` as "a new list one longer, then copy each element across"
-/// would produce identical output and would show up here as a `liss_list_new`
-/// and a run of copies.
+/// would produce identical output and would show up here as **an extra
+/// `liss_list_new`** — and that is the whole of what catches it. The
+/// per-element copies would *not* show: this program is `ni`-typed and
+/// `SPECTANDA` carries `liss_text_copy` but no `liss_int_copy`, deliberately,
+/// because a list of `voc` is the only element kind whose copies would survive
+/// the filter and adding every scalar `_copy` would drown the sequence in the
+/// `Load`s. The extra `new` is sufficient, and it is the assertion doing the
+/// work here.
 ///
 /// The `liss_list_copy` is the `Load` of `numeri`, which is the language's only
 /// unconditional copy site (§7.2); the `liss_list_free` is `Assign`'s free of
@@ -795,12 +801,19 @@ fn lectio_indicis_elementum_possidet() {
 
 /// **A list literal is one `liss_list_new` per list and no setter at all.**
 ///
-/// Spec §5.2: the constructor returns *uninitialised* memory and codegen writes
-/// each element word itself, at `ONUS + 8*i`, because it already knows the
-/// layout. There is deliberately no per-element entry point, and this is what
-/// says so — a nested literal is two `new`s with nothing between them, and the
-/// inner one comes first because elements are evaluated before the header they
-/// go into is allocated.
+/// Spec §5.2: the constructor hands back a header whose element words are
+/// codegen's to fill, and codegen writes each one itself at `ONUS + VERBUM*i`,
+/// because it already knows the layout. There is deliberately no per-element
+/// entry point, and this is what says so — a nested literal is two `new`s with
+/// **nothing between them**, and the inner one comes first because elements are
+/// evaluated before the header they go into is allocated.
+///
+/// "Nothing between them" is worth more than it looks. `liss_list_new` allocates
+/// with `calloc`, so a part-built list holds null words rather than heap
+/// garbage — but this assertion is what shows no correct path ever *has* a
+/// part-built list: the constructor is followed by `items.len()` stores and no
+/// call, so the zeroing is a net for the raising path only, and a reviewer
+/// should not read it as a step the construction depends on.
 #[test]
 fn litteralis_unam_constructionem_per_seriem_vocat() {
     let prog = support::ir_solum(

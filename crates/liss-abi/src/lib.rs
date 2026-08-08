@@ -93,12 +93,12 @@ pub const LISS_MAGIC: u32 = 0x4C49_5353;
 /// and must not be removed.
 ///
 /// **Defined in `liss_runtime::dispositio`, not here**, for the reason the kind
-/// codes are: codegen writes list element words itself — `liss_list_new`
-/// returns uninitialised memory by design — and this crate is never linked into
-/// the compiler (spec §11), so a second `24` in `emissio.rs` was the only other
-/// way. The `size_of` assertions below are what hold the three headers to it,
-/// and they are still here, which is what makes the shared constant a proof
-/// rather than a promise.
+/// codes are: codegen writes list element words itself — `liss_list_new` has no
+/// per-element setter by design — and this crate is never linked into the
+/// compiler (spec §11), so a second `24` in `emissio.rs` was the only other way.
+/// The `size_of` assertions below are what hold the three headers to it, and
+/// they are still here, which is what makes the shared constant a proof rather
+/// than a promise.
 pub use liss_runtime::dispositio::ONUS;
 
 #[repr(C)]
@@ -142,6 +142,24 @@ pub struct LissList {
     // items: [u64; len] at ONUS
 }
 
+/// **The proof that the number the compiler emits is the number this crate
+/// reads.** `ONUS` and `VERBUM` are defined in `liss_runtime::dispositio` so
+/// codegen can import them (spec §11 forbids it importing from *here*), and
+/// these assertions are what stop that sharing from being a promise: the musl
+/// cross-build of this crate is a prerequisite of every compiled program
+/// (`liss-codegen/build.rs`, which also re-runs on `liss-runtime/src`), so a
+/// constant that drifted from the layout is a **build failure** rather than a
+/// wrong answer.
+///
+/// `VERBUM` needs its own line and did not have one. `ONUS` is held by the
+/// three `size_of`s; the element **stride** is held by nothing at all, because
+/// the reader never spells it — [`series::elementa`] returns a `*mut u64` and
+/// every access is `.add(i)`, which is a hard-wired 8. So a `VERBUM` of 16
+/// would have codegen store element `i` at `ONUS + 16*i` while this crate reads
+/// it at `ONUS + 8*i`: `quantum` would over-allocate (harmless), every element
+/// past the first would read as a zero word, and `liberare_verbum` and
+/// `copiare_verbum` both *skip* a zero word. Silent wrong answers and silent
+/// leaks, and nothing would fail to compile. Now something does.
 const _: () = {
     assert!(size_of::<LissInt>() == ONUS);
     assert!(size_of::<LissText>() == ONUS);
@@ -150,6 +168,9 @@ const _: () = {
     assert!(align_of::<LissText>() == 8);
     assert!(align_of::<LissList>() == 8);
     assert!(size_of::<LissHdr>() == 8);
+    // `size_of::<u64>()`, not a literal 8: the element array *is* a `[u64]`,
+    // and `elementa`'s `.add(i)` scales by exactly this.
+    assert!(liss_runtime::dispositio::VERBUM == size_of::<u64>());
 };
 
 // Kind codes (spec §5.3): `kind = base | (depth << 3)`. `ni lista` is 10,

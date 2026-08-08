@@ -9,8 +9,18 @@
 //!
 //! Construction is `liss_list_new` plus **direct stores**: codegen allocates a
 //! header of the final length and writes each element word at
-//! `ONUS + 8*i` itself. There is no per-element setter, because there is
+//! `ONUS + VERBUM*i` itself. There is no per-element setter, because there is
 //! nothing for one to do that a store does not.
+//!
+//! The header comes back **zeroed** rather than raw — [`liss_list_new`] uses
+//! `allocare_nulla`, which is `calloc` — but that is a net for the failing
+//! path and not part of the construction protocol. Codegen emits the
+//! constructor and then one store per element with no call in between, and
+//! both [`liss_list_copy`] and [`liss_list_append`] write every word of what
+//! they allocate, so no correct path ever reads a zero it did not put there.
+//! The one path that does is an element expression raising between two stores;
+//! see [`crate::memoria::allocare_nulla`] for why "deterministic" was preferred
+//! to "whatever `malloc` returned" there.
 
 use core::ffi::c_char;
 use core::ptr;

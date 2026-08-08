@@ -26,11 +26,17 @@
 //!   is the writer and the runtime the reader ([`codex`]); the walks that free,
 //!   copy, compare and print a nested list recurse on the *child's own header*,
 //!   so nothing above [`Corpus::series`] ever computes a `k - GRADUS`.
-//! - **`liss_list_new` returns uninitialised memory on purpose.** There is no
+//! - **`liss_list_new`'s element words are codegen's to write.** There is no
 //!   per-element setter in the ABI, because there is nothing for one to do that
 //!   a `store` does not; [`Corpus::repone`] is the whole of the layout, and
-//!   `ONUS` is shared with the runtime through `liss_runtime::dispositio`
-//!   rather than written a second time here.
+//!   `ONUS` and `VERBUM` are shared with the runtime through
+//!   `liss_runtime::dispositio` rather than written a second time here. The
+//!   words do come back **zeroed** — `allocare_nulla` is `calloc` — but nothing
+//!   here leans on that: [`Corpus::series`] emits the constructor and then
+//!   exactly `items.len()` stores with no call in between, so no partially
+//!   built list is ever observable. The zeroing is a net for the *failing*
+//!   path, where an element expression raises before its store; see
+//!   `liss_abi::memoria::allocare_nulla`.
 //! - **`liss_list_put` borrows.** It is one of exactly two non-consuming entry
 //!   points, and the only one this file reaches with a bare `use_var` — see
 //!   [`Corpus::sententia`]'s `IndexAssign`.
@@ -1506,10 +1512,16 @@ impl<'a> Corpus<'a> {
     /// **direct store** per element (spec §5.2).
     ///
     /// There is deliberately no per-element setter in the ABI: `liss_list_new`
-    /// returns *uninitialised* memory and codegen completes it, because it
-    /// already knows the layout and a setter would have nothing to do that a
-    /// store does not. [`Corpus::repone`] is where the layout is spelled, and
-    /// [`ONUS`] is shared with the runtime rather than written again here.
+    /// hands back a header whose element words are codegen's to fill, because
+    /// codegen already knows the layout and a setter would have nothing to do
+    /// that a store does not. [`Corpus::repone`] is where the layout is
+    /// spelled, and [`ONUS`] and [`VERBUM`] are shared with the runtime rather
+    /// than written again here.
+    ///
+    /// The words arrive zeroed (`allocare_nulla` is `calloc`), and this loop
+    /// overwrites every one of them with no call in between — so on the success
+    /// path the zeroing is never read, and a reviewer should not take it for a
+    /// step this function depends on. It exists for the path below.
     ///
     /// **Elements first, then the header.** Evaluating an element can raise —
     /// `[°I / nullus]` is a program someone will write — and a raise does not
