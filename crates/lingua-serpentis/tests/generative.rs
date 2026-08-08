@@ -59,17 +59,33 @@ const T: Duration = Duration::from_secs(10);
 
 /// **How many programs the property draws — the cap spec §10.2 asks for.**
 ///
-/// Sixty-four, down from two hundred. The number is a budget rather than a
-/// confidence level, because confidence saturates long before it: the generator
+/// Sixty-four, down from two hundred. The number is a budget: the generator
 /// draws `ni` arithmetic over three variables and five operators, and the whole
 /// *behavioural* space it can reach is two outcomes — the program runs, or it
-/// divides by zero. Two hundred draws of that buy nothing over sixty-four that
-/// a hundred and thirty-six process spawns are worth.
+/// divides by zero.
 ///
-/// At the measured 384 ms per case under `liss run`, sixty-four cases plus
-/// [`SAMPLES`] is about **44 s**; the two hundred it replaces would have been
-/// about 96 s, in the workspace's already-slowest target.
+/// **The removed draws were not free, and it is worth being exact about what
+/// they were buying.** Before [`PONDUS_NULLIUS`] existed the error path was
+/// reached on 1.75% of draws, so cutting 200 to 64 took the chance of exercising
+/// it at all from 97% to 67% — a thirty-point swing, not nothing. The answer is
+/// not to buy it back with 136 more processes: weighting the leaf toward zero
+/// recovers it for no spawns at all, and overshoots what the two hundred ever
+/// managed. See [`PONDUS_NULLIUS`]. What sixty-four costs, after that, really is
+/// nothing.
+///
+/// The budget itself, at the measured 384 ms per case under `liss run`: the two
+/// tests in this file run on separate libtest threads, so wall time tracks the
+/// **larger** of [`CASUS`] and [`SAMPLES`] rather than their sum — which is why
+/// two hundred cases measured 62.3 s and not 250 × 310 ms. Sixty-four is
+/// therefore about **25 s** under `liss`, where two hundred would have been
+/// about 77 s, in the workspace's already-slowest target.
 const CASUS: u32 = 64;
+
+/// A generous sample for the statistical guards, which draw expressions without
+/// running any of them. Two thousand trees cost microseconds and no process at
+/// all, which is what makes the floor in
+/// `the_generator_still_draws_a_zero_divisor` safe to state tightly.
+const SPECULATIONES: usize = 2000;
 
 /// **The cap on shrinking, which is the larger uncapped cost.**
 ///
@@ -122,10 +138,35 @@ impl Expr {
     }
 }
 
+/// **The weight of an explicit zero among the leaves**, against 4 apiece for an
+/// arbitrary number and for a variable.
+///
+/// This is what keeps `divisio per nullum` reachable at [`CASUS`] draws, and it
+/// is the fix for a real hole. A uniform `0..200` puts a zero in one numeric
+/// leaf in two hundred, and once the chance of that zero landing to the right of
+/// a `/` or `%` is folded in, **the error path came out at 1.75% per draw** —
+/// measured over 400 samples. At two hundred cases that is a 97% chance of
+/// exercising it; at sixty-four it is 67%, so roughly one `cargo test` in three
+/// would have run `generated_programs_never_escape_the_error_model` without ever
+/// producing a diagnostic — and its error half is precisely the half that only
+/// exists when one is produced. A non-Latin `divisio per nullum`, a wrong line,
+/// a `judge` rule mis-firing: all of it passes silently on such a run.
+///
+/// Weighting buys that back **for nothing**, which raising [`CASUS`] does not:
+/// a weight costs no process, a case costs one. Measured the same way over 400
+/// samples, weight 3 puts the error path at **13.75% per draw**, or 99.99% over
+/// sixty-four — better than the two hundred cases ever gave — while 86% of
+/// programs still run to completion, so neither half of the property goes hungry.
+///
+/// Pinned by `the_generator_still_draws_a_zero_divisor`, which is what fails if
+/// this arm is ever dropped.
+const PONDUS_NULLIUS: u32 = 3;
+
 fn expr() -> impl Strategy<Value = Expr> {
     let leaf = prop_oneof![
-        (0u32..200).prop_map(Expr::Num),
-        proptest::sample::select(VARS.as_slice()).prop_map(Expr::Var),
+        4 => (0u32..200).prop_map(Expr::Num),
+        4 => proptest::sample::select(VARS.as_slice()).prop_map(Expr::Var),
+        PONDUS_NULLIUS => Just(Expr::Num(0)),
     ];
     leaf.prop_recursive(4, 24, 2, |inner| {
         prop_oneof![
@@ -160,24 +201,85 @@ fn program(e: &Expr) -> String {
 /// Textual, and deliberately so — it reads the source the generator *renders*,
 /// which is the artefact that reaches the compiler, so no change to the `Expr`
 /// tree can route around it.
+///
+/// **The init clause is the whole of D-26, and that is provable rather than
+/// hopeful.** A `dum` header has three clauses, and only two of them could in
+/// principle carry a terminator. The *step* clause cannot: `parser.rs`'s
+/// `assign_no_semi` admits only `<ident> = <expr>` there, so `dum (…; …; redde
+/// x)` is a parse error under both backends and never reaches either one's
+/// disagreement. The init clause is therefore the only route, and matching on it
+/// alone is complete, not merely narrow.
 fn caput_dum_terminatum(src: &str) -> bool {
     const TERMINI: [&str; 3] = ["redde", "abrumpe", "continua"];
-    let mut reliquum = src;
-    while let Some(i) = reliquum.find("dum") {
-        reliquum = &reliquum[i + "dum".len()..];
-        // The header opens at the next `(`; anything else after `dum` is not a
-        // loop header at all, and the next iteration will find the next `dum`.
-        let Some(j) = reliquum.find('(') else { return false };
-        if !reliquum[..j].trim().is_empty() {
+    for (i, _) in src.match_indices("dum") {
+        // `dummodo` is not a loop, and neither is `nondum`.
+        if !verbum_est(src, i, "dum") {
             continue;
         }
-        let caput = &reliquum[j + 1..];
-        let initium = caput.split(';').next().unwrap_or(caput);
-        if TERMINI.iter().any(|t| initium.contains(t)) {
+        let post = &src[i + "dum".len()..];
+        // The header opens at the next `(`; anything else between is some other
+        // construct, and a later `dum` gets its own turn.
+        let Some(j) = post.find('(') else { continue };
+        if !post[..j].trim().is_empty() {
+            continue;
+        }
+        let Some(initium) = clausula_initialis(&post[j + 1..]) else { continue };
+        if TERMINI.iter().any(|t| initium.match_indices(t).any(|(k, _)| verbum_est(initium, k, t)))
+        {
             return true;
         }
     }
     false
+}
+
+/// The **init clause** of a `dum` header, given everything after its opening
+/// `(`: the text up to the first `;` at the header's own parenthesis depth.
+///
+/// `None` where the header closes without one. `dum (verus)` is not a
+/// three-clause header, and reading past its `)` for a `;` would find the one
+/// ending the first statement of the **body** — so `dum (verus) { redde nullus;
+/// }`, an ordinary program, would be reported as D-26's shape. That was a real
+/// bug in the first draft of this guard, caught by the negative below.
+///
+/// Depth-tracked rather than a plain `split_once`, so a parenthesised
+/// initialiser such as `dum (ni i = (°I + °II); …)` is not cut short at its own
+/// inner `)`. Quotes are tracked for the same reason, so a `;` inside a string
+/// literal does not end the clause early. Escape sequences are not, which can
+/// only make the guard *miss* a shape, never invent one.
+fn clausula_initialis(post: &str) -> Option<&str> {
+    let mut altitudo = 1usize;
+    let mut in_chorda = false;
+    for (i, c) in post.char_indices() {
+        match c {
+            '"' => in_chorda = !in_chorda,
+            _ if in_chorda => {}
+            '(' => altitudo += 1,
+            ')' => {
+                altitudo -= 1;
+                if altitudo == 0 {
+                    return None;
+                }
+            }
+            ';' if altitudo == 1 => return Some(&post[..i]),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether the `verbum` sitting at byte `i` of `haec` is a whole word rather
+/// than part of a longer name.
+///
+/// Substring matching over-excludes, which is the safe direction — but silently:
+/// an init clause declaring `ni reddendum = °I`, or one holding a string with
+/// `continua` in it, would be refused as D-26's shape and the draw lost with no
+/// sign. A widened generator would simply produce fewer programs than it
+/// thought.
+fn verbum_est(haec: &str, i: usize, verbum: &str) -> bool {
+    let pars_nominis = |c: char| c.is_alphanumeric() || c == '_';
+    let ante = haec[..i].chars().next_back().is_none_or(|c| !pars_nominis(c));
+    let post = haec[i + verbum.len()..].chars().next().is_none_or(|c| !pars_nominis(c));
+    ante && post
 }
 
 proptest! {
@@ -295,6 +397,50 @@ fn generation_reaches_the_interpreter() {
     assert_eq!(reached, SAMPLES, "drew fewer programs than intended");
 }
 
+/// **The zero divisor is still drawn**, and the count is the thing being
+/// asserted rather than a comment about it.
+///
+/// [`PONDUS_NULLIUS`] is one line, and a later reader tidying the leaf strategy
+/// back to two arms would lose the error half of
+/// `generated_programs_never_escape_the_error_model` with the whole suite green
+/// — the property would still pass, on programs that never produce a
+/// diagnostic. That is the regression this test exists to make loud.
+///
+/// **It spawns nothing.** Two thousand trees are drawn and rendered, and the
+/// count is of sources with an *immediate* literal zero divisor — `/ nullus` or
+/// `% nullus`. That is a deliberate under-count: `(x / (nullus + nullus))`,
+/// `(x / (-nullus))` and `(x / (a - a))` all divide by zero too and none is
+/// matched here. Measured against the interpreter, the syntactic rate is 8.0%
+/// and the true error rate 13.75%, so this is a strict lower bound on the
+/// property that matters, which is the right direction for a floor.
+///
+/// The floor is 4% — half the measured rate, and fifty times the **0.15%** the
+/// unweighted leaf produces. That last number is not a projection: deleting the
+/// weighted arm drops this count to 3 of 2000 and the test says so by name.
+/// With 2000 draws the gap is far wider than any sampling noise, so this is a
+/// ratchet and not a coin toss.
+#[test]
+fn the_generator_still_draws_a_zero_divisor() {
+    let strategy = expr();
+    let mut runner = TestRunner::default();
+    let mut cum_nullo = 0usize;
+    for _ in 0..SPECULATIONES {
+        let e = strategy.new_tree(&mut runner).expect("draw an expression").current();
+        let src = program(&e);
+        if src.contains("/ nullus") || src.contains("% nullus") {
+            cum_nullo += 1;
+        }
+    }
+    let pars = cum_nullo as f64 / SPECULATIONES as f64;
+    assert!(
+        pars >= 0.04,
+        "only {cum_nullo} of {SPECULATIONES} draws ({:.2}%) divide by a literal \
+         zero; the error half of the property is close to unreachable at \
+         CASUS = {CASUS}. Has PONDUS_NULLIUS been dropped from the leaf?",
+        pars * 100.0,
+    );
+}
+
 /// **The D-26 guard, checked against the shape it names.**
 ///
 /// Nothing this generator draws can exercise [`caput_dum_terminatum`] — that is
@@ -316,8 +462,19 @@ fn the_guard_recognises_the_shape_it_excludes_and_nothing_else() {
         // An ordinary loop, and one with no `dum` in it at all.
         "munus initium reddit ni {\n  dum (ni i = °I; verus; i = i + °I) { }\n}",
         "munus initium reddit ni {\n  redde nullus;\n}",
-        // `dum` as the beginning of an identifier is not a loop header.
+        // `dum` inside a longer name is not a loop header, before or after.
         "munus initium reddit ni {\n  ni dummodo = °I;\n  redde nullus;\n}",
+        "munus initium reddit ni {\n  ni nondum = °I;\n  dum (ni i = °I; verus; i = i + °I) { }\n}",
+        // And a *terminator* inside a longer name is not a terminator. These
+        // are the draws a substring match would have silently thrown away.
+        "munus initium reddit ni {\n  dum (ni reddendum = °I; verus; i = i + °I) { }\n}",
+        "munus initium reddit ni {\n  dum (voc s = \"continuatio\"; verus; i = i + °I) { }\n}",
+        // A header with no init clause at all; its body's `redde` is not one,
+        // and must not be read as one. This negative caught a real bug.
+        "munus initium reddit ni {\n  dum (verus) { redde nullus; }\n}",
+        // A parenthesised initialiser must not be cut short at its own `)`.
+        "munus initium reddit ni {\n  dum (ni i = (°I + °II); verus; i = i + °I) \
+         { redde nullus; }\n}",
     ] {
         assert!(!caput_dum_terminatum(innocuum), "{innocuum}");
     }

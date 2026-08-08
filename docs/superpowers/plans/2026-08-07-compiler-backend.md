@@ -691,6 +691,8 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 **Precondition, checked and stated in the commit before a single line is removed:** every one of the 113 fixtures produces byte-identical `Rendered` under both backends, on both architectures; `cli.rs` is green; `robustness` and `generative` are green; `RECORDED_RULES` has not grown.
 
 > **Task 17 discharged this on x86_64, and the list is short: 112 of 113 identical.** The exception is `errores/vocatio-nimis-alte-implicata`, which is the re-blessing scheduled below — so the precondition is met the moment that rename lands. Nothing else diverged, and no fixture was excluded. Task 18 owes the aarch64 half.
+>
+> Read the number with §10.1's qualifier attached: **47 of the 113 reach codegen**, and the other 66 fail in the front end both backends share, so they pin front-end parity rather than back-end behaviour. 47 is the size of this precondition's back-end evidence.
 
 - [ ] Delete `interp.rs`, `Flow`, `parser::parse`, `checker::check`, the five `run*` entry points, and `tests/compilata.rs`.
 - [ ] `support::run_fixture` switches to the compiled path — **through `liss run`, not the raw image.** If it runs the image directly, the three `Monitum`-carrying `nuntii` files (`lista-index-lectio`, `lista-litteralis`, `longitudo-numerat`) have to be re-blessed empty, which contradicts "the recursion fixture is the only expectation that changes" and deletes the corpus's only coverage of Latinity warnings. `conformance.rs` inherits compilata's job.

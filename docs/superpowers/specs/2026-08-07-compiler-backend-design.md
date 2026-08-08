@@ -1032,6 +1032,16 @@ catch. Mutating the parent's `write_or_exit` away fails ten fixtures, and
 `monita/status-exitus-redactus` is not among them, because its `Monitum: ` line
 is the **runtime's** (D-10) and no prefix filter is applied anywhere.
 
+**What 113 fixtures of differential coverage is and is not.** All 113 are
+compared, but by the count in §10.2 only **47 reach codegen**; for the other 66
+both backends fail in the front end, which `cli.rs` and the interpreter share,
+so what those fixtures pin is *front-end parity* — that `liss` reproduces the
+interpreter's diagnostics, single-file `file = None` stripping included, which
+is duplicated between `cli.rs` and `lib.rs` and has no other check. That is
+worth having and is not the same claim. **Codegen's differential coverage is 47
+fixtures**, and §12's "all 113 pass through the compiled path" should be read
+against that number rather than as 113 fixtures of back-end coverage.
+
 **Result: 112 of the 113 fixtures are byte-identical under both backends.** The
 one that is not is `errores/vocatio-nimis-alte-implicata`, and it is the
 re-blessing named above: the interpreter's 64-frame cap raises `vocatio nimis
@@ -1111,13 +1121,33 @@ this is where a careless default turns `cargo test` from seconds into minutes.
 
 **The numbers, recorded.** `generative.rs` draws `CASUS = 64` cases, down from
 200, and shrinks at most `RETRACTATIONES = 256` times, down from proptest's
-2000; `SAMPLES` stays at 50. The cases were the wrong two hundred to begin with:
-the generator's whole behavioural range is "the program runs" or "it divides by
-zero", so the extra 136 spawns bought nothing. The shrink budget was the larger
-exposure — every shrink iteration is another spawn, so 2000 of them would turn a
-single failure into thirteen minutes of compiling and linking before the minimal
-repro appeared. The target dropped from 62.3 s to 19.6 s against the interpreter;
-against `liss` the 114 spawns would be about 44 s where the old budget was 96 s.
+2000; `SAMPLES` stays at 50. The shrink budget was the larger exposure — every
+shrink iteration is another spawn, so 2000 of them would turn a single failure
+into thirteen minutes of compiling and linking before the minimal repro
+appeared. The target dropped from 62.3 s to 19.6 s against the interpreter.
+Because its two tests run on separate libtest threads, wall time tracks the
+larger of `CASUS` and `SAMPLES` rather than their sum — which is why 200 cases
+measured 62.3 s rather than 250 × 310 ms — so against `liss` the cap is about
+25 s where the old budget would have been about 77 s.
+
+**Cutting the cases was not free, and the cheap fix is not more cases.** The
+generator's behavioural range is "the program runs" or "it divides by zero", but
+the second outcome was rare: measured over 400 samples, a uniform `0..200`
+numeric leaf reached the error path on **1.75% of draws**. Cutting 200 to 64
+therefore took the chance of exercising it at all from 97% to 67% — roughly one
+`cargo test` in three running the property's error half against no diagnostic at
+all, where a non-Latin message, a wrong line or a mis-firing `judge` rule would
+pass in silence.
+
+The answer is to weight the generator, not to spawn more processes.
+`PONDUS_NULLIUS` adds an explicit zero to the leaf strategy at weight 3 against
+4 apiece for a number and a variable, which costs **nothing per draw** where a
+case costs a process. Measured the same way, that puts the error path at
+**13.75% per draw** — 99.99% over 64 cases, better than 200 unweighted cases
+ever gave — while 86% of programs still run to completion, so neither half of
+the property goes hungry. `the_generator_still_draws_a_zero_divisor` pins the
+rate without spawning anything: deleting the weighted arm drops it from 8.0% to
+0.15% of 2000 draws and fails the test by name.
 
 The cap lands in Task 17, one task before Task 19 points `run_binary::BINARY` at
 `liss` and makes every one of those spawns a compile — so the budget is in place
@@ -1261,7 +1291,9 @@ musl targets, and `qemu` for the aarch64 checkpoint. MSRV rises 1.85 → 1.94.
   gate on the deletion, not a report after it.
 - All 113 fixtures pass through the compiled path, with exactly one intentional
   re-blessing (§10.1). Task 17 measured 112 already byte-identical and the
-  113th to be exactly that re-blessing.
+  113th to be exactly that re-blessing. **47 of the 113 reach codegen**; the
+  rest pin front-end parity between `liss` and the interpreter, which is a
+  different and lesser claim — see §10.1.
 - The live-allocation counter reads zero at exit for every `currunt` and
   `monita` fixture, including the six new `memoria-*` cases.
 - Unbounded recursion produces `Error: acervus vocationum exhaustus est` and
