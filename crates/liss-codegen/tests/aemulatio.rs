@@ -33,7 +33,10 @@
 //!   `SIGSEGV` with `si_addr` four bytes below the stack mapping. Both
 //!   branches of §8.2's discriminator are therefore reachable and correctly
 //!   discriminated under emulation, which is what
-//!   [`acervus_exhaustus_sub_aemulatore`] relies on.
+//!   [`acervus_exhaustus_sub_aemulatore`] relies on — and
+//!   [`acervus_displacitus_est_defectus_internus`] then demonstrates *inside
+//!   this suite*, rather than in a probe, by displacing the guest stack and
+//!   watching the classification move with it.
 //! - **The guest stack does not grow on demand.** `qemu-user` maps the whole
 //!   `RLIMIT_STACK` up front, so the `[stack]` mapping's low address *equals*
 //!   the derived floor. The measurement §8.2 is built on — that every interface
@@ -48,6 +51,23 @@
 //!   reachable from this suite at all; `the_page_size_is_asked_of_sysconf_and_
 //!   never_assumed` checks that the number is asked for rather than assumed,
 //!   and that is the whole of what can be checked from here.
+//! - **`RLIMIT_STACK` is an undeclared input to §8 under emulation**, silent in
+//!   both directions — unlimited makes the guard test pass vacuously, and below
+//!   8 MiB it fails on a correct build, because `qemu-user` floors the guest
+//!   stack at 8 MiB whatever the limit says. Asserted in `instrumenta.rs`, and
+//!   made self-diagnosing by the negative control here.
+//!
+//! # Why TLSDESC is not asserted
+//!
+//! Task 11 confirmed the aarch64 TLSDESC → local-exec relaxation by hand and
+//! this file does not re-check it. The reason is not "running the image is
+//! stronger" — running exercises only the TLS sites the four programs here
+//! actually execute, not all 53 in the image. It is that **an unrelaxed TLSDESC
+//! is not representable in what ships**: the linked aarch64 image has zero
+//! relocations of any kind and no dynamic section, so there is nowhere for one
+//! to live, and [`imago_est_statica_aarch64`]'s `PT_DYNAMIC` assertion already
+//! covers every site statically. `nexus.rs`'s module doc records the original
+//! measurement.
 
 mod support;
 
@@ -75,6 +95,19 @@ fn imago_peregrina(fons: &str) -> Vec<u8> {
 /// and the `ETXTBSY` race that helper guards against does not arise — the file
 /// is opened for reading by the emulator, never executed.
 fn exsequere_aemulatum(imago: &[u8], nomen: &str) -> (Option<i32>, String, String) {
+    exsequere_aemulatum_cum(imago, nomen, &[])
+}
+
+/// [`exsequere_aemulatum`], with environment variables for the emulator.
+///
+/// The one caller that needs this is
+/// [`acervus_displacitus_est_defectus_internus`], which sets `QEMU_STACK_SIZE`
+/// to move the guest stack out from under the bounds the runtime derives.
+fn exsequere_aemulatum_cum(
+    imago: &[u8],
+    nomen: &str,
+    ambitus: &[(&str, &str)],
+) -> (Option<i32>, String, String) {
     let dir = std::env::temp_dir().join(format!("liss-a64-{}-{nomen}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let via = dir.join("imago");
@@ -93,7 +126,12 @@ fn exsequere_aemulatum(imago: &[u8], nomen: &str) -> (Option<i32>, String, Strin
     // one run that finds the regression is the one that would litter the
     // repository with it. Pointing the emulator at the scratch directory puts
     // the core beside the image, and `remove_dir_all` takes both.
-    let exitus = Command::new(AEMULATOR).arg(&via).current_dir(&dir).output();
+    let mut cmd = Command::new(AEMULATOR);
+    cmd.arg(&via).current_dir(&dir);
+    for (clavis, valor) in ambitus {
+        cmd.env(clavis, valor);
+    }
+    let exitus = cmd.output();
     let _ = std::fs::remove_dir_all(&dir);
     let exitus = exitus.unwrap_or_else(|e| {
         panic!(
@@ -258,6 +296,64 @@ fn acervus_exhaustus_sub_aemulatore() {
         "a signalled process is a `no abort` violation — D-04's shape, and \
          spec §8's whole subject",
     );
+    assert_eq!(stdout, "", "nothing was printed before the recursion");
+}
+
+/// **The negative control: displace the guest stack and the *other* branch
+/// fires.**
+///
+/// [`acervus_exhaustus_sub_aemulatore`] shows the right sentence coming out of
+/// a stack overflow. On its own that is compatible with a handler that has no
+/// bounds at all — spec §8.2's bounds-unknown fallback reports exhaustion
+/// *unconditionally*, and `instrumenta.rs`'s
+/// `the_stack_limit_is_finite_and_large_enough_for_the_guard_test` exists
+/// precisely because `ulimit -s unlimited` puts the suite in that state and
+/// everything still passes.
+///
+/// So this test proves the bounds are **known and the band computed**, by
+/// moving the stack and requiring the classification to move with it.
+/// `QEMU_STACK_SIZE` sets the guest stack independently of `RLIMIT_STACK`: at
+/// 1 MiB the emulated `[stack]` mapping is 1 MiB, the runtime still subtracts
+/// the inherited 16 MiB `RLIMIT_STACK` from its high address, and the derived
+/// floor lands roughly 15 MiB *below* where the fault actually happens. The
+/// band `[fundus − 1 MiB, fundus + pagina)` therefore does not contain
+/// `si_addr`, and the discriminator must say so.
+///
+/// Three things fall out of four lines, and the third is why it is here rather
+/// than in a report:
+///
+/// - the guard band is **derived**, not a constant that happens to match;
+/// - `defectus internus: memoria violata est` gets its **first coverage on
+///   aarch64** — `liss-abi/tests/custos.rs` covers it on the host only;
+/// - a `RLIMIT_STACK` misconfiguration becomes **self-diagnosing**: it makes
+///   this test pass and [`acervus_exhaustus_sub_aemulatore`] fail, which is the
+///   opposite pattern from a real §8 regression, where both fail.
+///
+/// It costs 0.10 s, because a 1 MiB stack fills sixteen times faster than the
+/// default one.
+///
+/// **This is a statement about the emulator's configuration, not about the
+/// program.** On real hardware `QEMU_STACK_SIZE` has no analogue and
+/// `mapping-top − RLIMIT_STACK` is the true floor; nothing here suggests a
+/// kernel could present this geometry.
+#[test]
+fn acervus_displacitus_est_defectus_internus() {
+    let imago = imago_peregrina(
+        "munus profundum capit (ni n) reddit ni {\n    \
+             redde profundum(n + °I);\n}\n\
+         munus initium reddit ni {\n    \
+             redde profundum(°I);\n}\n",
+    );
+    let (status, stdout, stderr) =
+        exsequere_aemulatum_cum(&imago, "displacitus", &[("QEMU_STACK_SIZE", "1048576")]);
+    assert_eq!(
+        stderr, "Error: defectus internus: memoria violata est\n",
+        "with the guest stack displaced from the derived bounds, the fault is \
+         outside the band and must take the discriminator's other branch. The \
+         same sentence as `acervus_exhaustus_sub_aemulatore` here would mean \
+         the bounds are unknown and the band is never consulted",
+    );
+    assert_eq!(status, Some(1), "both branches exit 1 (spec §8.2)");
     assert_eq!(stdout, "", "nothing was printed before the recursion");
 }
 

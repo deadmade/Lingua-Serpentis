@@ -326,19 +326,44 @@ mod tests {
             .then_some((instructio & 0x1F, (instructio >> 5) & 0xFFFF))
     }
 
-    /// What aarch64 code most recently put in `w0` before the instruction at
-    /// `locus`, looked for over the preceding [`RETRO`] instructions.
+    /// aarch64 `BL <imm26>` / `BLR <Xn>` — a call, and therefore the point past
+    /// which nothing can be said about `w0`.
+    fn vocatio(instructio: u32) -> bool {
+        instructio & 0xFC00_0000 == 0x9400_0000 || instructio & 0xFFFF_FC1F == 0xD63F_0000
+    }
+
+    /// What aarch64 code put in `w0` for the call at `locus`, looked for over
+    /// the preceding [`RETRO`] instructions **and no further back than the
+    /// previous call**.
     ///
     /// This is how a *call's argument* is read off a stripped object with no
     /// disassembler in the dependency list: on aarch64 every instruction is
     /// four bytes, a relocation against a `bl` sits on the `bl` itself, and the
     /// first argument of a C call is `w0`.
+    ///
+    /// # Two filters, and both are load-bearing
+    ///
+    /// **`Rd == 0`.** The `sigaddset` calls that build the handler's signal mask
+    /// take their signal number in `w1`, and `movz w1, #11` / `movz w1, #7` sit
+    /// inside the same [`RETRO`] window as the `sigaction` calls that follow. A
+    /// scan that accepted any destination register would read those and get the
+    /// right answer for the wrong reason — and would keep getting it after the
+    /// `sigaction` arguments themselves had gone wrong.
+    ///
+    /// **Stopping at a call.** A `bl` clobbers `w0` — it is both the argument
+    /// register and the return register — so a `movz w0` on the far side of one
+    /// says nothing about this call. Without this the scan is a heuristic that
+    /// happens to be right on today's layout; with it, a value found is a value
+    /// this call actually receives.
     fn argumentum_primum(corpus: &[u8], locus: u64) -> Option<u32> {
         let locus = usize::try_from(locus).ok()?;
         let mut retro = 1;
         while retro <= RETRO {
             let inceptum = locus.checked_sub(retro * 4)?;
             let quattuor: [u8; 4] = corpus.get(inceptum..inceptum + 4)?.try_into().ok()?;
+            if vocatio(u32::from_le_bytes(quattuor)) {
+                return None;
+            }
             if let Some((0, imm)) = movz_w(u32::from_le_bytes(quattuor)) {
                 return Some(imm);
             }
@@ -361,6 +386,11 @@ mod tests {
     /// code beyond the two signal numbers" and then have them be the same two.
     const SIGSEGV: u32 = 11;
     const SIGBUS: u32 = 7;
+
+    /// The handler, by the tail of its v0-mangled name. It is a private `fn`,
+    /// so it has no stable symbol — but the path segments are stable and the
+    /// only thing varying is the crate-disambiguator hash in the middle.
+    const MANUS: &str = "8liss_abi6custos5manus";
 
     #[test]
     fn every_blob_is_present_and_is_this_target_s_architecture() {
@@ -570,16 +600,18 @@ mod tests {
         }
     }
 
-    /// **Spec §8.2's first per-architecture row, asserted against the shipped
-    /// bytes.** "signal delivered: `SIGSEGV` on x86_64; `SIGSEGV`, occasionally
-    /// `SIGBUS`, on aarch64 — both are trapped."
+    /// **Spec §8.2's `SIGBUS` requirement, asserted against the shipped bytes.**
+    /// §8.2 asks for `sigaction` on *both* `SIGSEGV` and `SIGBUS`, "because on
+    /// aarch64 a stack fault may arrive as either" — a bullet in that section,
+    /// not a row of its table. (§8.2's only table is the four bounds methods,
+    /// and this has nothing to do with it.)
     ///
     /// `tests/custos.rs` in `liss-abi` proves the handler *works*, but only for
     /// the signal it can provoke, and only on the host. A `SIGBUS` cannot be
     /// provoked reliably from a Lingua Serpentis program on any architecture,
     /// and on this 4 KiB-page x86_64 host under `qemu-aarch64` it cannot be
-    /// provoked at all — so the aarch64 half of that row is checked here, by
-    /// reading the *installer* out of the runtime this compiler embeds rather
+    /// provoked at all — so the aarch64 half of the requirement is checked here,
+    /// by reading the *installer* out of the runtime this compiler embeds rather
     /// than by arranging a fault.
     ///
     /// Two things are asserted, and the second is the one that matters:
@@ -647,53 +679,135 @@ mod tests {
         }
     }
 
-    /// **Spec §8.2's second per-architecture row**: "page size — 4 KiB on
-    /// x86_64; 4, 16 or 64 KiB on aarch64 — `sysconf(_SC_PAGESIZE)`, never a
-    /// literal."
+    /// **Spec §8.2's page-size requirement**: the page size comes from
+    /// `sysconf(_SC_PAGESIZE)`, "never a hardcoded 4096, because aarch64 kernels
+    /// commonly ship 16 KiB and 64 KiB pages". A bullet in §8.2, paraphrased —
+    /// that section's only table is the four bounds methods.
     ///
     /// This host reports 4096 and `qemu-aarch64` inherits it, so a runtime that
     /// hardcoded 4096 would behave identically to a correct one everywhere this
     /// suite can reach. The property therefore has to be checked as a property
-    /// of the code rather than of a run: `liss_custos_institue` asks `sysconf`,
-    /// and on aarch64 it asks it for `_SC_PAGESIZE` specifically.
+    /// of the code rather than of a run.
     ///
-    /// What this does **not** establish is in the report and worth repeating:
-    /// nothing here or anywhere in this suite has ever executed the handler on
-    /// a kernel whose pages are 16 or 64 KiB. The call is proven; the arithmetic
-    /// downstream of a 16384 is not.
+    /// # What is actually measured, which is narrower than "asked once"
+    ///
+    /// `liss_custos_institue`'s **own body** references `sysconf` at least once,
+    /// and on aarch64 at least one of those call sites is handed `_SC_PAGESIZE`.
+    ///
+    /// It is *not* "asked once and never again". `liss_custos_institue` calls
+    /// `fines`, which calls `pagina()` a second time at run time; that call is
+    /// invisible here only because `fines` is outlined into its own symbol. An
+    /// earlier draft of this test asserted `== 1` and said "asked for once, at
+    /// initialisation, and never in the handler" — which would have gone red on
+    /// a perfectly correct build that inlined `fines`, and was describing
+    /// something the check could not see. The "never in the handler" half is a
+    /// real and separate claim, and
+    /// [`the_handler_asks_nothing_and_allocates_nothing`] is where it is checked.
+    ///
+    /// What none of this establishes: nothing here or anywhere in this suite has
+    /// ever executed the handler on a kernel whose pages are 16 or 64 KiB. The
+    /// call is proven; the arithmetic downstream of a 16384 is not.
     #[test]
     fn the_page_size_is_asked_of_sysconf_and_never_assumed() {
         for meta in Target::OMNES {
             let octeti = meta.runtime().nucleus;
             let fasciculus = object::File::parse(octeti).expect("an object file");
             let sedes = loci(&fasciculus, "liss_custos_institue", "sysconf");
-            assert_eq!(
-                sedes.len(),
-                1,
-                "{}: `liss_custos_institue` calls sysconf {} time(s); the page \
-                 size is asked for once, at initialisation, and never in the \
-                 handler (spec §8.2)",
+            assert!(
+                !sedes.is_empty(),
+                "{}: `liss_custos_institue` never calls sysconf — the page size \
+                 is being assumed, and spec §8.2 requires it to be asked for, \
+                 because aarch64 kernels commonly ship 16 KiB and 64 KiB pages",
                 meta.triple(),
-                sedes.len(),
             );
 
             if meta != Target::Aarch64 {
                 continue;
             }
             let corpus = machina_corporis(&fasciculus, "liss_custos_institue");
-            let quaesitum = argumentum_primum(&corpus, sedes[0]).unwrap_or_else(|| {
-                panic!(
-                    "{}: no `movz w0, #imm` within {RETRO} instructions before \
-                     the sysconf call at +{:#x}",
+            let quaesita: Vec<Option<u32>> = sedes
+                .iter()
+                .map(|locus| argumentum_primum(&corpus, *locus))
+                .collect();
+            assert!(
+                quaesita.contains(&Some(SC_PAGESIZE)),
+                "{}: no sysconf call site in `liss_custos_institue` is handed \
+                 _SC_PAGESIZE ({SC_PAGESIZE}); the requests found at {sedes:?} \
+                 were {quaesita:?}",
+                meta.triple(),
+            );
+        }
+    }
+
+    /// **§8.2's other half: "Everything expensive happens at initialisation,
+    /// before `liss_initium`."**
+    ///
+    /// The handler runs with no stack left. §8's prose is explicit about what it
+    /// may touch — `write(2)`, `_exit(2)`, atomic loads on already-initialised
+    /// statics, and integer comparison — and every one of the things it may not
+    /// touch is a named libc symbol in the prelinked runtime, so their *absence*
+    /// from the handler's relocations is checkable.
+    ///
+    /// This is the claim
+    /// [`the_page_size_is_asked_of_sysconf_and_never_assumed`] used to make in
+    /// its failure message without checking it. Here it is checked, and the
+    /// difference is not cosmetic: a `sysconf` or an `open` that migrated from
+    /// the installer into the handler is precisely the regression §8.2 is
+    /// written to prevent, and no test in the workspace could see it.
+    ///
+    /// Measured on the shipped objects: the handler's only named relocation, on
+    /// both targets, is `_exit`. The denylist below is therefore satisfied with
+    /// room, and it is a denylist rather than an exact allowlist because
+    /// `liss_scribe_erratum` is `#[unsafe(no_mangle)]` and would appear by name
+    /// the moment the optimiser stopped inlining it — which is legal, and not a
+    /// defect.
+    #[test]
+    fn the_handler_asks_nothing_and_allocates_nothing() {
+        for meta in Target::OMNES {
+            let octeti = meta.runtime().nucleus;
+            let fasciculus = object::File::parse(octeti).expect("an object file");
+            let manus = fasciculus
+                .symbols()
+                .filter_map(|s| s.name().ok())
+                .find(|n| n.ends_with(MANUS))
+                .unwrap_or_else(|| panic!("{}: the runtime object has no `{MANUS}`", meta.triple()))
+                .to_owned();
+
+            // Allocation — no stack to allocate on, and the allocator's own
+            // locks may be held by the faulting thread. Initialisation-time
+            // queries — §8.2 computes the bounds "once here and never in the
+            // handler". Installation — re-entering it from a fault is a bug.
+            // And `exit`, which runs `atexit` handlers on a corrupted stack;
+            // `_exit` is the only one permitted, and is required below.
+            for vetitum in [
+                "malloc",
+                "calloc",
+                "realloc",
+                "free",
+                "sysconf",
+                "getrlimit",
+                "open",
+                "read",
+                "close",
+                "sigaction",
+                "sigaltstack",
+                "exit",
+            ] {
+                assert!(
+                    loci(&fasciculus, &manus, vetitum).is_empty(),
+                    "{}: the signal handler calls `{vetitum}`. Everything \
+                     expensive happens at initialisation, before `liss_initium` \
+                     (spec §8.2); by the time the handler runs there is no stack \
+                     left and no allocator it can trust",
                     meta.triple(),
-                    sedes[0],
-                )
-            });
-            assert_eq!(
-                quaesitum,
-                SC_PAGESIZE,
-                "{}: sysconf is asked for request {quaesitum}, not \
-                 _SC_PAGESIZE ({SC_PAGESIZE})",
+                );
+            }
+
+            assert!(
+                !loci(&fasciculus, &manus, "_exit").is_empty(),
+                "{}: the signal handler never calls `_exit` — it must not \
+                 return, and it must not run `atexit` handlers on a corrupted \
+                 stack (spec §8.2)",
                 meta.triple(),
             );
         }

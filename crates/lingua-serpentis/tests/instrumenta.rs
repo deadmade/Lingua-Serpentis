@@ -45,6 +45,72 @@ fn qemu_aarch64_is_on_the_path() {
     );
 }
 
+/// **`RLIMIT_STACK` must be finite and at least 8 MiB, or the §8 test under
+/// emulation is not testing what it says.**
+///
+/// `aemulatio.rs`'s `acervus_exhaustus_sub_aemulatore` inherits this process's
+/// stack limit, and the runtime derives its guard band from it (spec §8.2:
+/// the `[stack]` mapping's high address, minus `RLIMIT_STACK`). The dependency
+/// is silent in **both** directions, which is why it is asserted rather than
+/// documented:
+///
+/// - **`ulimit -s unlimited`** → `modus_acervi()` returns `None`, `FUNDUS` stays
+///   0, and the handler takes its bounds-unknown branch, which reports
+///   exhaustion *unconditionally*. The test still sees
+///   `acervus vocationum exhaustus est` and **passes without the discriminator
+///   ever running**. A green that means nothing.
+/// - **`ulimit -s 2048`** → `qemu-user` floors the guest stack at 8 MiB whatever
+///   the limit says, so `culmen − RLIMIT_STACK` lands about 6 MiB *above* the
+///   real floor, the fault is classified as `defectus internus: memoria violata
+///   est`, and the test fails saying "the guard page fault must become a Latin
+///   diagnostic, not a signal" — which any reader takes for a §8 runtime
+///   regression rather than an environment mismatch. Measured: 8192 is the
+///   boundary, 2048 fails, 8192 passes.
+///
+/// Neither is a runtime defect. On real hardware `mapping-top − RLIMIT_STACK`
+/// is the true floor at any limit; the 8 MiB floor is `qemu-user`'s, not the
+/// design's. But the test's evidentiary value holds only for
+/// `8 MiB ≤ RLIMIT_STACK < ∞`, and until this assertion existed nothing said so.
+///
+/// Read from `/proc/self/limits` rather than through `libc`, which is not among
+/// this crate's dependencies — and this file is Linux-only already, since every
+/// target it asserts is a musl one.
+#[test]
+fn the_stack_limit_is_finite_and_large_enough_for_the_guard_test() {
+    const MINIMUM: u64 = 8 * 1024 * 1024;
+    let limits = std::fs::read_to_string("/proc/self/limits")
+        .expect("/proc is mounted; the guard tests need it too");
+    let linea = limits
+        .lines()
+        .find(|l| l.starts_with("Max stack size"))
+        .expect("/proc/self/limits names the stack limit");
+    // `Max stack size            8388608              unlimited            bytes`
+    let mollis = linea
+        .split_whitespace()
+        .nth(3)
+        .expect("a soft limit column");
+
+    assert_ne!(
+        mollis, "unlimited",
+        "RLIMIT_STACK is unlimited. The runtime then has no floor to compare \
+         against (spec §8.2 treats RLIM_INFINITY as bounds-unknown), the \
+         handler reports exhaustion unconditionally, and \
+         `acervus_exhaustus_sub_aemulatore` passes without ever exercising the \
+         discriminator. Run with a finite `ulimit -s`",
+    );
+    let mollis: u64 = mollis
+        .parse()
+        .unwrap_or_else(|e| panic!("cannot read the soft stack limit {mollis:?}: {e}"));
+    assert!(
+        mollis >= MINIMUM,
+        "RLIMIT_STACK is {mollis} bytes; `acervus_exhaustus_sub_aemulatore` \
+         needs at least {MINIMUM}. Below it, qemu-user still gives the guest an \
+         8 MiB stack, so the floor the runtime derives lands above the real one \
+         and a correct build reports `memoria violata est` — a failure that \
+         reads as a §8 regression and is not one",
+    );
+}
+
 #[test]
 fn the_self_contained_crt_objects_are_present() {
     for t in ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"] {
