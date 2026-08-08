@@ -287,8 +287,10 @@ fn a_fault_away_from_the_stack_is_an_internal_defect() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "Error: defectus internus: memoria violata est\n",
-        "the discriminator's other branch, and the sentence `memoria_violata` raises",
+        "Error: defectus internus: memoria violata est: signum\n",
+        "the discriminator's other branch. `: signum` is the handler's tail, and \
+         it is what distinguishes this from `memoria_violata`'s `: verificatio` \
+         — a fault the kernel reported, not a value a `verifica` rejected",
     );
 }
 
@@ -322,7 +324,7 @@ fn a_closed_pipe_never_decides_the_exit_status() {
         ),
         (
             "fistula-violatio",
-            "Error: defectus internus: memoria violata est\n",
+            "Error: defectus internus: memoria violata est: signum\n",
         ),
     ] {
         let out = in_subprocesso(scaena);

@@ -125,8 +125,24 @@ fn opus(nomen: &str) -> OsString {
 ///
 /// This is the only supported way to build the compiler without musl std
 /// installed, and it is deliberately dumb: the files are copied, not checked.
-/// `src/target.rs`'s tests are the check, and they run against whatever landed
-/// here — a wrong blob fails them exactly as a wrong cross-build would.
+///
+/// **What checks them, and — more usefully — what does not.** `src/target.rs`'s
+/// tests run against whatever landed here and cover the object's *shape*: the
+/// `e_machine` of every blob, the symbols the runtime defines and leaves
+/// undefined, that the prelink pulled musl in, `main`'s call order and the
+/// handler's relocation closure, the CRT's `.init`/`.fini` epilogues, and the
+/// size band. A blob wrong in any of those fails them exactly as a wrong
+/// cross-build would.
+///
+/// It reads **no layout constant at all** — `ONUS`, `VERBUM` and the three
+/// `size_of`s appear nowhere in it. Those are held by the `const _: () = { … }`
+/// block in `liss-abi/src/lib.rs`, and that block is compiled only when
+/// `liss-abi` is, which on this path never happens: [`conde`] is skipped, and
+/// `liss-abi` is workspace-`exclude`d and a dependency of nothing here. So a
+/// stale blob whose `dispositio` disagrees with today's source links cleanly,
+/// passes every test in this crate, and produces silent wrong answers. Recorded
+/// as D-29; the close is to export the layout constants as absolute symbols from
+/// the blob and compare them here, in a `target.rs` test that can see both.
 fn ex_horreo(horreum: &Path, meta: &str, sedes: &Path) {
     for nomen in CRT.iter().chain([RUNTIME].iter()) {
         let fons = horreum.join(meta).join(nomen);

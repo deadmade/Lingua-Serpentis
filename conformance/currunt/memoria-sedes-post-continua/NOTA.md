@@ -16,7 +16,7 @@ that **did** run:
 | I | falls through | null (entry) | frees `"salve"`, slot left **dangling** |
 | II | `continua` | the freed pointer from I | frees it **again** |
 
-Deterministically `defectus internus: memoria violata est`, exit 1 —
+Deterministically `defectus internus: memoria violata est: verificatio`, exit 1 —
 `abolere` clears the magic before handing the block back, precisely so that a
 double free is caught rather than merely probable.
 

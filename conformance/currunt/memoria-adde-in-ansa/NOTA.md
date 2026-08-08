@@ -5,7 +5,7 @@ consumes the slot's own value, so it exercises §7.3.3's evaluate → free old �
 store in the one order that works: the `Load` copies the list, `liss_list_append`
 consumes that copy and returns a new one, and only then is the slot's previous
 pointer freed. Freeing first would hand `adde` a pointer whose magic was already
-cleared, which is `defectus internus: memoria violata est` rather than a wrong
+cleared, which is `defectus internus: memoria violata est: verificatio` rather than a wrong
 answer.
 
 **What this case cannot see.** `liss_list_append` *steals* the old list's element

@@ -20,7 +20,7 @@ and it is worth being exact about which, because the obvious one is not:
   teardown would free null. `continua` is different — it returns to a body that
   still reads `marca` at `acc = acc + nota + marca`, and reading a null slot is
   fatal by design (`verifica`'s null leg, `defectus internus: memoria violata
-  est`, exit 1). **A version of this fixture with `abrumpe` alone would pass over
+  est: verificatio`, exit 1). **A version of this fixture with `abrumpe` alone would pass over
   a codegen that gets §7.3.5 wrong.** The `continua` is load-bearing.
 
 The two jumps also differ in target, and the trace pins it: `continua` must

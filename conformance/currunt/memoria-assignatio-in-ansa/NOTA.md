@@ -7,7 +7,7 @@ Straight-line `s = s + s` was already pinned by Task 12. What a loop adds is
 *repetition*: the slot is written three times, and the free of the old value
 happens three times against a pointer the previous iteration stored. Getting the
 order wrong is a use-after-free that `liss_text_concat`'s magic check turns into
-`defectus internus: memoria violata est`, exit 1; freeing nothing at all is
+`defectus internus: memoria violata est: verificatio`, exit 1; freeing nothing at all is
 three leaked `LissText`s and `memoria non liberata est`, exit 1 (spec §7.5).
 This program exits 0 with the live-allocation count at zero.
 

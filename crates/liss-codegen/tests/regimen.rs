@@ -8,7 +8,7 @@
 //! `memoria non liberata est` if anything is still alive. `abolere` clears a
 //! header's magic **volatilely** before freeing (D-27 — a plain store was
 //! dead-store-eliminated, and shipped that way until this task), so a double
-//! free or a read after one is `defectus internus: memoria violata est` rather
+//! free or a read after one is `defectus internus: memoria violata est: verificatio` rather
 //! than silent corruption.
 //!
 //! But a fixture proves the **sum** of §7.3's six rules, not any one of them:
@@ -208,7 +208,7 @@ fn assignatio_vetus_post_lectionem_liberatur() {
 /// still right when the slot is rewritten three times.
 ///
 /// Since D-27 this **does** catch the wrong order — the use-after-free reaches
-/// a cleared magic and reports `defectus internus: memoria violata est`,
+/// a cleared magic and reports `defectus internus: memoria violata est: verificatio`,
 /// exit 1 — as well as the missing free, which leaks three `LissText`s and
 /// reports `memoria non liberata est`. Both were checked by mutation.
 #[test]
@@ -241,7 +241,7 @@ fn assignatio_in_ansa_libratur() {
 /// - A walk that stopped at the innermost block leaks `intus` and `medium`.
 /// - A walk that also swept `0..params` off `Func::params` double-frees
 ///   `nomen`, which `abolere`'s cleared magic reports as
-///   `defectus internus: memoria violata est`.
+///   `defectus internus: memoria violata est: verificatio`.
 ///
 /// The returned value is `nomen + medium`, a fresh `LissText` built from copies,
 /// so it survives a teardown that frees the slots it was built from — which is
@@ -281,7 +281,7 @@ munus initium reddit ni {
 ///   `memoria non liberata est`, exit 1;
 /// - if the jumps also freed `header.declares`, `caput` is freed by the
 ///   **`continua`** and the *next* iteration reads a null slot —
-///   `verifica`'s null leg, `defectus internus: memoria violata est`, exit 1.
+///   `verifica`'s null leg, `defectus internus: memoria violata est: verificatio`, exit 1.
 ///
 /// **The `continua` is what makes the second half testable, and that is a
 /// finding rather than a detail.** With `Corpus::libera` leaving each freed slot

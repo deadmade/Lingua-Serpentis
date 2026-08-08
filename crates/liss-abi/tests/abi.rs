@@ -249,13 +249,20 @@ fn every_latin_sentence_this_crate_can_say_is_listed_here() {
             // a `liss_panic` site and never will be: a handler with no stack
             // left writes byte constants and `_exit`s.
             "acervus vocationum exhaustus est",
-            // Reborn from `interp.rs`, which was fixtured there; the site here
-            // is fixtured now and the interpreter is gone.
-            // The handler's *other* branch says this too, out of its own
-            // `NUNTIUS_MEMORIA` — the same fact about the same program, and
-            // deduplicated here rather than shared in the source, because
-            // §10.3 wants the literal inline at the site.
-            "defectus internus: memoria violata est",
+            // Reborn from `interp.rs`, which was fixtured there; the sites here
+            // are fixtured now and the interpreter is gone.
+            //
+            // **Two sentences, not one.** The handler's non-stack branch and
+            // `defectus::memoria_violata` report the same fact about the same
+            // program and cannot share a literal — a handler must not call
+            // `liss_panic`, and §10.3 wants the literal inline at the site the
+            // catalogue attributes it to. Until the whole-branch review they
+            // were worded identically, which made them a pair `catalogus.rs`
+            // could only ever downgrade: `fixtured` requires a workspace-unique
+            // pattern, and `ambiguous` is a one-way door. The tails name how the
+            // fault was found — the kernel's signal, or a `verifica`'s rejection.
+            "defectus internus: memoria violata est: signum",
+            "defectus internus: memoria violata est: verificatio",
             "divisio per nullum",
             "index extra fines: {} (longitudo {})",
             // New here, and permanently UNCOVERED by design.
@@ -832,7 +839,7 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
         let (code, stderr) = erratum(scaena);
         assert_eq!(code, Some(1), "{scaena} status");
         assert_eq!(
-            stderr, "Error: defectus internus: memoria violata est\n",
+            stderr, "Error: defectus internus: memoria violata est: verificatio\n",
             "{scaena} stderr",
         );
         // A Rust panic crossing an `extern "C"` boundary aborts: SIGABRT and

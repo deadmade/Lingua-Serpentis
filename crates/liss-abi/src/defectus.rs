@@ -269,15 +269,22 @@ pub(crate) fn index_extra_fines(
 /// an internal defect rather than a language-level error.
 ///
 /// Structural — no file, no line — which `parse_diagnostic` classifies as
-/// `Diagnostic::Structural` and `judge` accepts without a location check. It
-/// shares its wording with the signal handler's non-stack branch (spec §8.2),
-/// which is the same fact about the same program.
+/// `Diagnostic::Structural`, and which `judge` now refuses outright: any
+/// `defectus internus: ` is the compiler admitting to a bug, and the fuzzers
+/// exist to find those.
+///
+/// It shares its stem with the signal handler's non-stack branch (spec §8.2) —
+/// the same fact about the same program — and differs in the tail, because the
+/// two are separate catalogue sites and an identical wording would have made
+/// both permanently `ambiguous` on the first provocation of either. `verificatio`
+/// is this one: a `verifica` rejected the value. `signum` is the handler's: the
+/// kernel reported a fault.
 pub(crate) fn memoria_violata() -> ! {
     unsafe {
         liss_panic(
             ptr::null(),
             0,
-            c"defectus internus: memoria violata est".as_ptr(),
+            c"defectus internus: memoria violata est: verificatio".as_ptr(),
             ptr::null(),
             ptr::null(),
         )

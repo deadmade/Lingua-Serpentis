@@ -13,7 +13,7 @@ Three things happen here that no `lista-*` case reaches:
    still owns the original for scope exit to free. If the copy is shallow, the
    free is a double free of the shared children; if the free is shallow, the
    children leak. Either way this case exits nonzero — the first as
-   `defectus internus: memoria violata est`, the second as
+   `defectus internus: memoria violata est: verificatio`, the second as
    `memoria non liberata est`.
 3. **An intermediate that nothing binds.** `tabula[°I][°II]` builds a copy of
    the outer list, a copy of the inner one, and a `voc`; two of those three are

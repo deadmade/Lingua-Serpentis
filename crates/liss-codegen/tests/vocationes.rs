@@ -113,9 +113,9 @@ munus triplum capit (ni n) reddit ni {
 /// namespace-sensitive `FuncId` binding in the compiler. Line 371's qualified
 /// arm is forced by the syntax (`alpha.porta` can only mean `alpha`'s), but a
 /// bare `quadratum(n)` inside `alpha/a.liss` has to resolve in the *checker's
-/// own* namespace, exactly as the interpreter resolves in the executing frame's.
-/// Bind it to `None` instead and the package silently calls the **root's**
-/// `quadratum`.
+/// own* namespace — the namespace of the file the call is written in, never the
+/// program's root. Bind it to `None` instead and the package silently calls the
+/// **root's** `quadratum`.
 ///
 /// It has to be a decoy of the same name *on the call path*. [`TRES`] already
 /// carries a root/package `initium` collision, but only ever reaches the
@@ -201,8 +201,10 @@ munus initium reddit ni {
 
 /// Two packages that import **each other** and alternate — the shape a single
 /// namespace cannot produce, and the one that needs both directions of the
-/// `FuncId` table to be right at once. Twenty levels, so the interpreter can
-/// still answer for it.
+/// `FuncId` table to be right at once. Twenty levels, and the depth is
+/// **asserted, not merely chosen**: [`fasciculi_se_invicem_vocant`] demands the
+/// written string `"XX\n"`, so one alternation too few or too many is a wrong
+/// answer rather than a shorter run.
 const ALTERNA: [(&str, &str); 3] = [
     (
         "principale.liss",
@@ -536,7 +538,7 @@ fn argumenta_per_fasciculum_mota_semel_liberantur() {
 /// Three assertions, and the third is the one that is easy to lose. Exit 1
 /// rules out D-04's shape, a signalled process, which `judge` maps straight to
 /// an invariant violation. The sentence rules out the discriminator's other
-/// branch, `defectus internus: memoria violata est` — which is what every
+/// branch, `defectus internus: memoria violata est: signum` — which is what every
 /// obvious way of computing the stack bounds produces instead, because they all
 /// describe the pages already touched rather than the ones the stack may grow
 /// into (spec §8.2's measured table). And **stdout still holds what `scribe`

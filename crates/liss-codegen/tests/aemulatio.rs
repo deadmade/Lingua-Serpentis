@@ -328,8 +328,8 @@ fn acervus_exhaustus_sub_aemulatore() {
 /// than in a report:
 ///
 /// - the guard band is **derived**, not a constant that happens to match;
-/// - `defectus internus: memoria violata est` gets its **first coverage on
-///   aarch64** — `liss-abi/tests/custos.rs` covers it on the host only;
+/// - `defectus internus: memoria violata est: signum` gets its **first coverage
+///   on aarch64** — `liss-abi/tests/custos.rs` covers it on the host only;
 /// - a `RLIMIT_STACK` misconfiguration becomes **self-diagnosing**: it makes
 ///   this test pass and [`acervus_exhaustus_sub_aemulatore`] fail, which is the
 ///   opposite pattern from a real §8 regression, where both fail.
@@ -352,7 +352,7 @@ fn acervus_displacitus_est_defectus_internus() {
     let (status, stdout, stderr) =
         exsequere_aemulatum_cum(&imago, "displacitus", &[("QEMU_STACK_SIZE", "1048576")]);
     assert_eq!(
-        stderr, "Error: defectus internus: memoria violata est\n",
+        stderr, "Error: defectus internus: memoria violata est: signum\n",
         "with the guest stack displaced from the derived bounds, the fault is \
          outside the band and must take the discriminator's other branch. The \
          same sentence as `acervus_exhaustus_sub_aemulatore` here would mean \

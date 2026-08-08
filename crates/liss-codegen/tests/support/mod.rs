@@ -224,7 +224,7 @@ pub fn casus_via(casus: &str) -> PathBuf {
 /// assertion. Spec §7.5 has the runtime check the live-allocation count on the
 /// success path and exit **1** with `memoria non liberata est` if it is
 /// nonzero, and `abolere` clears a header's magic **volatilely** before freeing
-/// so that a double free reports `defectus internus: memoria violata est`
+/// so that a double free reports `defectus internus: memoria violata est: verificatio`
 /// rather than corrupting silently. (Volatilely as of this task: a plain store
 /// there was dead-store-eliminated in every shipped build — D-27.) So "exit 0
 /// with the blessed stdout" *is* "every allocation this program made was freed

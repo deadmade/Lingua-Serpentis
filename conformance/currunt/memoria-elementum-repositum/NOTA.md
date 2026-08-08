@@ -12,7 +12,7 @@ load-bearing and both fail quietly if got wrong:
   status 1 as well.
 - **If codegen freed the list after the call**, the slot would hold a cleared
   header and the next statement to read it would be
-  `defectus internus: memoria violata est`.
+  `defectus internus: memoria violata est: verificatio`.
 - **If nothing freed the displaced element**, `memoria non liberata est`.
 
 The second block displaces a whole `voc lista` rather than a `voc`, so the free

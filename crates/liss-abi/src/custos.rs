@@ -128,13 +128,22 @@ const NUNTIUS_ACERVUS: &CStr = c"acervus vocationum exhaustus est";
 /// A fault nowhere near the stack, which in a language with no pointers, no FFI
 /// and no `unsafe` can only be a compiler bug.
 ///
-/// The sentence is `defectus::memoria_violata`'s, written out a second time
-/// rather than shared: that helper reaches it through `liss_panic`, which this
-/// handler must not call, and §10.3 wants the literal inline at the site the
-/// catalogue attributes it to. This site is not one — the marker is
-/// `liss_panic(` — so the duplicate costs the catalogue nothing, and
-/// `tests/abi.rs`'s sentence list deduplicates it.
-const NUNTIUS_MEMORIA: &CStr = c"defectus internus: memoria violata est";
+/// The sentence is `defectus::memoria_violata`'s with its own tail, and the
+/// tail is the correction the whole-branch review forced.
+///
+/// The two cannot share a literal: that helper reaches it through `liss_panic`,
+/// which this handler must not call, and §10.3 wants the literal inline at the
+/// site the catalogue attributes it to. Both **are** catalogue sites — this one
+/// through the `NUNTIUS_` marker, that one through `liss_panic(` — and an
+/// earlier note here claiming otherwise was simply wrong. Written identically
+/// they were a pair that could only ever degrade: `catalogus.rs` grants
+/// `fixtured` only to a pattern unique in the workspace, so the first
+/// provocation of either would mark both `ambiguous`, permanently.
+///
+/// `signum` and `verificatio` are how the fault was *found* — a hardware fault
+/// the kernel reported here, against a malformed value a `verifica` rejected —
+/// which is the one thing a reader of the sentence could not otherwise recover.
+const NUNTIUS_MEMORIA: &CStr = c"defectus internus: memoria violata est: signum";
 
 /// 16-byte aligned, because the kernel hands the handler this buffer as a stack
 /// and the ABI wants the frame aligned.

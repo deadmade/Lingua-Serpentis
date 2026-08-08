@@ -106,6 +106,59 @@ fn a_child_killed_by_a_signal_is_an_abort_however_politely_it_is_reported() {
     );
 }
 
+/// **The compiler admitting to a bug, and the runtime admitting to a leak, are
+/// not diagnostics either.**
+///
+/// The same shape as the sentence above and the same reason. `BINARY` is `liss`,
+/// so both fuzzers drive the *compiler*; `defectus internus: …` is what spec
+/// §10.3's `Defectus::novus(` sites say when it breaks, and `memoria non
+/// liberata est` is what §7.5 says when a compiled program leaks. Both are
+/// well-formed structural Latin with no file, no line, no English, no Arabic
+/// digit and no Rust type name, so before this every lexical rule passed and
+/// the verdict was `Acceptable`.
+///
+/// **Task 12's Critical is the proof that this is reachable**: `redde nullus;
+/// scribe("numquam");` — a legal program — made release codegen emit
+/// `munus componi non potuit`. A generator that drew it would have been told
+/// nothing was wrong.
+///
+/// Asserted here rather than left to the fuzzer for the same reason as the
+/// signal case: the input that provokes either one is a compiler defect nobody
+/// can write on purpose.
+#[test]
+fn the_compilers_own_failures_are_violations_and_not_diagnostics() {
+    let fons =
+        || vec![("fons.liss".to_string(), "munus initium reddit ni { redde nullus; }".to_string())];
+    for (nuntius, regula) in [
+        // Task 12's Critical, verbatim.
+        ("defectus internus: munus componi non potuit", "no internal defect"),
+        // The prefix is the rule, not the list: a sentence §10.3 has not been
+        // written yet must be caught the day it is.
+        ("defectus internus: machina ignota est", "no internal defect"),
+        ("memoria non liberata est", "no leak"),
+    ] {
+        let outcome = Outcome::Exited {
+            code: 1,
+            stdout: String::new(),
+            stderr: format!("Error: {nuntius}\n"),
+        };
+        match judge(&outcome, &fons()) {
+            Verdict::Violation { rule, .. } if rule == regula => {}
+            other => panic!("{nuntius:?} must break {regula:?}, got {other:?}"),
+        }
+    }
+
+    // And the rules are keyed on these sentences, not on "exit 1 with a
+    // structural error" — a neighbouring language-level failure with the same
+    // shape must stay an ordinary diagnostic.
+    let ordinarium = Outcome::Exited {
+        code: 1,
+        stdout: String::new(),
+        stderr: "Error: memoria exhausta est\n".to_string(),
+    };
+    assert_eq!(judge(&ordinarium, &fons()), Verdict::Acceptable);
+}
+
 /// Run one single-file source through the binary and judge it against the
 /// **general** deadline. The curated sweep passes its own per-case one.
 fn judge_source(name: &str, src: &str) -> Verdict {

@@ -87,8 +87,8 @@ type Tabula = HashMap<PathBuf, Arc<Vec<u8>>>;
 ///
 /// libwild links on a Rayon pool. A worker that panics while holding this lock
 /// poisons it, and then every later `lock().unwrap()` panics too — so a link
-/// failure would kill the compiler instead of becoming
-/// `imago non coniuncta est`, which is the one thing this module promises.
+/// failure would kill the compiler instead of becoming an
+/// `imago non coniuncta est: …`, which is the one thing this module promises.
 ///
 /// Ignoring poison is safe here rather than merely convenient: the map has no
 /// invariant spanning two operations. Every use is one insert, one remove or
@@ -240,26 +240,37 @@ impl Nexus for WildNexus {
         ];
         argv.extend(artefacta.iter().map(|(n, _)| (*n).to_owned()));
 
+        // **Four failures, four sentences.** They said the same four words until
+        // the whole-branch review, and that was a permanent trap rather than a
+        // wording preference: `catalogus.rs` decides `fixtured` on a pattern
+        // being *unique across the workspace*, so the first provocation of any
+        // one of them would have marked all four `ambiguous` — and nothing can
+        // move a site from `ambiguous` back to `fixtured`. The trap was
+        // reachable: `nexus.run` below fails on link-time resource exhaustion,
+        // which a large enough source program can cause without any compiler bug
+        // at all. The tails are what the linker was doing, so a user's report
+        // now names the stage as well as the outcome.
         let argumenta = || argv.iter().map(String::as_str);
         let mut args = libwild::Args::new(argumenta)
-            .map_err(|_| Defectus::novus("imago non coniuncta est"))?;
+            .map_err(|_| Defectus::novus("imago non coniuncta est: argumenta"))?;
         // Spec §9.3, and the reason it is set before `parse` rather than after:
         // `parse` itself can warn.
         args.on_warning(Box::new(|_| {}));
-        args.parse(argumenta).map_err(|_| Defectus::novus("imago non coniuncta est"))?;
+        args.parse(argumenta)
+            .map_err(|_| Defectus::novus("imago non coniuncta est: perscrutatio"))?;
 
         let nexus = Linker::with_file_system(fs.clone());
         {
             // The output borrows the linker's arena; both must go before the
             // map is read, or the image is still half-owned by libwild.
             let _egressus =
-                nexus.run(&args).map_err(|_| Defectus::novus("imago non coniuncta est"))?;
+                nexus.run(&args).map_err(|_| Defectus::novus("imago non coniuncta est: nexus"))?;
         }
         drop(nexus);
 
         let imago = aperi(&fs.tabula)
             .remove(Path::new(nomen))
-            .ok_or_else(|| Defectus::novus("imago non coniuncta est"))?;
+            .ok_or_else(|| Defectus::novus("imago non coniuncta est: imago abest"))?;
         // The linker is gone, so this `Arc` is the only handle and the bytes
         // move out rather than being copied.
         Ok(Arc::try_unwrap(imago).unwrap_or_else(|a| (*a).clone()))
@@ -315,8 +326,8 @@ mod tests {
     /// The one mistake this seam exists to catch: an x86_64 object linked
     /// against the aarch64 runtime. Without the check libwild is handed
     /// `-m elf_x86_64` for aarch64 inputs and fails somewhere in relocation
-    /// processing, which becomes the same opaque `imago non coniuncta est` with
-    /// nothing to say what went wrong.
+    /// processing, which becomes the same opaque `imago non coniuncta est:
+    /// nexus` with nothing to say what went wrong.
     #[test]
     fn artefacts_of_two_architectures_are_refused() {
         let x = Target::X86_64.runtime();
@@ -347,7 +358,7 @@ mod tests {
                 "imago",
             )
             .unwrap_err();
-        assert_eq!(e.nuntius, "imago non coniuncta est");
+        assert_eq!(e.nuntius, "imago non coniuncta est: nexus");
     }
 
     /// Each target's `emulatio` is derivable from its own blobs.

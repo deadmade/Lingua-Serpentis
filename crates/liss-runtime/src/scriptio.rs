@@ -1,8 +1,19 @@
 //! `scriptio` — the `scribe` formatter: the printable rendering of a language
 //! value. Free functions rather than a `Display`/`ToString`-style method:
-//! each one is monomorphic (renders exactly one value shape) and writes into
-//! a caller-supplied `Sink` rather than allocating and returning a `String`,
-//! which is what the runtime's static output buffer (spec §6) needs.
+//! each one is monomorphic (renders exactly one value shape) and *delivers* its
+//! bytes to a caller-supplied `Sink` rather than returning a `String`, which is
+//! what the runtime's static output buffer (spec §6) needs.
+//!
+//! **"Delivers", not "does not allocate", and the difference is a defect.**
+//! [`scribe_text`], [`scribe_char`] and [`scribe_bool`] genuinely allocate
+//! nothing. [`scribe_int`] and [`scribe_frac`] do: both delegate to
+//! `Roman::display` / `fraction::display`, which **return a `String`**, so every
+//! `scribe` of a `ni` or a fraction takes Rust's global allocator — outside
+//! §7.5's counted pair, and with `panic = "abort"` an allocation failure there
+//! reaches `handle_alloc_error` and dies in English rather than saying
+//! `memoria exhausta est`. This module's doc used to claim the opposite. See
+//! D-28 in `docs/defectus/2026-08-03-index.md`; the fix is a `display_ad(&mut
+//! impl Sink)` on `Roman`, which is a change to `roman.rs`, not to this file.
 //!
 //! Ported from `Value::display`'s match arms (the interpreter's `value.rs`,
 //! spec §5.5) — the same seven one-line bodies, unchanged, just monomorphised

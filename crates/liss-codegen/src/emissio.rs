@@ -139,7 +139,7 @@
 //! teardown reads and it still holds a live pointer. What killed that mutation
 //! was a *different* consequence: the second free clears the magic, so the
 //! ordinary scope exit then frees a header that reads as not-a-`LISS`-object
-//! and the program exits 1 with `defectus internus: memoria violata est`. The
+//! and the program exits 1 with `defectus internus: memoria violata est: verificatio`. The
 //! same is true of freeing after `liss_print_list`, which already consumed. So
 //! the rule to carry forward is narrower than "over-freeing is invisible": a
 //! redundant free of a **slot the discipline has already nulled** is invisible;
@@ -406,6 +406,14 @@ fn genus(ptr: types::Type, ty: &Ty) -> types::Type {
 /// program actually calls — an undefined symbol nothing references still costs
 /// nothing at link time, but it makes the object's symbol table a lie about
 /// what the program does.
+///
+/// **The `: externum` tail is load-bearing.** `declara` below declares the
+/// program's *own* functions and fails with the same four words; written
+/// identically the two were a pair `catalogus.rs` could only ever downgrade,
+/// since `fixtured` is granted to a pattern unique across the workspace and
+/// `ambiguous` is a one-way door. Import versus export is also the distinction
+/// a reader most needs: one blames the runtime's declared surface, the other the
+/// program's.
 fn externum(
     module: &mut ObjectModule,
     externa: &mut HashMap<&'static str, FuncId>,
@@ -419,7 +427,7 @@ fn externum(
     let sig = signum(module, params, ret);
     let id = module
         .declare_function(nomen, Linkage::Import, &sig)
-        .map_err(|_| Defectus::novus("defectus internus: munus declarari non potuit"))?;
+        .map_err(|_| Defectus::novus("defectus internus: munus declarari non potuit: externum"))?;
     externa.insert(nomen, id);
     Ok(id)
 }
@@ -477,7 +485,9 @@ impl Emissor {
         let id = self
             .module
             .declare_function(&func.symbol, Linkage::Export, &sig)
-            .map_err(|_| Defectus::novus("defectus internus: munus declarari non potuit"))?;
+            .map_err(|_| {
+                Defectus::novus("defectus internus: munus declarari non potuit: proprium")
+            })?;
         self.ordo.push(id);
         if func.is_entry {
             self.principium = Some(id);
@@ -485,9 +495,17 @@ impl Emissor {
         Ok(())
     }
 
+    /// `: definitio` distinguishes this from the `ExprKind::Call` arm's
+    /// `: vocatio`, which fails the same lookup for a different reason — here
+    /// `declara` and `defini` disagree about how many functions there are, there
+    /// a `FuncId` in the IR names none. Same four words at both sites would have
+    /// made each `ambiguous` on the first provocation of either, and nothing
+    /// moves a site back.
     fn defini(&mut self, index: usize, func: &Func) -> Result<(), Defectus> {
         let Some(id) = self.ordo.get(index).copied() else {
-            return Err(Defectus::novus("defectus internus: munus vocatum non inventum"));
+            return Err(Defectus::novus(
+                "defectus internus: munus vocatum non inventum: definitio",
+            ));
         };
         let ptr = self.module.target_config().pointer_type();
         self.ctx.clear();
@@ -835,10 +853,18 @@ impl<'a> Corpus<'a> {
         // `munus declarari`/`munus componi` already do for functions. One
         // sentence for both would make the catalogue Task 19 builds report a
         // single site for two unrelated ways of being broken.
+        //
+        // **And the same argument applies one level down**, which the first
+        // draft missed: `locus` declares a blob too, so `datum declarari non
+        // potuit` stood at two sites with one wording, and the catalogue grants
+        // `fixtured` only to a workspace-unique pattern. `constans` is a
+        // literal's blob, `scida` is the file-name blob a raise needs.
         let id = self
             .module
             .declare_anonymous_data(false, false)
-            .map_err(|_| Defectus::novus("defectus internus: datum declarari non potuit"))?;
+            .map_err(|_| {
+                Defectus::novus("defectus internus: datum declarari non potuit: constans")
+            })?;
         let gv = self.module.declare_data_in_func(id, self.fb.func);
         self.data.push((id, octeti.to_vec()));
         Ok((self.fb.ins().symbol_value(ptr, gv), octeti.len()))
@@ -866,7 +892,7 @@ impl<'a> Corpus<'a> {
                         let mut octeti = nomen.as_bytes().to_vec();
                         octeti.push(0);
                         let id = self.module.declare_anonymous_data(false, false).map_err(|_| {
-                            Defectus::novus("defectus internus: datum declarari non potuit")
+                            Defectus::novus("defectus internus: datum declarari non potuit: scida")
                         })?;
                         self.data.push((id, octeti));
                         self.scidae_datum = Some(id);
@@ -940,7 +966,7 @@ impl<'a> Corpus<'a> {
     /// `continua` frees it — null on the first iteration, and on the iteration
     /// after one that fell through, **the pointer the last scope exit already
     /// freed**. Measured, without this store:
-    /// `Error: defectus internus: memoria violata est`, exit 1, on a legal
+    /// `Error: defectus internus: memoria violata est: verificatio`, exit 1, on a legal
     /// program. `conformance/currunt/memoria-sedes-post-continua` is that
     /// program, and it is in the corpus.
     ///
@@ -1472,7 +1498,9 @@ impl<'a> Corpus<'a> {
                     valores.push(self.expressio(a)?);
                 }
                 let Some(id) = self.ordo.get(func.0 as usize).copied() else {
-                    return Err(Defectus::novus("defectus internus: munus vocatum non inventum"));
+                    return Err(Defectus::novus(
+                        "defectus internus: munus vocatum non inventum: vocatio",
+                    ));
                 };
                 let refr = self.module.declare_func_in_func(id, self.fb.func);
                 let inst = self.fb.ins().call(refr, &valores);
@@ -1491,9 +1519,10 @@ impl<'a> Corpus<'a> {
             //
             // Both operands are consumed inside the call, `base` included, so a
             // `xs[i]` whose base is a `Load` allocates and frees a whole copy of
-            // the list. That is the interpreter's cost too, and it is the price
-            // of "`Load` is the only copy site" — a borrowing `get` would need a
-            // second rule about which expressions may borrow.
+            // the list. That is the price of "`Load` is the only copy site" — a
+            // borrowing `get` would need a second rule about which expressions
+            // may borrow, which is spec §13's still-unscheduled `subscriptio
+            // mutuata`.
             ExprKind::Index { base, index } => {
                 let ptr = self.ptr();
                 let p = self.expressio(base)?;

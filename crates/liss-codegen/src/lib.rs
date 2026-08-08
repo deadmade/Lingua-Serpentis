@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn a_defect_formats_as_a_structural_error() {
-        let d = Defectus::novus("imago non coniuncta est");
-        assert_eq!(d.to_string(), "Error: imago non coniuncta est");
+        let d = Defectus::novus("imago non coniuncta est: nexus");
+        assert_eq!(d.to_string(), "Error: imago non coniuncta est: nexus");
     }
 }

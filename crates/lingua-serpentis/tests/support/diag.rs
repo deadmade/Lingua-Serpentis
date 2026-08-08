@@ -122,6 +122,39 @@ pub const RECORDED_RULES: [&str; 1] = [
 /// that guarantee with zero fuzzed enforcement.
 const ABRUPTE_CESSAVIT: &str = "programma abrupte cessavit";
 
+/// The prefix on every sentence the compiler says about **itself** — spec
+/// §10.3's `Defectus::novus(` sites, and `liss-abi`'s `memoria violata est`.
+///
+/// **This is the compiler admitting to a bug, and it must never be
+/// `Acceptable`.** With `BINARY` pointing at `liss`, `generative.rs` and
+/// `robustness.rs` fuzz the *compiler*, and a compiler defect is precisely what
+/// they exist to find. Without this rule the admission is invisible to them:
+/// `Error: defectus internus: munus componi non potuit` parses as a structural
+/// diagnostic, carries no file and no line, no English word, no Arabic digit
+/// and no Rust type name — so every lexical rule passes and the verdict is
+/// `Acceptable`.
+///
+/// That is not hypothetical. **Task 12's Critical had exactly this shape**: the
+/// legal program `redde nullus; scribe("numquam");` made release codegen emit
+/// this sentence. Had the generator drawn it, the property test whose entire
+/// purpose is finding compiler bugs would have shrugged.
+///
+/// A prefix rather than a list, because the list is spec §10.3's to grow: a new
+/// `Defectus::novus("defectus internus: …")` must be caught the day it is
+/// written, not the day somebody remembers to copy it here.
+const DEFECTUS_INTERNUS: &str = "defectus internus: ";
+
+/// Spec §7.5's leak report: the live-allocation count was nonzero at exit.
+///
+/// **§7.5's stated rationale for exit 1 does not hold on its own.** It argues
+/// against a distinctive code such as 70 because "a leak reported as 70 would be
+/// silently accepted by the robustness harness" — true, since `judge` treats any
+/// status outside {0, 1, 101} as `initium`'s own choice. But exit 1 with a
+/// well-formed Latin sentence was *also* accepted: like [`ABRUPTE_CESSAVIT`],
+/// this message passes every lexical rule there is. The exit code alone bought
+/// nothing; this constant is what makes §7.5's argument true.
+const MEMORIA_NON_LIBERATA: &str = "memoria non liberata est";
+
 /// A run either satisfies the invariant or names the rule it broke. The
 /// mapping from rule to recorded defect lives in
 /// `docs/defectus/2026-08-03-index.md`, not here, so this file stays a
@@ -196,6 +229,16 @@ pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
     // for how it reads — the child died by a signal, and §8 says none may.
     if d.message() == ABRUPTE_CESSAVIT {
         return violation("no abort", format!("the child was killed by a signal: {last:?}"));
+    }
+    // Two more of the same kind, and for the same reason: well-formed Latin
+    // reporting something no input may provoke. Neither adds a
+    // `RECORDED_RULES` entry — that array is violations the suite *tolerates*,
+    // and these are violations it now refuses.
+    if d.message().starts_with(DEFECTUS_INTERNUS) {
+        return violation("no internal defect", format!("the compiler reported a bug: {last:?}"));
+    }
+    if d.message() == MEMORIA_NON_LIBERATA {
+        return violation("no leak", format!("the live-allocation count was nonzero: {last:?}"));
     }
 
     if let Diagnostic::FileLine { file, .. } = &d {

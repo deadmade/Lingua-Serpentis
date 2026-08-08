@@ -26,7 +26,7 @@ Three separate rules are load-bearing here and each has its own failure:
 - **The parameter frame must not be swept a second time** off `Func::params`
   (§7.3.4). `semen` is slot 0 *and* the first entry of the body block's
   `declares`, so a codegen that also frees `0..params` double-frees it and
-  `abolere`'s cleared magic reports `defectus internus: memoria violata est`.
+  `abolere`'s cleared magic reports `defectus internus: memoria violata est: verificatio`.
 - **The returned value is never among the freed.** `semen + nota + intus`
   consumes three copies and yields a fresh `LissText`; the three slots die
   immediately afterwards.

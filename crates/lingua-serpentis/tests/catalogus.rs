@@ -136,13 +136,23 @@ fn extract_sites() -> Vec<Site> {
     // nothing was lost. The interpreter is gone in this same commit, and with
     // it the duplication.
     //
-    // Two duplicate patterns survive, and both are honest. `defectus internus:
-    // memoria violata est` is written twice — `defectus.rs` raises it through
-    // `liss_panic`, and `custos.rs`'s handler must write it without calling
-    // `liss_panic` at all — and `imago non coniuncta est` is written at four
-    // link-failure sites in `nexus.rs`. Neither can be provoked by a fixture, so
-    // both read UNCOVERED rather than `ambiguous`: the ladder tests `!seen`
-    // first, and a shared pattern nobody reached is plainly uncovered.
+    // **No duplicate patterns survive, and the five that did have been
+    // reworded.** The comment this replaces claimed there were two; there were
+    // five, and three of them — `emissio.rs`'s `munus declarari non potuit`,
+    // `munus vocatum non inventum` and `datum declarari non potuit`, two sites
+    // each — were created by the same commit that wrote the claim. The other
+    // two were `defectus internus: memoria violata est` (`custos.rs` and
+    // `defectus.rs`) and `imago non coniuncta est` (four sites in `nexus.rs`).
+    //
+    // Twelve rows in all, and every one of them a trap rather than a blemish.
+    // They read UNCOVERED only because nothing had provoked them: the ladder
+    // below tests `!seen` before duplication. The first provocation of any one
+    // would have flipped its whole group to `ambiguous` — and a fixture cannot
+    // move a site from `ambiguous` back to `fixtured`, as the ladder's own note
+    // says. `nexus.rs`'s `nexus.run` is reachable by a user program (link-time
+    // resource exhaustion on a very large source), not only by a compiler bug,
+    // so this was not hypothetical either. Each site now carries a tail naming
+    // which failure it is, and every pattern in the workspace is unique.
     let mut files: Vec<_> =
         ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
             .iter()
@@ -437,7 +447,9 @@ fn a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not() {
 
     // Too eager: `custos.rs` really does declare two `NUNTIUS_*` messages, and
     // both must still be found.
-    for want in ["acervus vocationum exhaustus est", "defectus internus: memoria violata est"] {
+    for want in
+        ["acervus vocationum exhaustus est", "defectus internus: memoria violata est: signum"]
+    {
         assert!(
             sites.iter().any(|s| s.file.ends_with("custos.rs") && s.pattern == want),
             "the `NUNTIUS_` declaration for {want:?} was skipped",

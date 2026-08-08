@@ -62,7 +62,7 @@ fn qemu_aarch64_is_on_the_path() {
 /// - **`ulimit -s 2048`** → `qemu-user` floors the guest stack at 8 MiB whatever
 ///   the limit says, so `culmen − RLIMIT_STACK` lands about 6 MiB *above* the
 ///   real floor, the fault is classified as `defectus internus: memoria violata
-///   est`, and the test fails saying "the guard page fault must become a Latin
+///   est: signum`, and the test fails saying "the guard page fault must become a Latin
 ///   diagnostic, not a signal" — which any reader takes for a §8 runtime
 ///   regression rather than an environment mismatch. Measured: 8192 is the
 ///   boundary, 2048 fails, 8192 passes.
@@ -106,7 +106,7 @@ fn the_stack_limit_is_finite_and_large_enough_for_the_guard_test() {
         "RLIMIT_STACK is {mollis} bytes; `acervus_exhaustus_sub_aemulatore` \
          needs at least {MINIMUM}. Below it, qemu-user still gives the guest an \
          8 MiB stack, so the floor the runtime derives lands above the real one \
-         and a correct build reports `memoria violata est` — a failure that \
+         and a correct build reports `memoria violata est: signum` — a failure that \
          reads as a §8 regression and is not one",
     );
 }

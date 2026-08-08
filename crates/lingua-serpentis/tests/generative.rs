@@ -212,9 +212,9 @@ fn program(e: &Expr) -> String {
 /// hopeful.** A `dum` header has three clauses, and only two of them could in
 /// principle carry a terminator. The *step* clause cannot: `parser.rs`'s
 /// `assign_no_semi` admits only `<ident> = <expr>` there, so `dum (…; …; redde
-/// x)` is a parse error under both backends and never reaches either one's
-/// disagreement. The init clause is therefore the only route, and matching on it
-/// alone is complete, not merely narrow.
+/// x)` is a parse error — it never reaches lowering at all, and never reached
+/// either backend's reading while there were two. The init clause is therefore
+/// the only route, and matching on it alone is complete, not merely narrow.
 fn caput_dum_terminatum(src: &str) -> bool {
     const TERMINI: [&str; 3] = ["redde", "abrumpe", "continua"];
     for (i, _) in src.match_indices("dum") {
@@ -301,7 +301,8 @@ proptest! {
         prop_assert!(
             !caput_dum_terminatum(&src),
             "the generator drew D-26's shape — a terminator in a `dum` init \
-             clause — on which the two backends disagree by design:\n{src}"
+             clause — whose meaning is an open language question and not \
+             settled behaviour (D-26):\n{src}"
         );
         let d = temp_dir("liss-gen");
         let p = d.write("fons.liss", &src);
