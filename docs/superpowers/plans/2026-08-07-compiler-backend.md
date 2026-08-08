@@ -621,6 +621,7 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 - [ ] `write_or_exit` and `finish` move into `lingua_serpentis::cli`, shared by both binaries. `lingua-serpentis` stays byte-identical.
 - [ ] The `ENGLISH_WORDS` carve-out for the usage string — commented, scoped to the usage text, never a general weakening.
 - [ ] New `tests/liss_cli.rs`: subcommand arity, the `./run` disambiguation, `--exi`, an unwritable output path, `build` on a program that fails to check, and the produced binary's mode bits.
+- [ ] **A test that `liss run` emits the parent's Latinity warnings.** Run a source with a non-Latin identifier and assert the `Monitum in '<file>', linea N: …` line byte-for-byte, ordered before the child's output. Task 15's codegen helper strips `Monitum` lines from expectations because a bare image has no parent; **once that is the only place warnings were asserted, parent-side emission has no test anywhere.** Three `nuntii` files in the corpus carry such a warning.
 
 `feat(cli): liss run and liss build`
 
@@ -629,6 +630,24 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 ## Task 17: The differential harness
 
 - [ ] `tests/compilata.rs`: every fixture run **both** ways, the two `Rendered` required equal. Scaffolding with a defined lifetime — deleted in Task 19.
+
+> **Run the compiled side through `liss run`, not the raw image, and subtract nothing.**
+> Warnings are a front-end product: `liss run` emits them from the **parent, before
+> spawning** (§9.5), so the full output is parent warnings plus child output, which
+> is what the blessed `nuntii` already records. Compare that against the
+> interpreter's `Rendered` with **no filtering on either side**.
+>
+> Task 15's codegen helper strips `Monitum` lines from the *expected* side because a
+> bare image has no parent to emit them, and `interpretatum` clears warnings
+> structurally. Both are correct **only** for a raw-image comparison. If compilata
+> runs the image and subtracts warnings, it will happily pass a compiled path that
+> wrongly omits them — and that is the one thing this task exists to catch.
+>
+> **`Monitum` is not a front-end-only prefix.** `liss-abi/src/ingressus.rs:72`
+> writes `Monitum: ` at **run time** for the D-10 exit-status truncation note, so a
+> prefix filter swallows a genuine runtime line. Keep `monita/status-exitus-redactus`
+> in scope and do not carry any `Monitum` filter to it — it would fail on a fixture
+> neither backend is wrong about.
 - [ ] Measure: `cargo test --test compilata -- --test-threads=1` against the default, and record both numbers in the spec. If it disappoints, build the content-hash cache (spec §10.2) — harness only, never in the shipped compiler, where a stale cache is a correctness hazard.
 - [ ] Cap the proptest generator that emits well-typed programs; it now reaches codegen on every case. Record the chosen number.
 
@@ -668,7 +687,7 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 **Precondition, checked and stated in the commit before a single line is removed:** every one of the 86 fixtures produces byte-identical `Rendered` under both backends, on both architectures; `cli.rs` is green; `robustness` and `generative` are green; `RECORDED_RULES` has not grown.
 
 - [ ] Delete `interp.rs`, `Flow`, `parser::parse`, `checker::check`, the five `run*` entry points, and `tests/compilata.rs`.
-- [ ] `support::run_fixture` switches to the compiled path. `conformance.rs` inherits compilata's job.
+- [ ] `support::run_fixture` switches to the compiled path — **through `liss run`, not the raw image.** If it runs the image directly, the three `Monitum`-carrying `nuntii` files (`lista-index-lectio`, `lista-litteralis`, `longitudo-numerat`) have to be re-blessed empty, which contradicts "the recursion fixture is the only expectation that changes" and deletes the corpus's only coverage of Latinity warnings. `conformance.rs` inherits compilata's job.
 - [ ] Remove the two now-unreachable checker sites **structurally, not with `unreachable!`**: `current_ret` becomes non-optional, `root_namespace` a constructor parameter.
 - [ ] `catalogus.rs`: add the three crates, the `liss_panic(`, `Defectus::novus(` and `NUNTIUS_` markers, plus a unit test pinning that `b"…"` literals are extracted.
 - [ ] Register: D-04 superseded with the new mechanism and wording, D-06 noted as relocated into the runtime, **D-19 closed**. Revisit **D-26** — with the interpreter gone the divergence has only one side left, so it becomes a plain language question about a terminator in a `dum` init clause.

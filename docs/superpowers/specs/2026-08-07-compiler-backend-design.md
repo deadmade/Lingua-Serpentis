@@ -58,10 +58,27 @@ And one decision taken while writing it, which reshaped the rest:
 - **No macOS.** Windows is a designed-for second milestone; macOS is not
   considered.
 - **No optimisation.** `ni` is boxed unconditionally (§5.1), so allocation-bound
-  loops will be *slower than the interpreter they replace*. The obvious fix —
-  eliding the copy when a load is a variable's last use — requires dataflow, and
-  ownership is deliberately syntactic (§7.2). It is named here, *elisio ad
-  ultimum usum*, so that it has a name when it is scheduled.
+  loops will be *slower than the interpreter they replace*. Two future
+  optimisations are named here so they have names when they are scheduled:
+
+  - ***Elisio ad ultimum usum*** — eliding the copy when a `Load` is a variable's
+    **last** use. Requires dataflow, and ownership is deliberately syntactic
+    (§7.2).
+  - ***Subscriptio mutuata*** — a **borrowing subscript**. Because `Load` is the
+    only copy site, `xs[i]` deep-copies the whole list to read one element, so
+    subscripting in a loop is quadratic. `exemplum-series` is exactly that shape.
+
+  The second is *not* covered by the first: in `summa = summa + numeri[i]`,
+  `numeri` is not at its last use — it is read again next iteration — so elisio
+  would never touch it. And it is **not a divergence**: the interpreter clones on
+  every variable read (`interp.rs:86-91`) and every element read (`:176-183`), so
+  both backends are O(n) per subscript and the corpus is blessed against it.
+
+  The IR already carries the precedent. `StmtKind::IndexAssign` takes a `SlotId`
+  base while `ExprKind::Index` takes an `Expr` base — so the objection that a
+  borrowing read needs "a second rule saying which expressions may borrow" is
+  already answered for the write form. An `Index` whose base is a `Load` of a slot
+  is the same shape.
 - **No new language semantics.** In particular `et` and `vel` keep their current
   non-short-circuiting behaviour (§3.4).
 - **No debug information.** No DWARF, no backtraces, no PC→line mapping. This is
@@ -1149,6 +1166,12 @@ musl targets, and `qemu` for the aarch64 checkpoint. MSRV rises 1.85 → 1.94.
    nothing in this one.
 2. ~~**Whether rustc bundles `libc.a`**~~ — **resolved.** It does not; `libc.a`
    must be embedded per target (§9.2). Measured by the probe.
-3. **When to schedule *elisio ad ultimum usum*.** With the interpreter gone there
-   is no faster path to fall back to, which is a mild argument for sooner than
-   "someday".
+3. **When to schedule *elisio ad ultimum usum* and *subscriptio mutuata*.** With
+   the interpreter gone there is no faster path to fall back to, which is a mild
+   argument for sooner than "someday".
+
+   The borrowing subscript has measured instances: `exemplum-series` and
+   `series_longa_ad_ultimum_elementum_pertingit` are both quadratic today, and
+   both would become linear. It is also the cheaper of the two, needing no
+   dataflow — only the rule that an `Index` whose base is a `Load` of a slot may
+   read through the slot rather than through a copy.
