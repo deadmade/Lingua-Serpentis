@@ -62,8 +62,9 @@ pub fn write_or_exit(w: &mut impl Write, text: &str) {
 /// Render a finished pipeline result to the two streams and exit.
 ///
 /// `liss run` never reaches this on the success path — the child owns stdout
-/// there — but every front-end failure does, which is what makes a compiled
-/// program's diagnostics identical to an interpreted one's.
+/// there — but every front-end failure does. That is what kept a compiled
+/// program's diagnostics byte-identical to an interpreted one's while both
+/// existed, and it is now simply the one place a front-end failure is written.
 pub fn finish(result: Result<(String, u8, Vec<Warning>), ProgramError>) -> ! {
     let r = render(result);
     // Warnings and errors go to stderr so they never contaminate program output.
@@ -188,10 +189,11 @@ fn load(arg: &str) -> Result<(Program, bool), ProgramError> {
 
 /// The single-source strip, applied to a failure.
 ///
-/// `run_file_with_warnings` does exactly this to the interpreter's errors: a
-/// one-file program is checked under a synthetic `fons.liss` and the name is
-/// removed afterwards, so the message reads `Error in linea N:`. Structural
-/// errors, which have no line of their own, surface at line 1.
+/// The deleted `run_file_with_warnings` did exactly this, and the rule is
+/// unchanged: a one-file program is checked under a synthetic `fons.liss` and
+/// the name is removed afterwards, so the message reads `Error in linea N:`.
+/// Structural errors, which have no line of their own, surface at line 1.
+/// This is now the only implementation of it.
 fn strip(single: bool, mut e: ProgramError) -> ProgramError {
     if single {
         e.file = None;

@@ -993,8 +993,8 @@ impl<'a> Corpus<'a> {
             // statement returns, not whether the last does (`checker.rs:128-131`
             // — "a `redde` followed by unreachable code still returns, and this
             // language has no dead-code lint to disagree with"), so
-            // `redde nullus; scribe("numquam");` is a legal program that the
-            // interpreter runs to an empty stdout and exit 0.
+            // `redde nullus; scribe("numquam");` is a legal program that runs
+            // to an empty stdout and exit 0.
             //
             // Without this the `redde` fills the Cranelift block and the next
             // statement adds an instruction to a filled one: a panic in debug,

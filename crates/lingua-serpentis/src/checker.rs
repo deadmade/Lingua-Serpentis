@@ -1105,8 +1105,13 @@ fn check_file(
 }
 
 /// Check a whole parsed program (§4 of the design), discarding the IR it built.
-/// The interpreter's entry point; `check_program_typed` is the compiler's, and
-/// they are one walk, so a diagnostic cannot differ between them (spec §3.4).
+///
+/// This was the *interpreter's* entry point, against `check_program_typed` as
+/// the compiler's — one walk behind two names, so that a diagnostic could not
+/// differ between the two backends (spec §3.4). With one backend left, the
+/// driver calls `check_program_typed` and this remains as the checking-only
+/// form the tests use, which is what keeps a checker test from having to care
+/// about the IR it is not asserting.
 pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
     check_program_typed(prog).map(|_| ())
 }
