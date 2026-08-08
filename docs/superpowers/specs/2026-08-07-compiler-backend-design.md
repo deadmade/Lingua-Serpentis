@@ -985,7 +985,13 @@ working unchanged, and `conformance.rs` needs no edit at all.
 > The compiled path reproduces the corpus's blessed `emissio`, `nuntii` and
 > `exitus` exactly.
 
-Checkable over all eighty-six existing fixtures with no new expectation files.
+Checkable over all **113** existing fixtures with no new expectation files.
+
+*(Corrected in Task 17, which was the first thing to run all of them. This
+section was written when the corpus held eighty-six; Tasks 4, 12, 13 and 15 have
+added twenty-seven since, and every count in §10 below has been brought to the
+number that was actually measured. The corpus is 32 `currunt`, 76 `errores`,
+4 `monita` and 1 `defectus`.)*
 
 **Exactly one expectation changes**: `errores/vocatio-nimis-alte-implicata`
 becomes `errores/acervus-exhaustus`, with a rewritten `NOTA.md`. Every other
@@ -1014,18 +1020,72 @@ reproduces the corpus" a checked claim rather than an assertion, and it is
 deleted along with the interpreter, at which point `conformance.rs` inherits its
 job unchanged.
 
+**The compiled side goes through `liss run`, and nothing is subtracted from
+either side.** Latinity warnings are a front-end product that the *parent*
+writes before it spawns (§9.5), so `liss run`'s two streams already hold parent
+warnings followed by child diagnostics — which is exactly what the blessed
+`nuntii` records, the interpreter having had only one process to write from.
+A harness that ran the bare image would have to subtract those warnings, as
+`liss-codegen/tests/support` legitimately does, and would then pass a compiled
+path that had wrongly *lost* them — the one regression this target exists to
+catch. Mutating the parent's `write_or_exit` away fails ten fixtures, and
+`monita/status-exitus-redactus` is not among them, because its `Monitum: ` line
+is the **runtime's** (D-10) and no prefix filter is applied anywhere.
+
+**Result: 112 of the 113 fixtures are byte-identical under both backends.** The
+one that is not is `errores/vocatio-nimis-alte-implicata`, and it is the
+re-blessing named above: the interpreter's 64-frame cap raises `vocatio nimis
+alte implicata` at the call's line, while compiled code recurses to the guard
+page and §8's handler answers `Error: acervus vocationum exhaustus est` with no
+line (§8.4). Both answers are pinned in `compilata.rs`'s `DIVERGENTIAE`, so
+either side moving is a failure; the entry dies with the file in Task 19.
+
 ### 10.2 The cost of a subprocess per fixture
 
-This reverses §3.2 of the conformance suite design. Of eighty-six fixtures,
-seventy-four are `errores` and most fail in the lexer, parser or checker,
-never reaching codegen; roughly twenty-five actually compile.
+This reverses §3.2 of the conformance suite design. Of 113 fixtures, 76 are
+`errores` and most fail in the lexer, parser or checker, never reaching codegen.
+Counted rather than guessed, by asking `liss build` which ones it can build:
+**47 compile** — 32 `currunt`, 10 `errores` that fail at run time, 4 `monita`
+and the 1 `defectus` — 37 stop in the checker, and 29 stop in the lexer or
+parser.
 
 **Measured, not estimated.** A prelinked link of a hello-world through libwild
 in memory takes a **median of 11.5 ms** (mean 14.5 over 20 runs, min 10.9; the
-45 ms first run is cold cache). Adding Cranelift, the image write and a
-fork/exec/wait, a compiling fixture costs on the order of 25 ms. That is well
-under a second single-threaded for the whole corpus, and a fraction of it with
-the harness's default parallelism.
+45 ms first run is cold cache).
+
+The whole-corpus figure this section used to predict — "on the order of 25 ms
+per compiling fixture … well under a second single-threaded" — was written
+before there were 113 fixtures and before `liss run` added a link and a spawn to
+each. `tests/compilata.rs` now runs both backends over all of them, so the real
+numbers are these, on a 24-core machine:
+
+| | `--test-threads=1` | default parallelism |
+|---|---|---|
+| release | **3.50 s** | **0.55 s** |
+| debug (what `cargo test` runs) | **30.4 s** | **2.80 s** |
+
+The per-fixture mean in release is 31 ms, which is what the 25 ms estimate was
+reaching for — but it is not where the time goes, and that matters more than the
+total:
+
+| stage reached | release | debug |
+|---|---|---|
+| lexer or parser error | 2 ms | 3 ms |
+| checker error | 30 ms | 309 ms |
+| compiled, linked, run | 39 ms | 384 ms |
+
+**Codegen, linking and the two `execve`s together cost 9 ms** in release and
+68 ms in debug. The fixed cost that dwarfs them is `latinitas`: 6 MB of
+Whitaker's Words parsed into its `OnceLock` on the first Latinity lint, which
+every program that gets past the parser pays — once per *process*, and there is
+now one process per fixture. The subprocess is not what made a fixture
+expensive; putting the dictionary behind a process boundary is.
+
+That also disposes of the first mitigation below. Content-hash caching would
+skip the 9 ms, not the 30, so it would buy under a third of the release time and
+would then have to be trusted; the second, one ISA per test thread, does not
+apply at all to a harness that spawns the compiler rather than linking it in.
+Neither is worth building for 0.55 s.
 
 The linked image for a trivial program is **513 KB** — the floor for any Lingua
 Serpentis binary, with the runtime blobs stripped and `--gc-sections` on.
@@ -1048,6 +1108,20 @@ is a correctness hazard), then one ISA per test thread rather than per fixture.
 produces well-typed programs that reach codegen every time. That generator is
 capped separately from token soup, defaulted low, and the number is recorded —
 this is where a careless default turns `cargo test` from seconds into minutes.
+
+**The numbers, recorded.** `generative.rs` draws `CASUS = 64` cases, down from
+200, and shrinks at most `RETRACTATIONES = 256` times, down from proptest's
+2000; `SAMPLES` stays at 50. The cases were the wrong two hundred to begin with:
+the generator's whole behavioural range is "the program runs" or "it divides by
+zero", so the extra 136 spawns bought nothing. The shrink budget was the larger
+exposure — every shrink iteration is another spawn, so 2000 of them would turn a
+single failure into thirteen minutes of compiling and linking before the minimal
+repro appeared. The target dropped from 62.3 s to 19.6 s against the interpreter;
+against `liss` the 114 spawns would be about 44 s where the old budget was 96 s.
+
+The cap lands in Task 17, one task before Task 19 points `run_binary::BINARY` at
+`liss` and makes every one of those spawns a compile — so the budget is in place
+before the bill arrives.
 
 ### 10.3 The catalogue, and why there is no shared message table
 
@@ -1185,8 +1259,9 @@ musl targets, and `qemu` for the aarch64 checkpoint. MSRV rises 1.85 → 1.94.
 - **Before the interpreter is deleted**, every fixture produces byte-identical
   `Rendered` values under both backends, on both architectures. This is the
   gate on the deletion, not a report after it.
-- All eighty-six fixtures pass through the compiled path, with exactly one
-  intentional re-blessing (§10.1).
+- All 113 fixtures pass through the compiled path, with exactly one intentional
+  re-blessing (§10.1). Task 17 measured 112 already byte-identical and the
+  113th to be exactly that re-blessing.
 - The live-allocation counter reads zero at exit for every `currunt` and
   `monita` fixture, including the six new `memoria-*` cases.
 - Unbounded recursion produces `Error: acervus vocationum exhaustus est` and

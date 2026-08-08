@@ -12,7 +12,7 @@
 
 ## Context
 
-The language has a mature front end, an 86-fixture corpus and a defect register that is 22-of-25 fixed. What it does not have is an artefact. Every program needs the source tree and a Rust toolchain before it prints a word.
+The language has a mature front end, an 86-fixture corpus (113 by Task 17) and a defect register that is 22-of-25 fixed. What it does not have is an artefact. Every program needs the source tree and a Rust toolchain before it prints a word.
 
 This plan builds the compiler and, at the end, deletes the interpreter. The deletion is the point rather than a side effect: two backends means writing every Latin diagnostic, the mod-256 exit rule, 1-based indexing and the grain arithmetic twice and keeping them in step forever. Spec §3.1 has the full argument.
 
@@ -667,7 +667,11 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 > backend's answer as the language's. It is pinned instead by
 > `caput_dum_terminatum_componitur` in `regimen.rs` — real coverage, but not
 > differential coverage.
-- [ ] Checkpoint: **all 86 fixtures identical between the two backends**, with only the one intentional re-blessing from Task 14.
+- [ ] Checkpoint: **all 113 fixtures identical between the two backends**, with only the one intentional re-blessing.
+
+> **The count is 113, not 86.** Written when the corpus held 86; Tasks 4, 12, 13 and 15 added 27 more. Task 17 ran all of them and corrected §10.1, §10.2 and §12 of the spec to the measured numbers, this line and Task 19's precondition included.
+>
+> **Result: 112 identical, 1 divergent.** The divergence is `errores/vocatio-nimis-alte-implicata` — spec §3.3 removes the interpreter's 64-frame cap, so the compiled program answers `Error: acervus vocationum exhaustus est` (§8.4, no line) where the interpreter answers `vocatio nimis alte implicata` at the call's line. That is precisely the re-blessing this milestone always intended, and it is now waiting in Task 19 below. Both answers are pinned in `compilata.rs`'s `DIVERGENTIAE` rather than skipped, so a change to either side fails the target.
 
 `test(compilata): every fixture, both ways, byte for byte`
 
@@ -684,7 +688,9 @@ The last and most intricate part of codegen. Lists are the only recursive type, 
 
 ## Task 19: Delete the interpreter
 
-**Precondition, checked and stated in the commit before a single line is removed:** every one of the 86 fixtures produces byte-identical `Rendered` under both backends, on both architectures; `cli.rs` is green; `robustness` and `generative` are green; `RECORDED_RULES` has not grown.
+**Precondition, checked and stated in the commit before a single line is removed:** every one of the 113 fixtures produces byte-identical `Rendered` under both backends, on both architectures; `cli.rs` is green; `robustness` and `generative` are green; `RECORDED_RULES` has not grown.
+
+> **Task 17 discharged this on x86_64, and the list is short: 112 of 113 identical.** The exception is `errores/vocatio-nimis-alte-implicata`, which is the re-blessing scheduled below — so the precondition is met the moment that rename lands. Nothing else diverged, and no fixture was excluded. Task 18 owes the aarch64 half.
 
 - [ ] Delete `interp.rs`, `Flow`, `parser::parse`, `checker::check`, the five `run*` entry points, and `tests/compilata.rs`.
 - [ ] `support::run_fixture` switches to the compiled path — **through `liss run`, not the raw image.** If it runs the image directly, the three `Monitum`-carrying `nuntii` files (`lista-index-lectio`, `lista-litteralis`, `longitudo-numerat`) have to be re-blessed empty, which contradicts "the recursion fixture is the only expectation that changes" and deletes the corpus's only coverage of Latinity warnings. `conformance.rs` inherits compilata's job.
