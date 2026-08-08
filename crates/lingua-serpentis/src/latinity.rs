@@ -97,10 +97,22 @@ fn lint_stmt(s: &Stmt, out: &mut Vec<Warning>) {
 mod tests {
     use super::*;
     use crate::lexer::tokenize;
-    use crate::parser::parse;
+    use crate::parser::parse_file;
 
+    /// Lint a statement sequence, through the `munus initium` wrapper.
+    ///
+    /// `parser::parse` accepted a bare statement list and is deleted with the
+    /// interpreter (D-19), so the source is wrapped in the smallest legal
+    /// program and only the **body** is linted — which is exactly the set of
+    /// statements the old call passed. The wrapper is on one line, so every
+    /// asserted line number is unchanged.
     fn lint_src(src: &str) -> Vec<Warning> {
-        lint(&parse(&tokenize(src).unwrap()).unwrap())
+        let wrapped = format!("munus initium reddit ni {{ {src} }}");
+        let ast = parse_file(&tokenize(&wrapped).unwrap()).unwrap();
+        match ast.funcs.first().map(|s| &s.kind) {
+            Some(crate::ast::StmtKind::Func(f)) => lint(&f.body),
+            other => panic!("the wrapper did not produce one function: {other:?}"),
+        }
     }
 
     #[test]

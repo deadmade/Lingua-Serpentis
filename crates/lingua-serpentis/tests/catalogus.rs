@@ -14,7 +14,21 @@ use std::path::Path;
 /// these they would be invisible to the ratchet — a new Roman-numeral message
 /// could be added with no fixture and nothing would change. They are exact:
 /// between them they match those six sites and nothing else in the workspace.
-const MARKERS: [&str; 8] = [
+/// The last three are the back end's, added in Task 19 with the crates that
+/// own them (spec §10.3).
+///
+/// `liss_panic(` finds the runtime's raises; `Defectus::novus(` finds the
+/// compiler's own failures; `NUNTIUS_` finds the signal handler's messages,
+/// which are not call sites at all but `static` byte constants with no marker
+/// near them — the same situation that already forced `Err("` and `.ok_or("`
+/// into this list.
+///
+/// **The runtime writes its sentences inline at the call site**, never as a
+/// reference to a shared table, and §10.3 makes that a rule rather than a
+/// habit: a site written `liss_panic(nuntii::DIVISIO_PER_NULLUM.as_ptr(), …)`
+/// carries no literal of its own, reports `UNPARSED`, and hides the message
+/// from the ratchet entirely.
+const MARKERS: [&str; 11] = [
     "LinguaError {",
     ".err(",
     "ProgramError::structural(",
@@ -23,6 +37,9 @@ const MARKERS: [&str; 8] = [
     "Err(\"",
     ".ok_or(\"",
     "ok_or_else(|| format!(",
+    "liss_panic(",
+    "Defectus::novus(",
+    "NUNTIUS_",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -103,62 +120,32 @@ fn literal_after(src: &str, from: usize, window: usize) -> Option<String> {
 
 fn extract_sites() -> Vec<Site> {
     let root = support::repo_root();
-    // `liss-runtime` joined the scan when `roman.rs` (four diagnostics) and
-    // `exitus.rs` (one) moved out of `lingua-serpentis` — without it those
-    // five sites would silently vanish from the count rather than showing up
-    // as a loss the ratchet must justify.
+    // **Every crate that can say a Latin sentence, and the list is now
+    // complete.** `liss-runtime` joined when `roman.rs` and `exitus.rs` moved
+    // out of `lingua-serpentis`; `liss-abi` joined on creation, ahead of need,
+    // so that no message could slip in unrecorded between its birth and its
+    // marker; `liss-ir` and `liss-codegen` join here with `Defectus::novus(`.
     //
-    // `liss-abi` joins it on creation, for the same reason and ahead of need:
-    // it is where the runtime's diagnostics live from now on, and a crate added
-    // later would let a message slip in unrecorded in between. It contributes
-    // nothing yet, because the marker that finds its sites — `liss_panic(` — is
-    // deliberately **not** in `MARKERS` here.
+    // The three back-end markers were deferred to this task on purpose, and the
+    // reason has now expired. `liss-abi` re-raises `divisio per nullum`,
+    // `modulus per nullum` and `index extra fines: {} (longitudo {})`, and
+    // `interp.rs` raised all three too. Adding `liss_panic(` while both
+    // implementations stood would have made each pattern non-unique — and
+    // `fixtured` decides on uniqueness — so six sites would have read
+    // `ambiguous` and the count would have recorded a *loss* of coverage where
+    // nothing was lost. The interpreter is gone in this same commit, and with
+    // it the duplication.
     //
-    // That deferral is the whole point. `liss-abi` re-raises `divisio per
-    // nullum`, `modulus per nullum` and `index extra fines: {} (longitudo {})`,
-    // which `interp.rs` still raises too. Adding the marker while both
-    // implementations exist would make each of those patterns non-unique, and
-    // `fixtured` decides on uniqueness — all six sites would read `ambiguous`
-    // and the fixtured count would drop by three, recording a *loss* of
-    // coverage where nothing was actually lost. The marker lands in Task 19,
-    // in the same commit that deletes the interpreter and with it the
-    // duplication; spec §10.3 predicts the result there — fewer sites and a
-    // higher fixtured fraction.
-    //
-    // **`NUNTIUS_` is deferred to Task 19 as well, and for its own reasons.**
-    // Spec §10.3 states the rule in two halves — every async-signal-safe message
-    // constant is named `NUNTIUS_*`, *and* `NUNTIUS_` is a marker. Task 9
-    // shipped the naming; the marker waits, and the argument above does not
-    // carry over, because `acervus vocationum exhaustus est` exists nowhere else
-    // in the workspace. Three separate things stop it:
-    //
-    //   1. `custos.rs`'s `NUNTIUS_PRAEFIXUM` is `b"Error: "` — the prefix, not a
-    //      sentence. The marker as specified would make it a site and read
-    //      `Error: ` as its message, adding a row that is not a diagnostic.
-    //   2. `acervus vocationum exhaustus est` has no fixture and cannot have
-    //      one: `errores/acervus-exhaustus` needs a compiler that can emit a
-    //      recursive program, which is Tasks 16–17. The site would land
-    //      UNCOVERED and depress the fixtured fraction for a reason that has
-    //      nothing to do with coverage.
-    //   3. `NUNTIUS_MEMORIA` says `defectus internus: memoria violata est`,
-    //      which `defectus.rs` also raises inline. That is the *same*
-    //      uniqueness problem as above, one crate down: with both markers in,
-    //      the two sites read `ambiguous`. They have to land together and be
-    //      resolved together — Task 19 should expect to add a guard, or accept
-    //      one deliberate `ambiguous` pair and say why.
-    //
-    // Until then `tests/abi.rs`'s `every_latin_sentence_this_crate_can_say_is_
-    // listed_here` is the stand-in. It is weaker in two known ways: it reads
-    // only `c"…"` literals, so a `b"…"` message would slip past it, and it is
-    // crate-local, so it cannot see duplication anywhere else.
-    //
-    // Task 19 will also need a guard for `liss_panic`'s own *definition*,
-    // beside the existing one for `-> LinguaError {`: a function that declares
-    // a diagnostic entry point is not itself a site that raises one, and
-    // without the guard `defectus.rs`'s `pub unsafe extern "C" fn liss_panic(`
-    // reads UNPARSED.
-    let mut files: Vec<_> = ["lingua-serpentis", "latinitas", "liss-runtime", "liss-abi"]
-        .iter()
+    // Two duplicate patterns survive, and both are honest. `defectus internus:
+    // memoria violata est` is written twice — `defectus.rs` raises it through
+    // `liss_panic`, and `custos.rs`'s handler must write it without calling
+    // `liss_panic` at all — and `imago non coniuncta est` is written at four
+    // link-failure sites in `nexus.rs`. Neither can be provoked by a fixture, so
+    // both read UNCOVERED rather than `ambiguous`: the ladder tests `!seen`
+    // first, and a shared pattern nobody reached is plainly uncovered.
+    let mut files: Vec<_> =
+        ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
+            .iter()
         .flat_map(|c| {
             std::fs::read_dir(root.join("crates").join(c).join("src"))
                 .unwrap()
@@ -183,7 +170,51 @@ fn extract_sites() -> Vec<Site> {
                 // this, every helper introduced to collapse duplicated wording
                 // adds a phantom UNPARSED entry directly above the site it
                 // exists to consolidate.
-                if src[..abs].trim_end().ends_with("->") {
+                //
+                // `fn liss_panic(` is the same distinction one crate down, and
+                // needs its own test because the marker ends in `(` rather than
+                // `{`: a function that DECLARES a diagnostic entry point is not
+                // a site that raises one. Without this,
+                // `defectus.rs`'s `pub unsafe extern "C" fn liss_panic(` reads
+                // UNPARSED — the definition has no literal near it — and the
+                // ratchet grows a row for the door rather than for anyone who
+                // walked through it.
+                let ante = src[..abs].trim_end();
+                if ante.ends_with("->") || ante.ends_with("fn") {
+                    at = abs + marker.len();
+                    continue;
+                }
+                // **Prose about a diagnostic is not a diagnostic.** The scanner
+                // reads whole files, comments included, and that was harmless
+                // while every marker was punctuation-heavy enough not to appear
+                // in English. `NUNTIUS_` and `Defectus::novus(` are not: the
+                // notes explaining them mention them by name, and each mention
+                // became a site — one of them reading `Error: ` as its message,
+                // quoted out of a sentence explaining why `Error: ` is not a
+                // message. Eight phantom UNPARSED rows, and a fixtured fraction
+                // that fell because the file documented itself.
+                //
+                // Only `//` needs handling: nothing in this workspace writes a
+                // block comment. A `//` *after* the marker on the same line is
+                // an ordinary trailing note and must not count, which is why
+                // this looks left from the marker rather than at the whole line.
+                let linea = src[..abs].rfind('\n').map_or(0, |i| i + 1);
+                if src[linea..abs].contains("//") {
+                    at = abs + marker.len();
+                    continue;
+                }
+                // `NUNTIUS_` names a **constant**, and only its declaration is
+                // the site. Every *use* — `erratum(NUNTIUS_ACERVUS)` and the
+                // two arms that choose between them — carries no literal and
+                // would report UNPARSED, turning one message into four rows.
+                //
+                // This is what makes the marker match spec §10.3's rule rather
+                // than merely its spelling: the rule is that every
+                // async-signal-safe *message constant* is named `NUNTIUS_*`,
+                // and a constant is where it is declared.
+                if marker == "NUNTIUS_"
+                    && !(ante.ends_with("const") || ante.ends_with("static"))
+                {
                     at = abs + marker.len();
                     continue;
                 }
@@ -296,6 +327,83 @@ fn pattern_counts(sites: &[Site]) -> std::collections::HashMap<&str, usize> {
         *counts.entry(s.pattern.as_str()).or_insert(0) += 1;
     }
     counts
+}
+
+/// **The runtime's literals are not `"…"`, and the scanner must read them
+/// anyway.**
+///
+/// `liss-abi` is `no_std`-shaped and async-signal-safe, so its messages are
+/// byte strings and C strings — `b"Error: "`, `c"acervus vocationum exhaustus
+/// est"` — never plain `&str`. [`opening_quote`] finds the first `"` that opens
+/// a literal, and for both forms that is the quote *after* the prefix letter,
+/// so both already work.
+///
+/// "Already work" is exactly why this test exists. Nothing about the extractor
+/// mentions `b` or `c`; it works by accident of where the quote falls, and a
+/// future `opening_quote` that anchored on a preceding delimiter, or skipped a
+/// quote whose previous byte is a letter, would silently stop reading every
+/// message the runtime can say — and the ratchet's own header would not move,
+/// because the sites would go UNPARSED rather than disappear.
+///
+/// The last case is the one that motivates the guard rather than the prefix:
+/// a `b"…"` immediately after a marker must still be found.
+#[test]
+fn byte_and_c_string_literals_are_extracted_like_any_other() {
+    let cases = [
+        ("NUNTIUS_", r#"const NUNTIUS_X: &[u8] = b"acervus exhaustus";"#, "acervus exhaustus"),
+        ("NUNTIUS_", r#"const NUNTIUS_Y: &CStr = c"memoria violata est";"#, "memoria violata est"),
+        ("NUNTIUS_", r#"const NUNTIUS_Z: &str = "planus";"#, "planus"),
+        // The shape every `liss_panic` site actually ships: a `c"…"` literal
+        // taken `.as_ptr()`, with the sentence inline rather than behind a
+        // shared constant (§10.3).
+        ("liss_panic(", r#"liss_panic(c"divisio per nullum".as_ptr(), locus);"#, "divisio per nullum"),
+        // An escaped quote inside the message does not end it.
+        ("liss_panic(", r#"liss_panic(c"nomen \"x\" ignotum".as_ptr());"#, "nomen \"x\" ignotum"),
+    ];
+    for (marker, src, want) in cases {
+        // Start where `extract_sites` starts: just past the marker. That
+        // matters for `NUNTIUS_`, which is a prefix of the constant's own name,
+        // so scanning from zero would stop at the marker before reaching the
+        // literal it introduces.
+        let from = src.find(marker).expect("the fragment contains its marker") + marker.len();
+        assert_eq!(
+            literal_after(src, from, 300).as_deref(),
+            Some(want),
+            "failed to extract from {src:?}",
+        );
+    }
+
+    // And a char literal standing between the marker and the message is still
+    // skipped, which is what `opening_quote` was written for — the byte- and
+    // C-string prefixes must not have disturbed it.
+    let src = r#"self.err(if c == '"' { "chorda non clausa" } else { "aliud" })"#;
+    let from = src.find(".err(").expect("marker") + ".err(".len();
+    assert_eq!(literal_after(src, from, 300).as_deref(), Some("chorda non clausa"));
+}
+
+/// A function that *declares* a diagnostic entry point is not a site that
+/// raises one — the `fn` half of `extract_sites`'s guard.
+///
+/// `defectus.rs`'s `pub unsafe extern "C" fn liss_panic(` matches the
+/// `liss_panic(` marker exactly, and without the guard it reads UNPARSED: the
+/// definition has no literal near it. The row would be for the door rather than
+/// for anyone who walked through it, and it would depress the fixtured fraction
+/// permanently.
+#[test]
+fn a_diagnostic_entry_points_own_definition_is_not_a_site() {
+    let sites = extract_sites();
+    let definitio = sites
+        .iter()
+        .find(|s| s.file.ends_with("defectus.rs") && s.pattern == "UNPARSED");
+    assert!(
+        definitio.is_none(),
+        "`fn liss_panic(`'s definition was counted as a site: {definitio:?}",
+    );
+    // The guard must not have swallowed the raises the marker exists to find.
+    assert!(
+        sites.iter().filter(|s| s.file.ends_with("defectus.rs")).count() >= 5,
+        "the `liss_panic(` marker found no call sites at all",
+    );
 }
 
 #[test]

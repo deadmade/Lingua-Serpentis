@@ -108,7 +108,16 @@ const PAGINA_MINIMA: usize = 4096;
 const VIA_MAPPARUM: &[u8] = b"/proc/self/maps\0";
 
 /// `Error: ` — the prefix `parse_diagnostic` looks for.
-const NUNTIUS_PRAEFIXUM: &[u8] = b"Error: ";
+///
+/// **Not `NUNTIUS_*`, deliberately, and it was.** Spec §10.3's rule is that
+/// every async-signal-safe *message* constant is named `NUNTIUS_*` and that
+/// `NUNTIUS_` is a catalogue marker. This is a prefix, not a message: under the
+/// old name the ratchet made it a site and read `Error: ` as its diagnostic,
+/// adding a row that is not a sentence anyone can be shown. Renaming it keeps
+/// the rule exact in both directions — every `NUNTIUS_*` is a message, and
+/// every message is a `NUNTIUS_*` — instead of carving an exception into the
+/// scanner for the one constant that breaks it.
+const PRAEFIXUM_ERRORIS: &[u8] = b"Error: ";
 
 /// The stack of calls has been exhausted. Keeping the `vocatio` root means a
 /// reader who knew the interpreter's `vocatio nimis alte implicata` recognises
@@ -381,7 +390,7 @@ unsafe extern "C" fn manus(_signum: c_int, notitia: *mut libc::siginfo_t, _conte
     let _ = unsafe { crate::scriptio::effunde() };
 
     let nuntius = unsafe { discerne(notitia) };
-    erratum(NUNTIUS_PRAEFIXUM);
+    erratum(PRAEFIXUM_ERRORIS);
     erratum(nuntius.to_bytes());
     erratum(b"\n");
 

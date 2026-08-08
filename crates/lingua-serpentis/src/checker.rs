@@ -88,12 +88,27 @@ struct Checker {
     funcs: HashMap<String, Sig>,                       // current namespace (folder)
     packages: HashMap<String, HashMap<String, Sig>>,   // program-wide package signatures
     imports: HashSet<String>,                          // current file's affer set
-    // Every declaration in the program, numbered. Empty only in the legacy
-    // single-block entry point, which numbers its own top-level functions.
+    // Every declaration in the program, numbered.
     func_ids: HashMap<FuncKey, ir::FuncId>,
     // The file whose bodies are being checked, for `Func::file`.
     file: Option<String>,
-    current_ret: Option<Type>, // Some(_) while checking a function body
+    /// The return type of the function whose body is being checked.
+    ///
+    /// **Not an `Option`, and that is a structural claim rather than tidying.**
+    /// It was `Option<Type>`, `None` meaning "no enclosing function", and the
+    /// `Return` arm raised `'redde' extra functionem` when it found one. That
+    /// diagnostic was reachable only through `checker::check`, the legacy
+    /// entry point that walked a bare `&mut [Stmt]` and so could be handed a
+    /// top-level `redde`. `check` is gone (D-19), and with it the only caller
+    /// that could produce the state.
+    ///
+    /// Every remaining path into `check_stmt` runs through `check_func_decl`,
+    /// which assigns this from `f.ret` before walking a single statement — and
+    /// `check_file` no longer has a non-`Func` fallback that could bypass it.
+    /// So the `None` case cannot be constructed, and rather than leave an
+    /// `unreachable!` standing in for a state the type system can rule out, the
+    /// type rules it out. The initial value below is never read.
+    current_ret: Type,
     loop_depth: usize,         // how many `indem`/`dum` bodies enclose the current statement
     // The package namespace of the functions being checked, `None` for the
     // program's root. It decides two things: the mangled symbol (§4.3), and
@@ -145,7 +160,19 @@ fn nop(line: usize) -> ir::Stmt {
 }
 
 impl Checker {
-    fn new() -> Self {
+    /// **`namespace` is a parameter, not a default.**
+    ///
+    /// It used to be initialised to `None` here, with a comment explaining that
+    /// the legacy single-block entry point "stays permissive: it has no program
+    /// around it". `None` means *the program's root*, and the root is the one
+    /// namespace whose `initium` is the entry point and may fall off its end
+    /// (§4.3). A default that quietly says "root" is a default that hands the
+    /// entry point's exemption to whoever forgot to set the field.
+    ///
+    /// With `checker::check` gone (D-19) there is no caller without a
+    /// namespace to declare, so every construction states one and the
+    /// permissive default cannot be written.
+    fn new(namespace: Option<String>) -> Self {
         Checker {
             scopes: vec![HashMap::new()],
             slots: vec![HashMap::new()],
@@ -156,11 +183,11 @@ impl Checker {
             imports: HashSet::new(),
             func_ids: HashMap::new(),
             file: None,
-            current_ret: None,
+            // Overwritten by `check_func_decl` before any statement is walked,
+            // and unreadable before that — see the field's own note.
+            current_ret: Type::Int,
             loop_depth: 0,
-            // The legacy single-block entry point stays permissive: it has no
-            // program around it, and D-19 defers its removal.
-            namespace: None,
+            namespace,
         }
     }
 
@@ -738,8 +765,7 @@ impl Checker {
                 Ok(None)
             }
             StmtKind::Return(e) => {
-                let want = self.current_ret.clone()
-                    .ok_or_else(|| LinguaError { message: "'redde' extra functionem".into(), line })?;
+                let want = self.current_ret.clone();
                 let (got, node) = self.resolve_expr(e, Some(want.clone()), line)?;
                 if got != want {
                     return Err(LinguaError {
@@ -804,8 +830,7 @@ impl Checker {
         // because a `munus` in a `dum` header is checked inside another one.
         let outer_slots = std::mem::take(&mut self.slot_types);
         for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
-        let saved = self.current_ret.clone();
-        self.current_ret = Some(f.ret.clone());
+        let saved = std::mem::replace(&mut self.current_ret, f.ret.clone());
         // A function body is not inside any loop, whatever encloses
         // the declaration. Nested functions are rejected, so this can
         // only matter for the legacy top-level entry point — but the
@@ -981,26 +1006,6 @@ fn reserved_name_error(name: &str, line: usize) -> Option<LinguaError> {
     })
 }
 
-pub fn check(program: &mut [Stmt]) -> LResult<()> {
-    let mut c = Checker::new();
-    let mut next = 0u32;
-    for s in program.iter() {
-        if let StmtKind::Func(f) = &s.kind {
-            if let Some(e) = reserved_name_error(&f.name, s.line) {
-                return Err(e);
-            }
-            let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
-            c.funcs.insert(f.name.clone(), (ptypes, f.ret.clone()));
-            c.func_ids.insert((None, f.name.clone()), ir::FuncId(next));
-            next += 1;
-        }
-    }
-    for s in program.iter_mut() {
-        let _ = c.check_stmt(s)?;
-    }
-    Ok(())
-}
-
 /// Collect one folder's function signatures across all its files, rejecting
 /// reserved names and duplicates (§4.2 — two `initium` in the root land here
 /// as the ordinary duplicate error).
@@ -1069,8 +1074,7 @@ fn check_file(
             }));
         }
     }
-    let mut c = Checker::new();
-    c.namespace = ns.map(str::to_string);
+    let mut c = Checker::new(ns.map(str::to_string));
     c.file = Some(file.path.clone());
     c.funcs = ns_sigs.clone();
     c.packages = pkg_sigs.clone();
@@ -1078,13 +1082,16 @@ fn check_file(
     c.func_ids = func_ids.clone();
     for s in file.ast.funcs.iter_mut() {
         let line = s.line;
-        // `parse_file` puts nothing but `munus` declarations in `funcs`, so the
-        // fallback is unreachable; checking it anyway is what the loop did
-        // before, and needs no panic to say so.
-        if !matches!(s.kind, StmtKind::Func(_)) {
-            let _ = c.check_stmt(s).map_err(|e| ProgramError::in_file(&file.path, e))?;
-            continue;
-        }
+        // **Only `munus` declarations reach here, and `parse_file` is what
+        // guarantees it**: its loop pushes `func_stmt()` and nothing else, and
+        // refuses anything that is not `munus` with
+        // `extra munera nihil nisi declarationes licet`.
+        //
+        // There used to be a fallback that walked a non-`Func` statement
+        // through `check_stmt` anyway. It was unreachable, and it was the last
+        // path by which a bare `redde` could have been checked outside a
+        // function — which is what `current_ret` had to be an `Option` for.
+        // Dropping it is what lets that field be a `Type`.
         let StmtKind::Func(f) = &mut s.kind else { continue };
         debug_assert_eq!(
             func_ids.get(&(ns.map(str::to_string), f.name.clone())),
@@ -1155,11 +1162,41 @@ pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, Pr
 mod tests {
     use super::*;
     use crate::lexer::tokenize;
-    use crate::parser::parse;
 
+    /// Check a **statement sequence**, through the `munus initium` wrapper
+    /// (spec §10.4).
+    ///
+    /// These tests used to call `checker::check`, which took a bare
+    /// `&mut [Stmt]` and was strictly laxer than the real pipeline: no
+    /// `initium` requirement, and functions registered with a plain `insert`
+    /// so duplicates went unnoticed. Twenty-nine of this file's tests
+    /// certified that shadow language, which is D-19, and `check` is deleted
+    /// with the interpreter that was the only thing able to run it.
+    ///
+    /// What they are *about* — types, scopes, conditions, list element rules —
+    /// is unchanged, so they are wrapped rather than rewritten. The wrapper is
+    /// one line, so asserted line numbers do not move, and the body it creates
+    /// is the root `initium`, which is the one function permitted to fall off
+    /// its end (§4.3) — so a statement sequence with no `redde` still checks.
+    ///
+    /// Sources that declare functions of their own cannot be wrapped, because
+    /// the wrapper would nest them. Those call [`check_totum`] and write out
+    /// their own `initium`.
     fn check_src(src: &str) -> LResult<()> {
-        let mut program = parse(&tokenize(src).unwrap()).unwrap();
-        check(&mut program)
+        check_totum(&format!("munus initium reddit ni {{ {src} }}"))
+    }
+
+    /// Check a **complete single-file program** — the caller writes its own
+    /// declarations, `initium` included — through the real entry point.
+    ///
+    /// The `ProgramError` is narrowed back to a `LinguaError` so the assertions
+    /// that read `.message` are untouched. A structural failure has no line of
+    /// its own and surfaces at line 1, exactly as the single-source path
+    /// renders it.
+    fn check_totum(src: &str) -> LResult<()> {
+        let mut p = pprog(&[("fons.liss", src)], &[]);
+        check_program(&mut p)
+            .map_err(|e| LinguaError { message: e.message, line: e.line.unwrap_or(1) })
     }
 
     #[test]
@@ -1295,22 +1332,35 @@ mod tests {
 
     #[test]
     fn function_return_type_checked() {
-        assert!(check_src("munus iunge capit (ni a, ni b) reddit ni { redde a + b; } scribe(iunge(°I, °II));").is_ok());
+        assert!(check_totum(
+            "munus iunge capit (ni a, ni b) reddit ni { redde a + b; }\n\
+             munus initium reddit ni { scribe(iunge(°I, °II)); }",
+        )
+        .is_ok());
     }
 
     #[test]
     fn returning_wrong_type_fails() {
-        assert!(check_src("munus f reddit ni { redde \"salve\"; }").is_err());
+        assert!(check_totum(
+            "munus f reddit ni { redde \"salve\"; }\nmunus initium reddit ni { }",
+        ).is_err());
     }
 
     #[test]
     fn calling_with_wrong_arg_type_fails() {
-        assert!(check_src("munus f capit (ni a) reddit ni { redde a; } scribe(f(\"x\"));").is_err());
+        assert!(check_totum(
+            "munus f capit (ni a) reddit ni { redde a; }\n\
+             munus initium reddit ni { scribe(f(\"x\")); }",
+        ).is_err());
     }
 
     #[test]
     fn nested_function_rejected() {
-        let err = check_src("munus outer reddit ni { munus inner reddit ni { redde °I; } redde °I; }").unwrap_err();
+        let err = check_totum(
+            "munus outer reddit ni { munus inner reddit ni { redde °I; } redde °I; }\n\
+             munus initium reddit ni { }",
+        )
+        .unwrap_err();
         assert!(err.message.contains("nidificat"));
     }
 
@@ -1345,13 +1395,20 @@ mod tests {
 
     #[test]
     fn function_returning_fraction_adapts_to_nr() {
-        assert!(check_src("munus tau reddit nr { redde °I:I/III; }").is_ok());
+        assert!(check_totum(
+            "munus tau reddit nr { redde °I:I/III; }\nmunus initium reddit ni { }",
+        )
+        .is_ok());
     }
 
     #[test]
     fn function_accepts_fraction_argument_as_mnr() {
         // The literal argument adapts to the declared mnr parameter type.
-        assert!(check_src("munus f capit (mnr a) reddit mnr { redde a; } scribe(f(°I:I/II));").is_ok());
+        assert!(check_totum(
+            "munus f capit (mnr a) reddit mnr { redde a; }\n\
+             munus initium reddit ni { scribe(f(°I:I/II)); }",
+        )
+        .is_ok());
     }
 
     #[test]
@@ -1431,8 +1488,13 @@ mod tests {
 
     #[test]
     fn reserved_builtin_names_cannot_be_user_functions() {
-        assert!(check_src("munus adde capit (ni a) reddit ni { redde a; }").is_err());
-        assert!(check_src("munus longitudo reddit ni { redde °I; }").is_err());
+        assert!(check_totum(
+            "munus adde capit (ni a) reddit ni { redde a; }\nmunus initium reddit ni { }",
+        ).is_err());
+        assert!(check_totum(
+            "munus longitudo reddit ni { redde °I; }\nmunus initium reddit ni { }",
+        )
+        .is_err());
     }
 
     #[test]

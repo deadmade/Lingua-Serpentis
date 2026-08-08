@@ -477,15 +477,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(tokens: &[Token]) -> LResult<Vec<Stmt>> {
-    let mut p = Parser { toks: tokens, pos: 0, depth: 0 };
-    let mut stmts = Vec::new();
-    while p.pos < p.toks.len() {
-        stmts.push(p.statement()?);
-    }
-    Ok(stmts)
-}
-
 /// Parse one file under the package model (§4.4–4.5 of the design):
 /// `affer` lines first, then `munus` declarations, nothing else.
 pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
@@ -524,9 +515,36 @@ mod tests {
 
     fn ri(n: i64) -> crate::roman::Roman { crate::roman::Roman::from_i64(n) }
 
+    /// **The `munus initium` wrapper**, and why every helper below goes through
+    /// it (spec §10.4).
+    ///
+    /// These tests used to call `parser::parse`, which looped `statement()`
+    /// over every token and so accepted a bare statement list — a top-level
+    /// `scribe(°I);` with no function around it. That is not the language:
+    /// `parse_file` allows `affer` lines followed by `munus` declarations and
+    /// nothing else. Seventeen of this file's tests certified the laxer
+    /// grammar, which is D-19, and `parse` is deleted with the interpreter that
+    /// was the only thing able to run it.
+    ///
+    /// The tests themselves are about **statements and expressions**, which the
+    /// language still has, so they are wrapped rather than rewritten. The
+    /// wrapper is on one line, so a source that starts at line 1 still reports
+    /// its errors at line 1 and every asserted line number is unchanged.
+    fn wrap(src: &str) -> String {
+        format!("munus initium reddit ni {{ {src} }}")
+    }
+
+    /// The wrapped source's statements — what `parse` used to return.
+    fn parse_stmts(src: &str) -> LResult<Vec<Stmt>> {
+        let ast = parse_file(&tokenize(&wrap(src)).unwrap())?;
+        match ast.funcs.first().map(|s| &s.kind) {
+            Some(StmtKind::Func(f)) => Ok(f.body.clone()),
+            other => panic!("the wrapper did not produce one function: {other:?}"),
+        }
+    }
+
     fn parse_first_expr(src: &str) -> Expr {
-        let toks = tokenize(src).unwrap();
-        let stmts = parse(&toks).unwrap();
+        let stmts = parse_stmts(src).unwrap();
         match &stmts[0].kind {
             StmtKind::ExprStmt(e) => e.clone(),
             other => panic!("expected ExprStmt, got {:?}", other),
@@ -534,13 +552,11 @@ mod tests {
     }
 
     fn parse_all(src: &str) -> Vec<Stmt> {
-        parse(&tokenize(src).unwrap()).unwrap()
+        parse_stmts(src).unwrap()
     }
 
     fn parse_err(src: &str) -> String {
-        parse(&tokenize(src).unwrap())
-            .expect_err("expected a parse error")
-            .message
+        parse_stmts(src).expect_err("expected a parse error").message
     }
 
     #[test]
@@ -868,14 +884,12 @@ mod tests {
 
     #[test]
     fn qualified_name_must_be_called() {
-        let toks = tokenize("ni x = mathematica.summa;").unwrap();
-        let m = parse(&toks).expect_err("expected error").message;
+        let m = parse_err("ni x = mathematica.summa;");
         assert!(m.contains("vocatio"), "got: {m}");
     }
 
     #[test]
     fn dot_without_a_function_name_is_rejected() {
-        let toks = tokenize("mathematica.(°I);").unwrap();
-        assert!(parse(&toks).is_err());
+        assert!(parse_stmts("mathematica.(°I);").is_err());
     }
 }

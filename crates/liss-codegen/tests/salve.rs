@@ -1,12 +1,15 @@
 //! The inflection point: a Lingua Serpentis program that is *executed as a
-//! native binary* rather than walked by an interpreter.
+//! native binary* rather than walked by a tree-walking interpreter — which, as
+//! of Task 19, is the only way this language runs at all.
 //!
 //! The program is `conformance/currunt/exemplum-salve` — `Const(Text)`,
 //! `Print`, `Return(0)` and nothing else, the narrowest source that exercises
 //! the whole pipeline: checker → typed IR → Cranelift → ELF object → libwild →
 //! `execve`. The fixture is read from `conformance/`, not restated here, so the
-//! compiled path is held to the same bytes the interpreted path is (spec
-//! §10.1) — and the fixture itself is untouched, still passing interpreted.
+//! compiled path is held to the blessed `emissio` itself (spec §10.1). Those
+//! bytes were recorded from the interpreter and are unchanged by its removal:
+//! the corpus is the oracle, which is precisely §3.1's argument for having only
+//! one backend.
 //!
 //! # Why the whole link is exercised and not just the object
 //!
@@ -25,8 +28,7 @@ use std::path::Path;
 use support::{exsequere, ir, radix};
 
 /// **The task.** `exemplum-salve`, compiled, linked, run — and its stdout
-/// compared against the same `emissio` the interpreted path is compared
-/// against.
+/// compared against the fixture's blessed `emissio`.
 #[test]
 fn exemplum_salve_becomes_a_static_binary_that_prints() {
     let Some(machina) = Target::hospes() else {

@@ -1,26 +1,52 @@
+//! The Lingua Serpentis compiler.
+//!
+//! # There is no interpreter, and the library does not run programs
+//!
+//! Until Task 19 this crate exposed five `run*` entry points that lexed,
+//! parsed, checked and then *executed* a program by walking its tree, and
+//! `interp.rs` was that tree-walker. Spec §3.1 removes it: the corpus is the
+//! oracle, a second implementation is a second thing to keep in step forever,
+//! and differential testing is a way of detecting the drift that having two
+//! implementations causes.
+//!
+//! So the pipeline stops at the typed IR. `lexer` → `parser::parse_file` →
+//! `latinity` → `checker::check_program_typed` → `liss_ir::Programma`, and
+//! [`cli::liss`] hands that to `liss_codegen` and runs the image it links.
+//! **Running a program is a thing the `liss` binary does, not a thing this
+//! library does.**
+//!
+//! Spec §9.6 said the opposite — that `run_program_with_warnings`,
+//! `run_dir_with_warnings` and `run_file_with_warnings` would keep their exact
+//! signatures with "the `String` … now the child's captured stdout" — and it
+//! has been amended. Its argument was that the corpus tooling should keep
+//! calling what it called; that premise died when the fixture harness moved to
+//! `liss run`, which it had to, because Latinity warnings are written by the
+//! parent before it spawns and a raw image has none. What §9.6 would have
+//! preserved is a library function that forks a compiler: a small `liss run`
+//! with a worse interface.
+//!
+//! What did survive the swap is [`render`], and that is what the corpus tooling
+//! actually depends on — the shape of the two streams, not a signature.
+
 pub mod error;
-/// `Roman` and its arithmetic moved to `liss-runtime` (spec §11) — it needs
-/// to be compiled for the host, inside the compiler, and for musl, inside
-/// `liss-abi`, so it cannot live inside the interpreter's own crate. This
-/// re-export keeps every existing `crate::roman::...` / `lingua_serpentis::
-/// roman::...` call site working unchanged.
+/// `Roman` and its arithmetic live in `liss-runtime` (spec §11): they are
+/// compiled twice, once for the host inside this compiler and once for musl
+/// inside `liss-abi`. This re-export keeps every existing
+/// `lingua_serpentis::roman::...` call site working unchanged.
 pub use liss_runtime::roman;
-/// Fraction arithmetic, moved to `liss-runtime` alongside `roman` for the
-/// same reason.
+/// Fraction arithmetic, in `liss-runtime` alongside `roman` for the same
+/// reason.
 pub use liss_runtime::fraction;
 pub mod token;
 pub mod lexer;
 pub mod ast;
 pub mod parser;
 pub mod checker;
-pub mod value;
-pub mod interp;
 pub mod latinity;
 pub mod program;
 pub mod cli;
 
 use ast::{ParsedFile, ParsedProgram};
-use error::{LResult, LinguaError};
 use program::{Program, SourceFile};
 pub use error::{ProgramError, Warning};
 
@@ -32,10 +58,11 @@ fn parse_one(f: SourceFile) -> Result<ParsedFile, ProgramError> {
 
 /// Lex and parse every file of a loaded program, root and packages alike.
 ///
-/// Split out of `run_loaded` for `cli::liss`, which needs the `ParsedProgram`
-/// itself: the compiled path lints it, checks it into the typed IR and stops,
-/// where the interpreted path goes on to execute. Sharing the parse is what
-/// keeps the two from drifting into different notions of what loading is.
+/// `cli::liss` is the only caller: it lints the result, checks it into the
+/// typed IR and stops. It was split out of `run_loaded` — the private function
+/// the five deleted `run*` entry points shared — so that the compiled and
+/// interpreted paths could not drift into different notions of what loading
+/// is. One path remains and the split is now merely where the code lives.
 pub(crate) fn parse_loaded(prog: Program) -> Result<ParsedProgram, ProgramError> {
     let mut root = Vec::new();
     for f in prog.root {
@@ -50,110 +77,6 @@ pub(crate) fn parse_loaded(prog: Program) -> Result<ParsedProgram, ProgramError>
         packages.insert(name, parsed);
     }
     Ok(ParsedProgram { root, packages })
-}
-
-/// The full pipeline over a loaded program: parse every file, lint, check the
-/// whole program, execute from `initium`. Returns the collected `scribe`
-/// output, the exit status, and any Latinity warnings.
-///
-/// Linting runs *before* the checker, and its result is attached to a failure
-/// rather than dropped with it (D-09). A program with a non-Latin name and a
-/// type error has two problems and should report both; a lint that only
-/// appears once the program compiles is one nobody reads. This is safe to
-/// reorder: `latinity` matches on declaration names only, and the sole thing
-/// `check_program` mutates is `Expr::FloatLit` nodes.
-///
-/// The one place warnings genuinely cannot survive is a lex, parse or
-/// structural failure — there is no `ParsedProgram` to lint yet, and nothing
-/// has run, so the error carries an empty `stdout` and no warnings.
-fn run_loaded(prog: Program) -> Result<(String, u8, Vec<Warning>), ProgramError> {
-    let mut parsed = parse_loaded(prog)?;
-    let warnings = latinity::lint_program(&parsed);
-    if let Err(mut e) = checker::check_program(&mut parsed) {
-        e.warnings = warnings;
-        return Err(e);
-    }
-    match interp::execute_program(&parsed) {
-        // The interpreter's own warnings — currently only the truncated-exit
-        // status note (D-10) — come after the Latinity ones, which are about
-        // the source rather than the run.
-        Ok((output, code, run_warnings)) => {
-            let mut all = warnings;
-            all.extend(run_warnings);
-            Ok((output, code, all))
-        }
-        // `e.stdout` is already whatever `scribe` printed before the failure.
-        Err(mut e) => {
-            e.warnings = warnings;
-            Err(e)
-        }
-    }
-}
-
-/// Run a program given as (relative path, source) pairs — the disk-free
-/// entry integration tests use. Paths are '/'-separated and follow the
-/// folder rules: `"a.liss"` is a root file, `"mathematica/summa.liss"` is in
-/// the `mathematica` package, anything deeper is an error.
-pub fn run_program_with_warnings(
-    files: &[(&str, &str)],
-) -> Result<(String, u8, Vec<Warning>), ProgramError> {
-    let files = files.iter()
-        .map(|(p, s)| SourceFile { path: (*p).to_string(), src: (*s).to_string() })
-        .collect();
-    run_loaded(program::assemble(files)?)
-}
-
-/// Run the program folder at `dir`.
-pub fn run_dir_with_warnings(
-    dir: &std::path::Path,
-) -> Result<(String, u8, Vec<Warning>), ProgramError> {
-    run_loaded(program::load_dir(dir)?)
-}
-
-/// Run a single-file program — the degenerate case of §4.1: same rules
-/// (`initium` required, declarations only), but errors and warnings keep the
-/// file-less phrasing the single-source API has always had. Structural
-/// errors, which have no line of their own, surface at line 1.
-pub fn run_file_with_warnings(src: &str) -> Result<(String, u8, Vec<Warning>), ProgramError> {
-    let file = SourceFile { path: "fons.liss".into(), src: src.to_string() };
-    let prog = Program { root: vec![file], packages: std::collections::BTreeMap::new() };
-    let strip = |ws: &mut Vec<Warning>| {
-        for w in ws {
-            w.file = None;
-        }
-    };
-    match run_loaded(prog) {
-        Ok((out, code, mut warnings)) => {
-            strip(&mut warnings);
-            Ok((out, code, warnings))
-        }
-        // The error type used to be `LinguaError`, which had nowhere to carry
-        // the partial output and warnings. `ProgramError`'s "line but no file"
-        // Display arm is byte-identical to `LinguaError`'s, so the message a
-        // user sees is unchanged; structural errors, which have no line of
-        // their own, still surface at line 1.
-        Err(mut e) => {
-            e.file = None;
-            e.line = Some(e.line.unwrap_or(1));
-            strip(&mut e.warnings);
-            Err(e)
-        }
-    }
-}
-
-/// Single-file pipeline, discarding the exit status (library convenience).
-///
-/// Keeps the `LinguaError` result the single-source API has always had, so
-/// callers are unaffected by `run_file_with_warnings` widening its error.
-pub fn run_with_warnings(src: &str) -> LResult<(String, Vec<Warning>)> {
-    run_file_with_warnings(src)
-        .map(|(output, _, warnings)| (output, warnings))
-        .map_err(|e| LinguaError { message: e.message, line: e.line.unwrap_or(1) })
-}
-
-/// Single-file pipeline, discarding warnings too.
-pub fn run(src: &str) -> LResult<String> {
-    run_with_warnings(src).map(|(output, _)| output)
 }
 
 /// Everything a completed run puts in front of the user: the two streams and
@@ -240,84 +163,29 @@ mod tests {
         assert_eq!(r.code, 1);
     }
 
-    #[test]
-    fn output_printed_before_an_error_still_reaches_stdout() {
-        // Defectus D-08. `scribe` output is accumulated in `Interp::out` and
-        // was returned only on the Ok arm, so any runtime error threw away
-        // everything the program had provably already printed.
-        let src = "munus initium reddit ni {\n  scribe(\"ante\");\n  ni z = °I - °I;\n  scribe(°V / z);\n  redde nullus;\n}";
-        let e = run_program_with_warnings(&[("principale.liss", src)])
-            .expect_err("dividing by zero is an error");
-        assert_eq!(e.stdout, "ante\n");
-        // And it reaches the real stdout, not just the error value.
-        let r = render(run_program_with_warnings(&[("principale.liss", src)]));
-        assert_eq!(r.stdout, "ante\n");
-        assert_eq!(r.stderr, "Error in 'principale.liss', linea 4: divisio per nullum\n");
-        assert_eq!(r.code, 1);
-    }
-
-    #[test]
-    fn warnings_survive_an_error_and_are_rendered_before_it() {
-        // Defectus D-09. A program with a non-Latin name AND a division by
-        // zero reported only the error: the warnings were computed and then
-        // discarded by `run_loaded`'s `?`. A program with two problems only
-        // ever told you about one.
-        let r = render(run_program_with_warnings(&[(
-            "principale.liss",
-            "munus initium reddit ni {\n  ni counter = °I - °I;\n  scribe(°V / counter);\n  redde nullus;\n}",
-        )]));
-        assert_eq!(
-            r.stderr,
-            "Monitum in 'principale.liss', linea 2: nomen 'counter' fortasse non Latinum est\n\
-             Error in 'principale.liss', linea 3: divisio per nullum\n"
-        );
-        assert_eq!(r.code, 1);
-    }
-
-    #[test]
-    fn warnings_survive_a_checker_error_too() {
-        // Not only runtime errors. Linting runs before the checker now, so a
-        // program that fails to type-check still reports its style problems —
-        // a lint that only appears once the program compiles is useless.
-        let r = render(run_program_with_warnings(&[(
-            "principale.liss",
-            "munus initium reddit ni {\n  ni counter = \"non numerus\";\n  redde nullus;\n}",
-        )]));
-        assert!(
-            r.stderr.starts_with(
-                "Monitum in 'principale.liss', linea 2: nomen 'counter' fortasse non Latinum est\n"
-            ),
-            "warnings must come first, got: {:?}",
-            r.stderr
-        );
-        assert!(r.stderr.contains("Error in 'principale.liss', linea 2:"));
-    }
-
-    #[test]
-    fn an_out_of_range_exit_status_warns_before_it_is_truncated() {
-        // Defectus D-10. The packages design §4.3 specifies the truncation, so
-        // the behaviour stays; what was missing was any signal that it
-        // happened. `redde °CCC` still exits 44, but says so.
-        let (_, code, warnings) = run_program_with_warnings(&[(
-            "principale.liss",
-            "munus initium reddit ni {\n  redde °CCC;\n}",
-        )])
-        .unwrap();
-        assert_eq!(code, 44);
-        assert_eq!(
-            warnings.iter().map(|w| w.to_string()).collect::<Vec<_>>(),
-            vec!["Monitum: reditus 'initium' extra fines status exitus est; ad XLIV redactus"]
-        );
-    }
-
-    #[test]
-    fn an_in_range_exit_status_says_nothing() {
-        let (_, code, warnings) = run_program_with_warnings(&[(
-            "principale.liss",
-            "munus initium reddit ni {\n  redde °III;\n}",
-        )])
-        .unwrap();
-        assert_eq!(code, 3);
-        assert!(warnings.is_empty(), "got {warnings:?}");
-    }
+    // **Five tests stood here and are re-homed, not dropped.** Each drove
+    // `run_program_with_warnings`, so each needed the interpreter to produce
+    // the `Result` it then rendered. What they asserted is behaviour a user
+    // sees, so all five say it end to end now — which is a stronger claim than
+    // a rendering of a value built in process:
+    //
+    // - `output_printed_before_an_error_still_reaches_stdout` (D-08) →
+    //   `conformance/errores/emissio-ante-erratum`, and now also
+    //   `conformance/currunt/scribe-ante-acervum`, which is the harder half:
+    //   the flush has to happen inside a SIGSEGV handler.
+    // - `warnings_survive_an_error_and_are_rendered_before_it` (D-09) →
+    //   `conformance/errores/monitum-cum-errato`.
+    // - `warnings_survive_a_checker_error_too` →
+    //   `tests/programs.rs::type_errors_halt_but_their_warnings_survive`,
+    //   which asserts the same two lines in the same order.
+    // - `an_out_of_range_exit_status_warns_before_it_is_truncated` (D-10) →
+    //   `conformance/monita/status-exitus-redactus` and
+    //   `tests/cli.rs::an_out_of_range_exit_status_is_truncated_and_says_so`.
+    //   The note is the *runtime's* now (`liss-abi`'s `ingressus`), not the
+    //   interpreter's, so only an end-to-end test can see it at all.
+    // - `an_in_range_exit_status_says_nothing` →
+    //   `tests/cli.rs::an_exit_status_that_already_fits_says_nothing`.
+    //
+    // The four above survive because `render` survives: they are about the
+    // shape of the two streams, and they never needed a backend to make one.
 }

@@ -8,12 +8,14 @@ rust-version.workspace = true
 name = "lingua_serpentis"
 path = "src/lib.rs"
 
-[[bin]]
-name = "lingua-serpentis"
-path = "src/main.rs"
-
-# The compiling surface (spec §9.5). A shim over `cli::liss` — see that
-# module for why the driver itself is a library module rather than living here.
+# The compiling surface, and now the only one (spec §9.5). A shim over
+# `cli::liss` — see that module for why the driver itself is a library module
+# rather than living here.
+#
+# The `lingua-serpentis` binary is gone. §9.5 kept it "for this milestone"
+# because `tests/cli.rs`'s twenty-three tests were the regression net for the
+# whole pipeline; those tests point at `liss` now, so the reason is spent and
+# what was left was an untested second CLI over deleted entry points.
 [[bin]]
 name = "liss"
 path = "src/bin/liss.rs"
