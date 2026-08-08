@@ -40,7 +40,9 @@ mod support;
 
 use liss_codegen::target::Target;
 use object::{Object, ObjectSymbol};
-use support::{curre, curre_fasciculos, ir_fasciculorum, par_est, par_est_fasciculorum};
+use support::{
+    curre, curre_fasciculos, imago, ir_fasciculorum, par_est, par_est_fasciculorum,
+};
 
 /// The exact sentence spec §8.2 has the guard handler write, and the whole of
 /// what a stack-exhausted image puts on stderr.
@@ -91,6 +93,77 @@ munus initium reddit ni {
 
 munus triplum capit (ni n) reddit ni {
     redde n * °III;
+}
+"#,
+    ),
+];
+
+/// **A root function shadowed by a package function of the same name, reached
+/// through the package's own *unqualified* call.**
+///
+/// This is the one program shape that catches `checker.rs:435` — the sole
+/// namespace-sensitive `FuncId` binding in the compiler. Line 371's qualified
+/// arm is forced by the syntax (`alpha.porta` can only mean `alpha`'s), but a
+/// bare `quadratum(n)` inside `alpha/a.liss` has to resolve in the *checker's
+/// own* namespace, exactly as the interpreter resolves in the executing frame's.
+/// Bind it to `None` instead and the package silently calls the **root's**
+/// `quadratum`.
+///
+/// It has to be a decoy of the same name *on the call path*. [`TRES`] already
+/// carries a root/package `initium` collision, but only ever reaches the
+/// package's through a qualified call, so it exercises the symbol table and
+/// never the resolution — the mangled names differ and everything links.
+///
+/// The two bodies are deliberately far apart in value, not merely different:
+/// `alpha.porta(°III)` is `IX` through the package's `n * n` and `CIII` through
+/// the root's `n + °C`, so the wrong binding is a wrong *number*, not a
+/// coincidence that could agree on some input. And it is the dangerous shape —
+/// links, runs, exits 0, prints the wrong answer.
+const UMBRA: [(&str, &str); 2] = [
+    (
+        "principale.liss",
+        r#"affer alpha;
+
+munus quadratum capit (ni n) reddit ni {
+    redde n + °C;
+}
+
+munus initium reddit ni {
+    scribe(alpha.porta(°III));
+    redde nullus;
+}
+"#,
+    ),
+    (
+        "alpha/a.liss",
+        r#"munus quadratum capit (ni n) reddit ni {
+    redde n * n;
+}
+
+munus porta capit (ni n) reddit ni {
+    redde quadratum(n);
+}
+"#,
+    ),
+];
+
+/// A runtime raise from inside a **package** file, so the diagnostic has to
+/// name a path with a folder in it.
+const DIVISIO: [(&str, &str); 2] = [
+    (
+        "principale.liss",
+        r#"affer alpha;
+
+munus initium reddit ni {
+    scribe(alpha.dimidium(°X, nullus));
+    redde nullus;
+}
+"#,
+    ),
+    (
+        "alpha/porta.liss",
+        r#"munus dimidium capit (ni a, ni b) reddit ni {
+    redde a / b;
 }
 "#,
     ),
@@ -324,6 +397,40 @@ fn nomina_non_ascii_per_fasciculos_transeunt() {
     }
 }
 
+/// **The alias survives the link, and so does an export nothing calls.**
+///
+/// [`definita`] reads the *relocatable object*, which is this compiler's own
+/// output and therefore the easy half. Two claims can only be made about the
+/// finished image: that `liss_initium` and `liss_0__7_initium` came out of the
+/// linker at **one address** rather than as two definitions it was free to place
+/// apart, and that `--gc-sections` — which `nexus.rs` passes because it is worth
+/// about 0.92 MB on every image — did not take `beta.triplum` with it on its way
+/// through.
+///
+/// The host target only: this reads a linked file, and the other target's cannot
+/// be produced here any more usefully than it can be run.
+#[test]
+fn imago_coniuncta_symbola_servat() {
+    let machina = Target::hospes().expect("the host is x86_64 or aarch64");
+    let octeti = imago(&ir_fasciculorum(&TRES), machina);
+    let fasciculus = object::File::parse(&octeti[..]).expect("a linked image");
+    // `expect`, not an `Option` comparison: two absent symbols compare equal,
+    // and a vacuous pass is exactly what this test exists to rule out.
+    let locus = |nomen: &str| {
+        fasciculus
+            .symbols()
+            .find(|s| s.name() == Ok(nomen))
+            .unwrap_or_else(|| panic!("the linked image defines {nomen}"))
+            .address()
+    };
+    assert_eq!(
+        locus("liss_initium"),
+        locus("liss_0__7_initium"),
+        "two names, one address, after the linker has had its say",
+    );
+    locus("liss_4_beta_7_triplum");
+}
+
 // ---------------------------------------------------------------------------
 // Programs that cross a boundary and run
 // ---------------------------------------------------------------------------
@@ -340,6 +447,45 @@ fn programma_trium_fasciculorum_currit() {
 #[test]
 fn nomina_non_ascii_coniunguntur_et_currunt() {
     par_est_fasciculorum(&MACRA, "nomina-macra");
+}
+
+/// **A bare call inside a package resolves in that package**, even when the
+/// root declares the same name.
+///
+/// The counterpart to the fact that a package *cannot* call a root function
+/// (the root has no name to `affer`, and `check_file` gives the checker only its
+/// own namespace's signatures): the language forbids the binding, and the flat
+/// `FuncId` table is the one place it can still happen by accident.
+/// `checker.rs:435` is that place, and this is the only test in the workspace
+/// that observes it.
+///
+/// Nothing else catches the mutation. Binding line 435 to `None` leaves
+/// `vocationes.rs` without this, `regimen.rs` and `scalares.rs` green, and kills
+/// exactly one workspace test — `programs.rs`, and by an `expect` in
+/// `Checker::func_id` firing because the root happens not to declare the name,
+/// which is a total-function assertion tripping rather than an observation of
+/// wrong behaviour. Give the root a declaration of the same name and even that
+/// goes quiet: the program links, runs and prints the other function's answer.
+#[test]
+fn vocatio_nuda_in_fasciculo_in_fasciculo_suo_solvitur() {
+    par_est_fasciculorum(&UMBRA, "umbra");
+}
+
+/// **A raise inside a package names the package's file.**
+///
+/// `Corpus::scida` is per-function — it is `Func::file`, emitted as one C string
+/// per function — and `locus()` passes it to every fallible entry point rather
+/// than leaving an ambient one, precisely so a raise in a callee names the
+/// callee's file and line and not whatever the caller last set. Across a package
+/// boundary is where that has teeth: the path has a folder in it, and the
+/// caller's file is a different string in a different function's `.rodata`.
+///
+/// `scalares.rs`'s division raise covers a folder program's **root** file, which
+/// cannot tell an ambient locus from a travelling one, because there is only the
+/// one file to name.
+#[test]
+fn error_in_fasciculo_scidam_fasciculi_nominat() {
+    par_est_fasciculorum(&DIVISIO, "divisio-in-fasciculo");
 }
 
 /// Two packages calling each other, twenty levels of alternation. A circular
