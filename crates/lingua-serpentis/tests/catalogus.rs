@@ -406,6 +406,77 @@ fn a_diagnostic_entry_points_own_definition_is_not_a_site() {
     );
 }
 
+/// **The comment guard decides whether a diagnostic is visible at all**, so it
+/// gets a test of its own rather than being trusted to the snapshot.
+///
+/// It was added because `NUNTIUS_` and `Defectus::novus(` are the first markers
+/// whose own explanatory prose names them, and each mention became a site —
+/// including one that extracted `Error: ` as a diagnostic out of a sentence
+/// saying `Error: ` is not one. The heuristic is deliberately narrow (`//`
+/// to the left of the marker on its own line; no block comments exist in this
+/// workspace), and narrow heuristics fail in both directions:
+///
+/// - too eager, and a **real** site whose line happens to contain `//` earlier
+///   — inside a string — vanishes silently, taking its message off the ratchet
+///   with the header still reading the same total;
+/// - too shy, and the phantom rows come back.
+///
+/// Both directions are asserted here.
+#[test]
+fn a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not() {
+    let sites = extract_sites();
+
+    // Too shy: the notes in `catalogus.rs`'s own scanned crates that mention
+    // `NUNTIUS_` and `Defectus::novus(` by name must not be sites. The
+    // giveaway row was `Error: `, quoted in `custos.rs`'s note about the
+    // renamed prefix constant.
+    assert!(
+        !sites.iter().any(|s| s.pattern == "Error: "),
+        "a comment quoting `Error: ` was read as a diagnostic",
+    );
+
+    // Too eager: `custos.rs` really does declare two `NUNTIUS_*` messages, and
+    // both must still be found.
+    for want in ["acervus vocationum exhaustus est", "defectus internus: memoria violata est"] {
+        assert!(
+            sites.iter().any(|s| s.file.ends_with("custos.rs") && s.pattern == want),
+            "the `NUNTIUS_` declaration for {want:?} was skipped",
+        );
+    }
+
+    // And the guard is keyed on `//` *before* the marker, not anywhere on the
+    // line: a trailing note after a real site must not erase it.
+    let src = "    eprintln!(\"Error: machina ignota est\"); // and exit\n";
+    assert_eq!(
+        literal_after(src, src.find("eprintln!(").expect("marker") + "eprintln!(".len(), 300)
+            .as_deref(),
+        Some("Error: machina ignota est"),
+    );
+}
+
+/// A `NUNTIUS_*` constant is a site where it is **declared**, and nowhere else.
+///
+/// `custos.rs` uses each of its two message constants two or three times —
+/// `erratum(NUNTIUS_ACERVUS)` and the arms that choose between them — and each
+/// use carries no literal, so without the `const`/`static` guard one message
+/// becomes four rows, three of them UNPARSED.
+#[test]
+fn only_a_nuntius_declaration_is_a_site_not_its_uses() {
+    let custos: Vec<_> = extract_sites()
+        .into_iter()
+        .filter(|s| s.file.ends_with("custos.rs"))
+        .collect();
+    assert_eq!(
+        custos.len(),
+        2,
+        "expected exactly the two `NUNTIUS_*` declarations, got {custos:#?}",
+    );
+    assert!(
+        !custos.iter().any(|s| s.pattern == "UNPARSED"),
+        "a bare use of a message constant was counted: {custos:#?}",
+    );
+}
+
 #[test]
 fn catalogus() {
     let sites = extract_sites();
