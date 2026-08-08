@@ -12,10 +12,20 @@ path = "src/lib.rs"
 name = "lingua-serpentis"
 path = "src/main.rs"
 
+# The compiling surface (spec §9.5). A shim over `cli::liss` — see that
+# module for why the driver itself is a library module rather than living here.
+[[bin]]
+name = "liss"
+path = "src/bin/liss.rs"
+
 [dependencies]
 latinitas = { path = "../latinitas" }
 liss-ir = { path = "../liss-ir" }
 liss-runtime = { path = "../liss-runtime" }
+# The back end, as spec §9.1's diagram draws it. `liss-codegen` dev-depends on
+# this crate for `tests/salve.rs`, so what remains is a **dev**-dependency
+# cycle, which cargo permits and a normal one would not.
+liss-codegen = { path = "../liss-codegen" }
 
 [dev-dependencies]
 insta = "1"

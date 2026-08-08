@@ -1,37 +1,15 @@
-use lingua_serpentis::{render, run_dir_with_warnings, run_file_with_warnings, ProgramError, Warning};
-use std::io::Write;
+//! The interpreting binary, unchanged. Spec §9.5 keeps it beside `liss` for
+//! this milestone because its twenty-three tests are the regression net for the
+//! whole pipeline, and losing them in the milestone that swaps the backend
+//! would be exactly the wrong time.
+//!
+//! `write_or_exit` and `finish` moved to `lingua_serpentis::cli`, so that
+//! broken-pipe handling and stream order have one implementation shared with
+//! `liss`. Nothing else here changed, and nothing about what this binary does.
+use lingua_serpentis::cli::finish;
+use lingua_serpentis::{run_dir_with_warnings, run_file_with_warnings};
 use std::path::Path;
 use std::process::exit;
-
-/// Write `text` to `w`, treating a closed pipe as an ordinary end of output.
-///
-/// Defectus D-06. Rust's runtime sets SIGPIPE to SIG_IGN, so the `print!` this
-/// replaces panicked on `prog | head` — a Rust panic message, a backtrace note
-/// and exit 101, for the most ordinary idiom a shell has. Every Unix tool
-/// terminates quietly instead, and `head` closing its end of the pipe is not
-/// an error the user needs telling about.
-///
-/// Zero runtime dependencies rules out resetting the signal handler through
-/// libc, so the write error is handled where it surfaces. `exit` does not run
-/// destructors, which means nothing else would flush these handles: the flush
-/// here is load-bearing rather than tidy.
-fn write_or_exit(w: &mut impl Write, text: &str) {
-    match w.write_all(text.as_bytes()).and_then(|()| w.flush()) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => exit(0),
-        // Anything else is a real failure to write, and saying so on a stream
-        // that may itself be broken is not worth a second panic.
-        Err(_) => exit(1),
-    }
-}
-
-fn finish(result: Result<(String, u8, Vec<Warning>), ProgramError>) -> ! {
-    let r = render(result);
-    // Warnings and errors go to stderr so they never contaminate program output.
-    write_or_exit(&mut std::io::stderr(), &r.stderr);
-    write_or_exit(&mut std::io::stdout(), &r.stdout);
-    exit(r.code);
-}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

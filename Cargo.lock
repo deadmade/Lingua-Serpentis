@@ -961,6 +961,7 @@ dependencies = [
  "insta",
  "latinitas",
  "libtest-mimic",
+ "liss-codegen",
  "liss-ir",
  "liss-runtime",
  "proptest",

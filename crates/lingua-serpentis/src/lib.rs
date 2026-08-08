@@ -17,6 +17,7 @@ pub mod value;
 pub mod interp;
 pub mod latinity;
 pub mod program;
+pub mod cli;
 
 use ast::{ParsedFile, ParsedProgram};
 use error::{LResult, LinguaError};
@@ -27,6 +28,28 @@ fn parse_one(f: SourceFile) -> Result<ParsedFile, ProgramError> {
     let tokens = lexer::tokenize(&f.src).map_err(|e| ProgramError::in_file(&f.path, e))?;
     let ast = parser::parse_file(&tokens).map_err(|e| ProgramError::in_file(&f.path, e))?;
     Ok(ParsedFile { path: f.path, ast })
+}
+
+/// Lex and parse every file of a loaded program, root and packages alike.
+///
+/// Split out of `run_loaded` for `cli::liss`, which needs the `ParsedProgram`
+/// itself: the compiled path lints it, checks it into the typed IR and stops,
+/// where the interpreted path goes on to execute. Sharing the parse is what
+/// keeps the two from drifting into different notions of what loading is.
+pub(crate) fn parse_loaded(prog: Program) -> Result<ParsedProgram, ProgramError> {
+    let mut root = Vec::new();
+    for f in prog.root {
+        root.push(parse_one(f)?);
+    }
+    let mut packages = std::collections::BTreeMap::new();
+    for (name, files) in prog.packages {
+        let mut parsed = Vec::new();
+        for f in files {
+            parsed.push(parse_one(f)?);
+        }
+        packages.insert(name, parsed);
+    }
+    Ok(ParsedProgram { root, packages })
 }
 
 /// The full pipeline over a loaded program: parse every file, lint, check the
@@ -44,19 +67,7 @@ fn parse_one(f: SourceFile) -> Result<ParsedFile, ProgramError> {
 /// structural failure — there is no `ParsedProgram` to lint yet, and nothing
 /// has run, so the error carries an empty `stdout` and no warnings.
 fn run_loaded(prog: Program) -> Result<(String, u8, Vec<Warning>), ProgramError> {
-    let mut root = Vec::new();
-    for f in prog.root {
-        root.push(parse_one(f)?);
-    }
-    let mut packages = std::collections::BTreeMap::new();
-    for (name, files) in prog.packages {
-        let mut parsed = Vec::new();
-        for f in files {
-            parsed.push(parse_one(f)?);
-        }
-        packages.insert(name, parsed);
-    }
-    let mut parsed = ParsedProgram { root, packages };
+    let mut parsed = parse_loaded(prog)?;
     let warnings = latinity::lint_program(&parsed);
     if let Err(mut e) = checker::check_program(&mut parsed) {
         e.warnings = warnings;
