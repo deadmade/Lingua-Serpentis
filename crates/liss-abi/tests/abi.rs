@@ -186,13 +186,23 @@ fn freeing_a_null_is_a_no_op() {
 /// Every Latin sentence this crate can put in front of a user, read out of its
 /// own source.
 ///
-/// The diagnostic catalogue cannot see these yet: `liss-abi`'s marker,
-/// `liss_panic(`, waits for Task 19, because adding it while `interp.rs` still
-/// raises the same three sentences would turn six sites `ambiguous` and drop
-/// the fixtured count by three. That leaves this crate's own wording unwatched
-/// for eleven tasks — during which Task 9 adds `acervus vocationum exhaustus
-/// est`. This is the stand-in: it counts no sites and touches no snapshot, but
-/// it makes "a new Latin sentence appeared" a diff someone has to justify.
+/// **The diagnostic catalogue sees these now**, and this is no longer the only
+/// thing watching them. `liss-abi`'s markers — `liss_panic(` and `NUNTIUS_` —
+/// waited until Task 19, because adding them while `interp.rs` still raised the
+/// same three sentences would have turned six sites `ambiguous` and dropped the
+/// fixtured count by three, recording a loss where nothing was lost. The
+/// interpreter went in the same commit that added them.
+///
+/// This stays, and is worth keeping for what the catalogue still cannot do: it
+/// is **crate-local and exhaustive**, so it notices a sentence added anywhere in
+/// `liss-abi` even at a site no marker matches, where the ratchet notices only
+/// what its markers find. It counts no sites and touches no snapshot; it makes
+/// "a new Latin sentence appeared" a diff someone has to justify.
+///
+/// It reads `c"…"` literals only, so a `b"…"` message would still slip past it —
+/// the catalogue covers that gap now, and
+/// `catalogus.rs::byte_and_c_string_literals_are_extracted_like_any_other` pins
+/// that it does.
 fn sententiae() -> Vec<String> {
     let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
     let mut inventa = Vec::new();
@@ -239,8 +249,8 @@ fn every_latin_sentence_this_crate_can_say_is_listed_here() {
             // a `liss_panic` site and never will be: a handler with no stack
             // left writes byte constants and `_exit`s.
             "acervus vocationum exhaustus est",
-            // Reborn from `interp.rs`; fixtured there today, and the reason
-            // the `liss_panic(` marker waits for the interpreter's deletion.
+            // Reborn from `interp.rs`, which was fixtured there; the site here
+            // is fixtured now and the interpreter is gone.
             // The handler's *other* branch says this too, out of its own
             // `NUNTIUS_MEMORIA` — the same fact about the same program, and
             // deduplicated here rather than shared in the source, because

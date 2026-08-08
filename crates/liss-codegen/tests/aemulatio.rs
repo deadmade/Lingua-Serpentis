@@ -270,9 +270,14 @@ fn nota_de_statu_redacto_transit_aemulationem() {
 /// for a **compiled Lingua Serpentis program on aarch64**, which is the thing
 /// spec §3.3 removed the recursion cap in favour of.
 ///
-/// The message is `compilata.rs`'s `DIVERGENTIAE` entry, restated here because
-/// this is the other architecture and there is no interpreter to differentiate
-/// against — the interpreter caps at 64 frames and would never reach the page.
+/// The message is `conformance/errores/acervus-exhaustus`'s, restated here
+/// rather than shared. It was `compilata.rs`'s `DIVERGENTIAE` entry until Task
+/// 19 re-blessed the fixture and deleted that file; the restatement outlived
+/// both, and now carries more weight than it did. **`compilata` and the corpus
+/// run host images only**, so this assertion is the *only* thing in the
+/// workspace holding that sentence on aarch64. A corpus-wide rename does not
+/// touch it, which is the point and also the hazard: if the wording ever
+/// changes, this is the second place to change.
 ///
 /// This is the slow one: the recursion has 16 MiB of guest stack to fill under
 /// emulation. Measured at roughly 1.4 s, and it is the reason this file's cost

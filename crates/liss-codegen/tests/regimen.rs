@@ -456,14 +456,20 @@ fn sententia_post_abrumpe_neglegitur() {
 /// that starts the loop is the instruction that lands in the filled block, so
 /// breaking out of the walk is not enough and `dum_intus` must return.
 ///
-/// **These are compile-and-run, not a differential**, and that is the point of
-/// D-26 in `docs/defectus/2026-08-03-index.md`: `interp.rs:325` discards the
-/// `Flow` from `self.exec(init)`, so the interpreter loops forever on the first
-/// program and ignores the `abrumpe` outright in the second. The two backends
-/// genuinely disagree, the language has not decided which is right, and
-/// codegen's duty in the meantime is only to not crash. Task 17's whole-corpus
-/// differential must exclude these until it does — which is why they are here
-/// and **not** in `conformance/`.
+/// **These are compile-and-run against a written expectation, and they are the
+/// only pin on the behaviour anywhere.** That is the point of D-26 in
+/// `docs/defectus/2026-08-03-index.md`: the language has not decided what a
+/// terminator in a `dum` init clause means, and codegen's duty in the meantime
+/// is only to not crash. `interp.rs:325` discarded the `Flow` from
+/// `self.exec(init)`, so the interpreter looped forever on the first program
+/// and ignored the `abrumpe` outright in the second — that disagreement is what
+/// made the question visible, and it ended with the interpreter.
+///
+/// **They are still not `conformance/` fixtures, and the reason got stronger.**
+/// With two backends a fixture would have blessed one of them as the language;
+/// with one, it would settle an open question by implication, with no spec and
+/// nobody having decided. `generative.rs`'s `caput_dum_terminatum` is the other
+/// half — it keeps the generator from drawing the shape at all.
 #[test]
 fn caput_dum_terminatum_componitur() {
     // `redde` — control leaves the function from the init clause.

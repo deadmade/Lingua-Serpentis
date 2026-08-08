@@ -330,12 +330,13 @@ fn index_extra_fines_utrimque_clamat() {
 /// sentences from the same shape of expression, which is exactly the pair
 /// needed.
 ///
-/// Four orders are pinned, and each is the interpreter's:
+/// Four orders are pinned, and each is the interpreter's, recorded from it
+/// before the deletion (see `support`'s header):
 ///
 /// - a literal's elements, left to right (`eval` walks the `Vec`);
-/// - `xs[i]`: **base then index** (`interp.rs`'s `Index` arm);
+/// - `xs[i]`: **base then index** (was `interp.rs`'s `Index` arm);
 /// - `adde(xs, v)`: **list then item**, which is argument order;
-/// - `xs[i] = v`: **index then value** (`interp.rs:267-268`) — and this is the
+/// - `xs[i] = v`: **index then value** (was `interp.rs:267-268`) — and this is the
 ///   one a codegen author is most likely to get backwards, because
 ///   `liss_list_put`'s bounds check happens after both, so swapping them is
 ///   invisible in every program where neither raises.
@@ -792,7 +793,7 @@ fn scriptio_indicis_seriem_mutuatur_non_consumit() {
 /// is owned.**
 ///
 /// `liss_list_get` consumes its list and returns a deep copy of the element —
-/// `interp.rs:182`'s `items[i - 1].clone()` — so `scribe(xs[°I])` copies the
+/// what `interp.rs:182`'s `items[i - 1].clone()` did — so `scribe(xs[°I])` copies the
 /// list (the `Load`), gets an owned `voc` out of it, and the get frees the copy
 /// itself. The element then belongs to the expression, and `scribe` consumes it.
 ///

@@ -251,9 +251,14 @@ pub unsafe extern "C" fn liss_list_len(p: *mut LissList) -> *mut LissInt {
 /// `xs[i]` — **1-based**, bounds-checked, returning a **deep copy**. Consumes
 /// both `p` and `index`.
 ///
-/// The copy is what `interp.rs:182` did on every element read, and it is what
-/// keeps the no-aliasing invariant: after this call the element is in the list
-/// and the result is a separate value the caller owns.
+/// The copy keeps the no-aliasing invariant: after this call the element is in
+/// the list and the result is a separate value the caller owns.
+///
+/// Held by `conformance/currunt/lista-index-lectio` and, more sharply, by
+/// `liss-codegen/tests/series.rs`'s `series_indicem_per_exemplar_legit`, which
+/// reads the emitted call sequence â a missing copy is visible there and
+/// invisible in a program that prints the right answer. `interp.rs:182` did the
+/// same thing with `items[i - 1].clone()`.
 ///
 /// Out of range raises `index extra fines: {} (longitudo {})` with **both
 /// numbers as Roman numerals** — the length interpolated as a bare `usize` was

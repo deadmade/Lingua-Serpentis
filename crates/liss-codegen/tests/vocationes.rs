@@ -14,16 +14,23 @@
 //! namespaces and for an identifier no ASCII escape would round-trip; and that
 //! programs built out of those calls run.
 //!
-//! # The interpreter is an oracle only 64 frames deep
+//! # The oracle was only 64 frames deep, and that shaped this file
 //!
-//! `interp.rs`'s `VOCATIONES_MAXIMAE` is 64 and its refusal is
-//! `vocatio nimis alte implicata`. Every *bounded* case below therefore goes
-//! through `par_est_fasciculorum` or `par_est` and is compared against it; every
-//! *deep* one runs the compiled image alone against a written expectation,
-//! because the two backends are meant to disagree about depth until the
-//! interpreter is deleted (Task 19). That is also why none of this is a
-//! `conformance/` fixture: the corpus asserts interpreter behaviour, and would
-//! turn red.
+//! `interp.rs`'s `VOCATIONES_MAXIMAE` was 64 and its refusal was
+//! `vocatio nimis alte implicata`, so while it stood, only the **bounded** cases
+//! here could be differentials — the deep ones ran the compiled image against a
+//! written expectation, because the two backends were meant to disagree about
+//! depth until spec §3.3 removed the cap with the interpreter.
+//!
+//! Task 19 deleted it, and the split survives in a weaker form: every case below
+//! is now an image run against a recorded answer, and the bounded ones' answers
+//! are the interpreter's, captured on 2026-08-08 (see `support`'s header).
+//!
+//! **The corpus has the deep cases now**, which it could not while it was
+//! blessed against a 64-frame ceiling: `currunt/recursio-profunda` (5,000
+//! levels), `currunt/scribe-ante-acervum` and `errores/acervus-exhaustus`. What
+//! stays here is what a fixture cannot say — the *object*, and the ten-thousand
+//! frame depth that would make a corpus run needlessly slow.
 //!
 //! # What "exit 0" is still worth
 //!
@@ -583,13 +590,18 @@ fn recursio_per_fasciculos_acervum_exhaurit() {
 }
 
 /// **There is no recursion limit** (spec §3.3), and ten thousand frames is the
-/// evidence: the interpreter refuses at 64 and this returns an answer.
+/// evidence: the interpreter refused at 64 and this returns an answer.
 ///
-/// It is deliberately not a differential — `par_est` would compare against
-/// `vocatio nimis alte implicata`, which is the interpreter's own limit and not
-/// the language's. Ten thousand is also comfortably inside an ordinary 8 MiB
-/// `RLIMIT_STACK`, so this test says "deep recursion completes", while the three
-/// above say "and when it cannot, it says so in Latin".
+/// It never had a recorded interpreter answer and could not have one — the
+/// tree-walker's reply at this depth was `vocatio nimis alte implicata`, its own
+/// limit and not the language's. Ten thousand is comfortably inside an ordinary
+/// 8 MiB `RLIMIT_STACK`, so this test says "deep recursion completes", while the
+/// three above say "and when it cannot, it says so in Latin".
+///
+/// `currunt/recursio-profunda` makes the same point in the corpus at 5,000, and
+/// `cli.rs::deep_recursion_runs_because_there_is_no_limit` at 10,000 through the
+/// CLI. Three levels of the suite, because a guard that fired early would pass
+/// every test that only checks the *failure* path.
 ///
 /// `°X.M` is ten thousand: a numeral's `.` multiplies (`convert_int_roman`),
 /// and `X̄` is how ten thousand is written back out — an `X` under a combining
@@ -616,11 +628,17 @@ munus initium reddit ni {
     assert_eq!(code, Some(0), "and the live-allocation count is still zero");
 }
 
-/// Shallow recursion inside the interpreter's own limit, so that one case in
-/// this file is still differential: the compiled answer is the interpreter's,
-/// digit for digit.
+/// Shallow recursion — twenty frames — where the recorded answer really is the
+/// interpreter's, digit for digit.
+///
+/// This case was chosen to sit inside the old 64-frame ceiling precisely so that
+/// one recursive program in this file could be checked against the tree-walker
+/// rather than against a transcription. That is why its expectation is a
+/// forty-glyph multi-tier vinculum nobody would have typed correctly by hand:
+/// `factorial(°XX)` is 2,432,902,008,176,640,000, and the string below came out
+/// of the interpreter on 2026-08-08.
 #[test]
-fn recursio_intra_terminum_interpretis_consentit() {
+fn recursio_brevis_responsum_interpretis_reddit() {
     par_est(
         r#"munus factorial capit (ni n) reddit ni {
     si (n par_est nullus) {

@@ -260,12 +260,13 @@ pub fn compare(f: &Fixture, got: &Rendered) -> Result<(), String> {
 
 /// One stream's difference, with the first line that differs called out.
 ///
-/// `pub` for `compilata.rs`, which compares two *backends* rather than a
-/// backend against a blessing: its "expected" column is the interpreter and its
-/// "actual" is the compiler, and it says so where it prints this. Sharing the
-/// function rather than re-spelling it is what keeps the two targets from
-/// drifting into different ideas of what a first difference is.
-pub fn diff(label: &str, want: &str, got: &str) -> Option<String> {
+/// Was `pub` for `compilata.rs`, whose "expected" column was the interpreter
+/// rather than a blessing; sharing this rather than re-spelling it kept the two
+/// targets from drifting into different ideas of what a first difference is.
+/// That file is deleted and [`compare`] is the only caller left, so this is
+/// private again — a `pub` with no reader outside its module is an invitation to
+/// grow one.
+fn diff(label: &str, want: &str, got: &str) -> Option<String> {
     if want == got {
         return None;
     }

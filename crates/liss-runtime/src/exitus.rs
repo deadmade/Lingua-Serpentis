@@ -1,5 +1,6 @@
 //! Turning `initium`'s returned `ni` into a Unix exit status. Moved from
-//! `interp.rs` unchanged in behaviour; see the packages design §4.3 for why
+//! `interp.rs` unchanged in behaviour, and now driven by `liss-abi`'s
+//! `ingressus`; see the packages design §4.3 for why
 //! truncation is specified rather than a bug.
 
 use crate::roman::Roman;
@@ -7,8 +8,10 @@ use crate::roman::Roman;
 /// A minimal, dependency-free stand-in for a caller's own warning type.
 /// `liss-runtime` cannot depend on `lingua-serpentis` (or anything else — see
 /// the crate doc), so this carries only the message text; a caller with a
-/// richer warning type (file, line) wraps it. `lingua-serpentis::interp`
-/// does exactly that at its one call site.
+/// richer warning type (file, line) wraps it. `liss-abi`s `ingressus` does
+/// exactly that at its one call site, where the runtime writes the D-10
+/// truncated-exit-status note; `lingua-serpentis::interp` was the caller before
+/// Task 19.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Warning {
     pub message: String,

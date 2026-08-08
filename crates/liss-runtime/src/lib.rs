@@ -22,9 +22,9 @@ pub use exitus::{exit_status, Warning};
 pub use roman::Roman;
 
 /// A binary operator. Carries no AST data of its own — just the operator's
-/// identity — so it lives with the arithmetic it drives (`interp.rs`, and
-/// later the checker's typed IR and codegen) rather than with the syntax
-/// tree that names it. Moved down from `lingua-serpentis::ast` unchanged.
+/// identity — so it lives with the arithmetic it drives: the checker's typed IR
+/// and codegen, and `interp.rs` before them. Moved down from
+/// `lingua-serpentis::ast` unchanged.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
     Add,
