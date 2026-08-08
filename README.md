@@ -93,8 +93,15 @@ $ cargo test --manifest-path crates/liss-abi/Cargo.toml
 
 ## Documentation
 
+`docs/README.md` is the index: which document answers which question, and how the design specs amend
+and supersede one another. Start there.
+
+- `docs/internals/` — reference for the code as it stands: `codegen.md` (the back end), `abi.md`
+  (the ABI, the runtime, the IR), `rationale.md` (the front end, and what was tried and broke),
+  `testing.md` (the corpus and the ratchets).
 - `docs/superpowers/specs/` — design specs, one per milestone. The most recent,
-  `2026-08-07-compiler-backend-design.md`, describes the compiler as it stands.
+  `2026-08-07-compiler-backend-design.md`, describes the compiler as it stands; an unqualified
+  "spec §N" means that file.
 - `docs/superpowers/plans/` — the implementation plans those specs became.
 - `docs/defectus/2026-08-03-index.md` — the defect register: what was found, what was fixed, what is
   deferred, and why.
