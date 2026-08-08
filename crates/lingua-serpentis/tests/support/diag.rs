@@ -102,6 +102,26 @@ pub const RECORDED_RULES: [&str; 1] = [
 //
 // Both underlying checks stay in `judge`. They are what keep these fixed.
 
+/// The sentence `liss run` prints when the program it spawned was killed by a
+/// signal (spec §9.5), and the reason `judge` must treat it as an abort.
+///
+/// **Spec §9.5's justification for the mapping is wrong, and this constant is
+/// what makes it true instead.** §9.5 says a signalled child would otherwise
+/// "exit 139 and be silently accepted by the robustness harness". Both halves
+/// were accepted: a bare 139 takes `judge`'s `code != 1` arm and is
+/// `Acceptable`, and the mapped form parses as a well-formed structural
+/// diagnostic carrying no English, no Arabic digit and no Rust type name, so it
+/// was `Acceptable` too. The mapping closed no hole.
+///
+/// What it does do is move the evidence. `Outcome::Signalled` describes the
+/// process `judge` itself spawned, and under `liss run` that is the **parent**
+/// — the compiler, which is not what §8 makes promises about. The child's death
+/// reaches this harness only as this sentence. So with `BINARY` pointing at
+/// `liss`, §8's guarantee that no compiled program dies by signal has exactly
+/// one observable form here, and treating it as anything but a violation leaves
+/// that guarantee with zero fuzzed enforcement.
+const ABRUPTE_CESSAVIT: &str = "programma abrupte cessavit";
+
 /// A run either satisfies the invariant or names the rule it broke. The
 /// mapping from rule to recorded defect lives in
 /// `docs/defectus/2026-08-03-index.md`, not here, so this file stays a
@@ -170,6 +190,13 @@ pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
     let Some(d) = parse_diagnostic(last) else {
         return violation("diagnostic grammar", format!("unparseable: {last:?}"));
     };
+
+    // Before any of the lexical rules: this sentence is *well-formed* Latin and
+    // would pass every one of them. It is a violation for what it reports, not
+    // for how it reads — the child died by a signal, and §8 says none may.
+    if d.message() == ABRUPTE_CESSAVIT {
+        return violation("no abort", format!("the child was killed by a signal: {last:?}"));
+    }
 
     if let Diagnostic::FileLine { file, .. } = &d {
         if !sources.iter().any(|(p, _)| p == file) {

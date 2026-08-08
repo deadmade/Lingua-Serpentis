@@ -1,6 +1,25 @@
-//! End-to-end behaviour of the `lingua-serpentis` binary. Everything here
-//! needs a real process: argv, the stdout/stderr split, exit status, and the
-//! failure modes that abort rather than return.
+//! End-to-end behaviour of the binary. Everything here needs a real process:
+//! argv, the stdout/stderr split, exit status, and the failure modes that abort
+//! rather than return.
+//!
+//! **The binary is `liss` as of Task 19** (`support::proc::BINARY`), where it
+//! was `lingua-serpentis` before. Spec §9.5 kept the interpreting binary "for
+//! this milestone" on the grounds that these twenty-three tests were the
+//! regression net for the whole pipeline; once they run against the compiler
+//! that reason has been spent, and `main.rs` goes.
+//!
+//! **Four of the twenty-three changed, and the plan predicted two.** The two it
+//! named are the recursion pair below, which asserted the interpreter's
+//! 64-frame cap. The other two are the usage-string tests: `liss` has its own
+//! three-line usage and its own disambiguation sentence, so a test that pins
+//! `Usus: lingua-serpentis …` cannot survive pointing at a different binary.
+//! Spec §10.1's "twenty-two are untouched and one is updated" was written before
+//! the second recursion test and the binary flip were both assigned here.
+//!
+//! Nineteen are untouched, which is the number that matters: every diagnostic
+//! about paths, folders, permissions, encodings, exit statuses and broken pipes
+//! reads exactly as it did, because the front end and `program::load_dir` are
+//! shared and the runtime reproduces the rest.
 mod support;
 
 use std::ffi::OsStr;
@@ -8,6 +27,22 @@ use std::time::Duration;
 use support::proc::{run_binary, run_closing_stdout_early, temp_dir, Outcome};
 
 const T: Duration = Duration::from_secs(20);
+
+/// `liss`'s usage, byte for byte: three invocation lines and the sentence that
+/// disambiguates a folder named `run`.
+///
+/// Duplicated from `liss_cli.rs`'s `USUS` deliberately rather than shared. The
+/// two files drive the same binary by different routes — that one calls it
+/// directly, this one through `support::proc` — and a shared constant would let
+/// a reworded usage string stay green in both because both read the new
+/// wording. Two independent transcriptions is the point.
+const USUS: &str = "\
+Usus: liss run <via.liss | directorium>
+      liss build <via.liss | directorium> [--exi <via>] [--ad <machina>]
+      liss <via.liss | directorium>
+Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
+directorium ita nominatum per './run' dandum est.
+";
 
 fn run(args: &[&str]) -> Outcome {
     let owned: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
@@ -27,15 +62,17 @@ fn no_arguments_prints_usage_to_stderr() {
     let (code, out, err) = exited(&o);
     assert_eq!(code, 1);
     assert_eq!(out, "");
-    assert_eq!(err, "Usus: lingua-serpentis <via.liss | directorium>\n");
+    assert_eq!(err, USUS);
 }
 
 #[test]
 fn two_arguments_prints_usage_to_stderr() {
+    // Two positional paths, which `liss` refuses for the same reason
+    // `lingua-serpentis` refused two arguments: there is one program to run.
     let o = run(&["a.liss", "b.liss"]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Usus: lingua-serpentis <via.liss | directorium>\n");
+    assert_eq!(err, USUS);
 }
 
 #[test]
@@ -317,9 +354,15 @@ fn unbounded_recursion_is_a_clean_latin_error() {
     // `exited` panicked before reaching any assertion. D-04.
     let (code, out, err) = exited(&o);
     assert_eq!(code, 1);
-    // Verbatim now that the message exists — the Global Constraints' carve-out
-    // for `contains` inside an ignored test expires with the ignore.
-    assert_eq!(err, "Error in linea 1: vocatio nimis alte implicata\n");
+    // **The sentence changed with the backend, and this is the only test in
+    // this file that says so.** The interpreter refused the 65th frame and said
+    // `vocatio nimis alte implicata` at the call's line; compiled code reaches
+    // the guard page and §8's handler answers with no line at all (§8.4),
+    // because a faulting thread cannot know which call was the last.
+    //
+    // `exited` rather than a signal check is the whole claim: the child dies by
+    // SIGSEGV and `liss` must turn that into a status, never let it through.
+    assert_eq!(err, "Error: acervus vocationum exhaustus est\n");
     assert_eq!(out, "");
 }
 
@@ -342,21 +385,35 @@ fn deep_expression_nesting_is_a_clean_latin_error() {
     assert_eq!(err, "Error in linea 1: expressio nimis alte implicata\n");
 }
 
+/// **There is no limit, and ten thousand levels is how that is stated.**
+///
+/// Renamed from `recursion_inside_the_limit_still_runs`, which asked whether
+/// the interpreter's ceiling was set too low — a question about
+/// `VOCATIONES_MAXIMAE = 64` that stopped meaning anything when spec §3.3
+/// removed it. It ran `fac(°X)`: ten frames, comfortably inside a cap of
+/// sixty-four, and equally comfortably inside a cap of eleven.
+///
+/// Ten thousand is chosen to be unmistakably past the old ceiling — two orders
+/// of magnitude beyond it, and well past the ~2,000 the interpreter managed
+/// even before the cap — while staying inside the 40,000–80,000 a default 8 MiB
+/// stack allows (§3.3). So this is the capability gain, asserted: a program the
+/// language could not run yesterday.
+///
+/// It is also the guard on §8's guard. `currunt/recursio-profunda` makes the
+/// same point in the corpus at 5,000; a handler that fired early would fail
+/// both, and only these two would notice.
 #[test]
-fn recursion_inside_the_limit_still_runs() {
-    // The limit must not be so tight that ordinary recursion stops working.
+fn deep_recursion_runs_because_there_is_no_limit() {
     let d = temp_dir("liss-cli");
     let p = d.write("fons.liss",
-        "munus fac capit (ni n) reddit ni { si (n minor_est °II) { redde °I; } redde n * fac(n - °I); }\n\
-         munus initium reddit ni { scribe(fac(°X)); redde nullus; }");
+        "munus numera capit (ni n) reddit ni { si (n minor_est °I) { redde nullus; } redde °I + numera(n - °I); }\n\
+         munus initium reddit ni { scribe(numera(°X.M)); redde nullus; }");
     let o = run(&[p.to_str().unwrap()]);
     let (code, out, err) = exited(&o);
     assert_eq!(code, 0);
     assert_eq!(err, "");
-    // fac(X) is 3_628_800, printed M̅M̅M̅D̅C̅X̅X̅V̅MMMDCCC — each vinculum is a
-    // combining overline on the glyph before it, multiplying it by a thousand.
-    assert_eq!(
-        out,
-        "M\u{305}M\u{305}M\u{305}D\u{305}C\u{305}X\u{305}X\u{305}V\u{305}MMMDCCC\n"
-    );
+    // `°X.M` is X × M = 10,000 — `convert_int_roman` splits on '.' and
+    // multiplies pairwise. Ten thousand prints X̅, a vinculum over the X
+    // multiplying it by a thousand.
+    assert_eq!(out, "X\u{305}\n");
 }

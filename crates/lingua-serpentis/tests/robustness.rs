@@ -9,9 +9,36 @@ mod support;
 use std::ffi::OsStr;
 use std::time::Duration;
 use support::diag::{judge, parse_diagnostic, Diagnostic, Verdict, RECORDED_RULES};
-use support::proc::{run_binary, temp_dir};
+use support::proc::{run_binary, temp_dir, Outcome};
 
-const T: Duration = Duration::from_secs(10);
+/// The per-input deadline the `terminates` rule is judged against.
+///
+/// **Ten seconds until Task 19, and it had to rise when `BINARY` became `liss`**
+/// — not because anything got slower to *run*, but because each case now pays a
+/// Cranelift pass and a link before it runs at all, and the curated pathologies
+/// are deliberately enormous.
+///
+/// Measured on this machine, `liss run` against the sweep below:
+///
+/// | case | debug | release |
+/// |---|---|---|
+/// | `series longissima` (5,001-element literal) | **17.1 s** | 0.67 s |
+/// | `nomen longissimum` (100,000-char identifier) | 0.39 s | — |
+/// | `numerus longissimus` (5,000 `M`s) | 0.4 s | — |
+/// | `parentheses nimium implicatae` | 0.05 s | — |
+/// | `recursio infinita` | 0.6 s | — |
+///
+/// One case dominates, and the 25× gap is the debug build of Cranelift rather
+/// than anything about the program: it answers `V̅I` — 5,001 — correctly in both
+/// builds. Sixty seconds is roughly 3.5× the measured debug worst case, which is
+/// headroom for a loaded machine without being so loose that the rule stops
+/// meaning anything: D-20's `x = x * x` does not terminate *at all*, so no
+/// finite deadline lets it through.
+///
+/// This is spec §10.2's "a careless default turns `cargo test` from seconds into
+/// minutes" arriving in `robustness.rs`, where the plan only anticipated it in
+/// `generative.rs`. The budget there is a case count; here it is this.
+const T: Duration = Duration::from_secs(60);
 
 #[test]
 fn the_diagnostic_grammar_parses_all_three_shapes() {
@@ -35,6 +62,44 @@ fn the_diagnostic_grammar_parses_all_three_shapes() {
     );
     assert_eq!(parse_diagnostic("Monitum in linea 2: nomen"), None);
     assert_eq!(parse_diagnostic("thread 'main' panicked"), None);
+}
+
+/// **`Error: programma abrupte cessavit` is an abort, not a diagnostic.**
+///
+/// `BINARY` is `liss`, so the process this harness spawns is the compiling
+/// *parent*, which does not die by signal: the driver waits for the child,
+/// reports the signal as this sentence and exits 1 (spec §9.5). Every other
+/// route to `Outcome::Signalled` therefore describes the compiler being killed,
+/// never a compiled program — and §8's promise is about compiled programs.
+///
+/// This sentence is deliberately well-formed: Latin, no digits, no Rust type
+/// name, a valid structural diagnostic. It passes every lexical rule `judge`
+/// has, which is exactly why it needed a rule of its own. Asserted here rather
+/// than left to the fuzzer, because the input that provokes it is a compiler
+/// defect nobody can write on purpose.
+#[test]
+fn a_child_killed_by_a_signal_is_an_abort_however_politely_it_is_reported() {
+    let outcome = Outcome::Exited {
+        code: 1,
+        stdout: String::new(),
+        stderr: "Error: programma abrupte cessavit\n".to_string(),
+    };
+    match judge(&outcome, &[("fons.liss".to_string(), "munus initium reddit ni { redde nullus; }".to_string())]) {
+        Verdict::Violation { rule: "no abort", .. } => {}
+        other => panic!("§8 has no fuzzed enforcement: {other:?}"),
+    }
+    // And the neighbouring sentence is still an ordinary diagnostic, so the
+    // rule is keyed on this message rather than on "exit 1 with a structural
+    // error", which would condemn most of the corpus.
+    let ordinarium = Outcome::Exited {
+        code: 1,
+        stdout: String::new(),
+        stderr: "Error: acervus vocationum exhaustus est\n".to_string(),
+    };
+    assert_eq!(
+        judge(&ordinarium, &[("fons.liss".to_string(), "munus initium reddit ni { redde nullus; }".to_string())]),
+        Verdict::Acceptable,
+    );
 }
 
 /// Run one single-file source through the binary and judge it.

@@ -1,0 +1,9 @@
+munus numera capit (ni n) reddit ni {
+  si (n minor_est °I) { redde nullus; }
+  redde °I + numera(n - °I);
+}
+
+munus initium reddit ni {
+  scribe(numera(°V.M));
+  redde nullus;
+}

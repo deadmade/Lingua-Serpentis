@@ -196,19 +196,22 @@ pub fn discover() -> Vec<Fixture> {
     out
 }
 
-/// Run a fixture the way `main.rs` does: a directory is a program folder, a
-/// file is a single-source program. The two paths render warnings
-/// differently — folder mode attributes them to a file, single-file mode does
-/// not — so both must be exercised.
+/// Run a fixture the way a user would: `liss run` on the path the corpus names,
+/// a directory being a program folder and a `.liss` file a single-source
+/// program. The two modes render warnings and diagnostics differently — folder
+/// mode attributes them to a file, single-source mode does not — so both must
+/// be exercised, and `liss` must be the one to choose between them.
+///
+/// **This is the whole of the backend swap.** Until Task 19 this called
+/// `run_dir_with_warnings` / `run_file_with_warnings` and walked the tree in
+/// process; `conformance.rs`, `catalogus.rs` and the corpus tooling around them
+/// are unchanged, because the one function that decides how a fixture runs is
+/// this one. `tests/compilata.rs` spent the milestone proving the two agree —
+/// 112 of 113 byte-identical, the 113th the re-blessing this task performs —
+/// and is deleted now that there is nothing to differentiate against.
 pub fn run_fixture(f: &Fixture) -> Rendered {
     let target = f.target();
-    if target.is_dir() {
-        lingua_serpentis::render(lingua_serpentis::run_dir_with_warnings(&target))
-    } else {
-        let src = std::fs::read_to_string(&target)
-            .unwrap_or_else(|e| panic!("{}: cannot read {}: {e}", f.name, target.display()));
-        lingua_serpentis::render(lingua_serpentis::run_file_with_warnings(&src))
-    }
+    curre(&target).unwrap_or_else(|e| panic!("{}: {e}", f.name))
 }
 
 pub fn blessing() -> bool {

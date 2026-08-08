@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/catalogus.rs
 expression: report
 ---
-115 sites · 70 fixtured · 0 ambiguous · 38 uncovered · 7 unparsed
+115 sites · 69 fixtured · 0 ambiguous · 39 uncovered · 7 unparsed
 
 crates/lingua-serpentis/src/checker.rs:217  variabilis ignota: '{}'  → fixtured
 crates/lingua-serpentis/src/checker.rs:251  functio '{}' numerum argumentorum falsum accepit  → fixtured
@@ -67,7 +67,7 @@ crates/lingua-serpentis/src/interp.rs:128  operatio unaria invalida  → UNCOVER
 crates/lingua-serpentis/src/interp.rs:142  'longitudo' seriem expectat  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:153  'adde' seriem et elementum expectat  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:186  subscriptio invalida  → UNCOVERED
-crates/lingua-serpentis/src/interp.rs:206  vocatio nimis alte implicata  → fixtured
+crates/lingua-serpentis/src/interp.rs:206  vocatio nimis alte implicata  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:220  munus ignotum: '{}'  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:222  munus '{}' numerum argumentorum falsum accepit  → UNCOVERED
 crates/lingua-serpentis/src/interp.rs:271  index seriei invalidus  → UNCOVERED

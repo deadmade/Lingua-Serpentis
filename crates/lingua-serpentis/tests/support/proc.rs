@@ -8,7 +8,24 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-pub const BINARY: &str = env!("CARGO_BIN_EXE_lingua-serpentis");
+/// The binary every subprocess test drives.
+///
+/// **`liss`, as of Task 19**, and that is what gives spec §8 its teeth. The
+/// robustness and generative harnesses judge whatever this spawns, so pointing
+/// it at the compiler is what makes "no compiled program dies by signal" a
+/// fuzzed claim rather than a written one — a mutation or a generated program
+/// that faults now reaches `judge` instead of reaching a tree-walker that could
+/// not fault in the same way.
+///
+/// It costs a Cranelift pass, a link and a second `execve` per case, which is
+/// why `generative.rs` carries an explicit case budget (spec §10.2).
+///
+/// The signal never arrives as `Outcome::Signalled`, though: the process spawned
+/// here is the compiling **parent**, and `liss` maps a signalled child to
+/// `Error: programma abrupte cessavit` and exit 1 (§9.5). `diag::judge` has a
+/// rule for exactly that sentence, and without it §8 would have no enforcement
+/// at all — see the note there.
+pub const BINARY: &str = env!("CARGO_BIN_EXE_liss");
 
 /// How a run of the binary ended.
 #[derive(Debug, Clone, PartialEq)]
@@ -52,7 +69,7 @@ pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
         .stdout(Stdio::from(out))
         .stderr(Stdio::from(err))
         .spawn()
-        .expect("spawn lingua-serpentis");
+        .expect("spawn liss");
 
     let deadline = Instant::now() + timeout;
     let status = loop {
@@ -96,7 +113,7 @@ pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) ->
         .stdout(Stdio::piped())
         .stderr(Stdio::from(err))
         .spawn()
-        .expect("spawn lingua-serpentis");
+        .expect("spawn liss");
 
     {
         let mut out = child.stdout.take().expect("piped stdout");
