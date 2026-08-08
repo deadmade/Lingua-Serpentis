@@ -923,6 +923,19 @@ named `run` must be given as `./run`, as `git` and `cargo` require.
 `write_or_exit` and `finish` move into a shared `cli` module so broken-pipe
 handling and stream order have one implementation.
 
+**The driver lives in a library module, not in `src/bin/`.** `catalogus.rs`
+scans `crates/*/src` **non-recursively**, so a diagnostic written in
+`src/bin/liss.rs` would be invisible to the ratchet — silently, with the header
+still reporting the old count. `src/bin/liss.rs` is a shim; the messages live in
+`lingua_serpentis::cli`.
+
+`--exi` defaults to the `.liss` stem or the program folder's name, in the cwd;
+the artefact is mode 0755, against 0700 for `run`'s unlinked temp. **If the
+resolved output path exists and is a directory, refuse** with a Latin diagnostic
+naming `--exi`. That case arises whenever a program folder is built by name from
+its parent, where the default output path *is* the input directory. Overwriting
+an existing file is ordinary compiler behaviour and is allowed.
+
 `run` spawns with **inherited** stdio. This is essential rather than convenient:
 the *child's* runtime receives the closed pipe and handles it itself (§6), so
 D-06 survives at the source; and `liss run prog | head` needs no re-buffering.
@@ -1130,6 +1143,30 @@ invariant fails. `liss-abi` already links libc through std-on-musl; the crate
 supplies bindings, not new machinery. The constraint is narrowed rather than
 abandoned: `liss-runtime`, `liss-ir` and `lingua-serpentis` stay at zero, and
 `liss-abi`'s single dependency is justified in one place.
+
+**What "zero" means, now that `lingua-serpentis` is the compiler driver.** The
+rule is about *third-party* dependencies. `lingua-serpentis → liss-codegen` is a
+first-party edge, and Cranelift and libwild are tabled above with their reasons —
+that is the dependency table working, not being circumvented. So the CLI links
+them, and still has zero third-party dependencies of its own.
+
+That distinction was tested by the CLI and held. §9.5's temp-file dance names two
+operations std cannot do — clearing `FD_CLOEXEC`, and parent-side `SIGINT`
+handlers for the `/proc` fallback — and neither is worth a third-party
+dependency:
+
+- **The `FD_CLOEXEC` clear is unnecessary on Linux**, measured rather than
+  assumed: `execve` resolves the path in `do_open_execat` before
+  `do_close_on_exec` runs, which is exactly why `fexecve` plus
+  `memfd_create(MFD_CLOEXEC)` is the standard idiom. The step's purpose is
+  satisfied without it.
+- **The temp file must be reopened read-only before exec**, not exec'd through the
+  write handle, or `execve` fails `ETXTBSY`. This is a requirement, not a style
+  choice, and it is easy to undo by reordering two lines.
+- **The fallback loses its signal handlers**, so `SIGINT` and `SIGTERM` join
+  `SIGKILL` in the set that leaves a file behind. That path is already documented
+  as best-effort and already requires `/proc` to be unmounted to be reached at
+  all; this widens a stated gap rather than opening a new one.
 
 `liss-runtime` is compiled **twice** — for the host, inside the compiler, where
 `liss-ir` needs `Roman` for integer constants; and for musl, inside `liss-abi`.
