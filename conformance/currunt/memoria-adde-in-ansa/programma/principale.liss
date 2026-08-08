@@ -1,0 +1,19 @@
+munus initium reddit ni {
+    ni lista quadrata = [];
+    dum (ni i = °I; i minor_est °VI; i = i + °I) {
+        quadrata = adde(quadrata, i * i);
+    }
+    scribe(quadrata);
+    scribe(longitudo(quadrata));
+
+    voc lista verba = [];
+    verba = adde(verba, "primum");
+    verba = adde(verba, "secundum");
+    scribe(verba);
+
+    ni lista lista tabulae = [];
+    tabulae = adde(tabulae, quadrata);
+    tabulae = adde(tabulae, [°VII, °VIII]);
+    scribe(tabulae);
+    redde nullus;
+}

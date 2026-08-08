@@ -2,16 +2,38 @@
 //!
 //! # What this covers, and what it does not
 //!
-//! **Every statement and every scalar type** (Tasks 12–13): constants, slots,
-//! every binary and unary operator, the four comparisons, the division and
-//! modulus raises, and the whole of control flow — `si`/`aut`, `indem`, `dum`,
-//! `abrumpe`, `continua`, `redde` — with the ownership discipline of spec §7.
-//! **Lists are Task 15**, and everything they need is the only
-//! `unimplemented!` left: `ListLit`, `Index`, `Len`, `Append`, `IndexAssign`
-//! and `scribe` of a series. Those are **not** a [`Defectus`], because a Latin
-//! sentence saying "this compiler cannot do that yet" would be a claim about
-//! the user's program and it is not one. Nothing user-facing can reach them,
-//! because no CLI calls [`compila`] until Task 16.
+//! **The whole language** — every statement, every type, every operator.
+//! Tasks 12–13 brought the constants, the slots, the binary and unary
+//! operators, the four comparisons, the division and modulus raises, and the
+//! whole of control flow (`si`/`aut`, `indem`, `dum`, `abrumpe`, `continua`,
+//! `redde`) with the ownership discipline of spec §7; Task 15 closed it with
+//! `lista`.
+//!
+//! Every `unimplemented!` still in this file names a shape the **checker
+//! refuses** — a binary operator on a type that cannot carry it, an ordering
+//! comparison on a series, a list literal typed as something other than a
+//! series. None is reachable from a valid program. They are deliberately not a
+//! [`Defectus`]: a Latin sentence here would be a claim about the user's
+//! program, and it would be a false one.
+//!
+//! # What lists brought that nothing else did
+//!
+//! `lista` is the only recursive type, the only place a kind code is read at
+//! run time, and the only place a deep copy and a deep free can disagree. Three
+//! consequences live in this file:
+//!
+//! - **`ekind` is written once, at construction, and never read here.** Codegen
+//!   is the writer and the runtime the reader ([`codex`]); the walks that free,
+//!   copy, compare and print a nested list recurse on the *child's own header*,
+//!   so nothing above [`Corpus::series`] ever computes a `k - GRADUS`.
+//! - **`liss_list_new` returns uninitialised memory on purpose.** There is no
+//!   per-element setter in the ABI, because there is nothing for one to do that
+//!   a `store` does not; [`Corpus::repone`] is the whole of the layout, and
+//!   `ONUS` is shared with the runtime through `liss_runtime::dispositio`
+//!   rather than written a second time here.
+//! - **`liss_list_put` borrows.** It is one of exactly two non-consuming entry
+//!   points, and the only one this file reaches with a bare `use_var` — see
+//!   [`Corpus::sententia`]'s `IndexAssign`.
 //!
 //! `ExprKind::Call` is emitted here, one task before the one that owns it,
 //! because `conformance/currunt/exemplum-praecisio` — Task 12's checkpoint —
@@ -92,11 +114,25 @@
 //! So: **"I added a redundant free and the suite stayed green" proves nothing.**
 //! A mutation meant to test an over-free must free through a fresh `use_var`,
 //! the way a real `0..params` sweep would, rather than by calling
-//! [`Corpus::libera`] twice. Written here as well as in the spec because
-//! Task 15 will meet it while adding `liss_list_put`.
+//! [`Corpus::libera`] twice.
+//!
+//! **Task 15 met it, and this is what it found.** The over-free that `libera`'s
+//! null store makes benign really is inert — a `liss_list_free` added after
+//! `liss_list_put` changes nothing about the slot, because the slot is what the
+//! teardown reads and it still holds a live pointer. What killed that mutation
+//! was a *different* consequence: the second free clears the magic, so the
+//! ordinary scope exit then frees a header that reads as not-a-`LISS`-object
+//! and the program exits 1 with `defectus internus: memoria violata est`. The
+//! same is true of freeing after `liss_print_list`, which already consumed. So
+//! the rule to carry forward is narrower than "over-freeing is invisible": a
+//! redundant free of a **slot the discipline has already nulled** is invisible;
+//! a redundant free of anything still reachable is caught, by the magic, and
+//! only since D-27.
 
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{AbiParam, InstBuilder, Signature, UserFuncName, Value, types};
+use cranelift_codegen::ir::{
+    AbiParam, InstBuilder, MemFlagsData, Signature, UserFuncName, Value, types,
+};
 // One machine-level basic block. Aliased because `liss_ir::Block` is a
 // *lexical* block — a list of statements and the slots it declares — and the
 // two appear within three lines of each other everywhere control flow is built.
@@ -108,6 +144,7 @@ use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module, default
 use cranelift_object::object::write::Symbol;
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use liss_ir::{Block, Const, Expr, ExprKind, Func, Grain, Programma, SlotId, Stmt, StmtKind, Ty};
+use liss_runtime::dispositio::{ONUS, VERBUM};
 use liss_runtime::genus::{
     GRADUS, KIND_BOOL, KIND_CHAR, KIND_FRAC_SCRIPULUM, KIND_FRAC_UNCIA, KIND_INT, KIND_TEXT,
 };
@@ -1029,10 +1066,14 @@ impl<'a> Corpus<'a> {
                         self.voca("liss_print_frac", &[ptr, types::I64], &[v, gr])
                     }
                     Ty::Text => self.voca("liss_print_text", &[ptr], &[v]),
-                    Ty::List(_) => unimplemented!(
-                        "Task 15: `scribe` of a list. `liss_print_list` exists \
-                         and consumes its argument, recursing through `ekind`",
-                    ),
+                    // The one printer that recurses, and it does so on the
+                    // **child's own header** rather than on a kind code
+                    // codegen computed: the container's `ekind` names the
+                    // element type, and a nested element is a `LissList` whose
+                    // own `ekind` names *its* elements. So `scribe` of an
+                    // `ni lista lista` needs no more from here than `scribe` of
+                    // an `ni lista` — one pointer, consumed.
+                    Ty::List(_) => self.voca("liss_print_list", &[ptr], &[v]),
                 }
             }
             StmtKind::ExprStmt(e) => {
@@ -1078,11 +1119,43 @@ impl<'a> Corpus<'a> {
                 self.fb.ins().jump(meta, &[]);
                 Ok(())
             }
-            StmtKind::IndexAssign { .. } => unimplemented!(
-                "Task 15: `IndexAssign`. `liss_list_put` borrows the list, \
-                 consumes the index and the value, and frees the element it \
-                 displaces",
-            ),
+            // `xs[i] = v` — **the one statement that mutates through a slot
+            // instead of rebinding it** (spec §7.3).
+            //
+            // The list is **borrowed**: `liss_list_put` is one of the ABI's two
+            // non-consuming entry points, so the pointer comes off the slot by
+            // a bare `use_var` and neither a copy before nor a free after. A
+            // `Load` here would be the silent version of this bug — it would
+            // copy the list, write the element into the copy, and free the
+            // copy, leaving the program's own list untouched and every later
+            // read correct-looking but stale.
+            //
+            // Nothing is left to free. `index` and `value` are consumed inside
+            // the call, and the element they displace is freed there too — that
+            // is the whole of §7.3 for this statement, and it is why the
+            // element type never appears here.
+            StmtKind::IndexAssign { slot, index, value } => {
+                let ptr = self.ptr();
+                // **Index, then value**, which is `interp.rs:267-268`'s order
+                // and therefore the order the corpus is blessed against: a
+                // `xs[f()] = g()` whose two calls both print would print them
+                // the other way round otherwise.
+                let i = self.expressio(index)?;
+                let v = self.expressio(value)?;
+                let verbum = self.verbum(v);
+                // Read **after** both operands, for the same reason
+                // `Assign` evaluates before it frees: the slot must be observed
+                // at the moment the write happens, not before the expressions
+                // that decide what is written.
+                let (var, _) = self.sedem(*slot)?;
+                let p = self.fb.use_var(var);
+                let (scida, linea) = self.locus()?;
+                self.voca(
+                    "liss_list_put",
+                    &[ptr, ptr, types::I64, ptr, types::I64],
+                    &[p, i, verbum, scida, linea],
+                )
+            }
         }
     }
 
@@ -1374,11 +1447,183 @@ impl<'a> Corpus<'a> {
                 // signature from it.
                 Ok(self.fb.inst_results(inst)[0])
             }
-            other => unimplemented!(
-                "Task 15: lists — {other:?}. The entry points exist: \
-                 `liss_list_new`/`_get`/`_put`/`_append`/`_len`/`_eq`, and \
-                 `codex` already gives a `Ty` its element kind",
-            ),
+            ExprKind::ListLit { items } => self.series(&e.ty, items),
+            // `xs[i]` — **1-based, bounds-checked, and a deep copy** (spec
+            // §5.4). The copy is not an optimisation this file could skip: it
+            // is `interp.rs:182`'s `items[i - 1].clone()`, and it is what keeps
+            // the no-aliasing invariant — after the call the element is still
+            // in the list *and* the result is a value this expression owns and
+            // something above must free.
+            //
+            // Both operands are consumed inside the call, `base` included, so a
+            // `xs[i]` whose base is a `Load` allocates and frees a whole copy of
+            // the list. That is the interpreter's cost too, and it is the price
+            // of "`Load` is the only copy site" — a borrowing `get` would need a
+            // second rule about which expressions may borrow.
+            ExprKind::Index { base, index } => {
+                let ptr = self.ptr();
+                let p = self.expressio(base)?;
+                let i = self.expressio(index)?;
+                let (scida, linea) = self.locus()?;
+                let verbum = self.voca_unum(
+                    "liss_list_get",
+                    &[ptr, ptr, ptr, types::I64],
+                    types::I64,
+                    &[p, i, scida, linea],
+                )?;
+                // The result crosses as a `u64` whatever the element is (spec
+                // §5.1). `e.ty` is the **element** type — the IR carries it on
+                // the node, so there is nothing to strip off `base.ty` here.
+                Ok(self.ex_verbo(&e.ty, verbum))
+            }
+            // `longitudo(xs)` — consumes the list and returns a `ni`.
+            ExprKind::Len(arg) => {
+                let ptr = self.ptr();
+                let p = self.expressio(arg)?;
+                self.voca_unum("liss_list_len", &[ptr], ptr, &[p])
+            }
+            // `adde(xs, v)` — a **new** list one longer; the old one is
+            // consumed and its element words are **stolen**, not copied (spec
+            // §5.4). Nothing about that stealing is visible from here, and that
+            // is the point: this call site would be identical if `_append`
+            // deep-copied every element, so the property is the ABI's to hold
+            // and `liss-abi`'s `append_in_a_loop_stays_balanced_and_copies_no_element`
+            // is the only thing that can measure it — it reads the live count
+            // after each of a hundred appends and finds `1 + i` rather than
+            // `1 + i(i+1)/2`. What codegen owes is to reach this entry point
+            // and add nothing, which `tests/series.rs` reads off the object.
+            ExprKind::Append { list, item } => {
+                let ptr = self.ptr();
+                let p = self.expressio(list)?;
+                let v = self.expressio(item)?;
+                let verbum = self.verbum(v);
+                self.voca_unum("liss_list_append", &[ptr, types::I64], ptr, &[p, verbum])
+            }
+        }
+    }
+
+    /// A list literal: one `liss_list_new` of the final length, then one
+    /// **direct store** per element (spec §5.2).
+    ///
+    /// There is deliberately no per-element setter in the ABI: `liss_list_new`
+    /// returns *uninitialised* memory and codegen completes it, because it
+    /// already knows the layout and a setter would have nothing to do that a
+    /// store does not. [`Corpus::repone`] is where the layout is spelled, and
+    /// [`ONUS`] is shared with the runtime rather than written again here.
+    ///
+    /// **Elements first, then the header.** Evaluating an element can raise —
+    /// `[°I / nullus]` is a program someone will write — and a raise does not
+    /// unwind, so a header allocated before its elements would be a live
+    /// allocation at the moment `liss_panic` runs. That costs nothing on the
+    /// success path and it is what keeps the failing path's diagnostic the only
+    /// thing the user sees.
+    ///
+    /// Each element is **moved** into the list. Nothing is copied here and
+    /// nothing is freed: the temporaries the item expressions produced become
+    /// the list's, exactly as `Let` takes a temporary into a slot.
+    fn series(&mut self, ty: &Ty, items: &[Expr]) -> Result<Value, Defectus> {
+        let ptr = self.ptr();
+        // The **element** kind, taken off the node's own type rather than
+        // computed as `codex(ty) - GRADUS`: an empty literal has no item to
+        // read one off, and a subtraction is a thing that can underflow where
+        // a projection cannot.
+        let Ty::List(elementum) = ty else {
+            // Unreachable from a valid program: `checker.rs`'s `ListLit` arm
+            // types every list literal as `Type::List`. Left as a panic rather
+            // than a `Defectus` for the reason the module doc gives — a Latin
+            // sentence here would be a claim about the user's program, and a
+            // false one.
+            unimplemented!(
+                "the checker types a list literal as a series, not `{ty:?}`; \
+                 codegen should never have been asked",
+            )
+        };
+
+        let mut valores = Vec::with_capacity(items.len());
+        for elementum in items {
+            valores.push(self.expressio(elementum)?);
+        }
+
+        let ekind = self.fb.ins().iconst(types::I64, i64::from(codex(elementum)));
+        let longitudo = self.fb.ins().iconst(types::I64, items.len() as i64);
+        let p = self.voca_unum(
+            "liss_list_new",
+            &[types::I64, types::I64],
+            ptr,
+            &[ekind, longitudo],
+        )?;
+        for (i, v) in valores.into_iter().enumerate() {
+            let verbum = self.verbum(v);
+            self.repone(p, i, verbum);
+        }
+        Ok(p)
+    }
+
+    /// Store one element word at `ONUS + VERBUM*i` — the whole of the list
+    /// payload's layout, in one place.
+    ///
+    /// `MemFlagsData::trusted()`: the store cannot trap, because the pointer came
+    /// from `liss_list_new` two instructions ago and `i` is below the length it
+    /// was given; and it is aligned, because [`ONUS`] and [`VERBUM`] are both
+    /// multiples of eight and the allocator's alignment is at least that.
+    ///
+    /// The `i32` offset is Cranelift's, not the layout's. A literal with more
+    /// than 2^28 elements cannot be written — the source would be gigabytes —
+    /// but it is one `iadd_imm` to be total rather than a `try_from` whose
+    /// error arm is a sentence nobody can provoke. `saturating` for the same
+    /// reason one line up: an arithmetic overflow that no `Vec<Expr>` can reach
+    /// is still not a panic worth shipping.
+    fn repone(&mut self, p: Value, i: usize, verbum: Value) {
+        let discrimen = (i as i64).saturating_mul(VERBUM as i64).saturating_add(ONUS as i64);
+        match i32::try_from(discrimen) {
+            Ok(offset) => {
+                self.fb.ins().store(MemFlagsData::trusted(), verbum, p, offset);
+            }
+            Err(_) => {
+                let sedes = self.fb.ins().iadd_imm_s(p, discrimen);
+                self.fb.ins().store(MemFlagsData::trusted(), verbum, sedes, 0);
+            }
+        }
+    }
+
+    /// One value widened to the **`u64` element word** every generic position
+    /// takes: a list element, `liss_list_append`'s value, `liss_list_put`'s
+    /// value (spec §5.1).
+    ///
+    /// **Zero-extension, and the two types it applies to are the two that own
+    /// nothing.** `veritas` is an `i8` that is 0 or 1 and `lit` an `i32` holding
+    /// a scalar value below 0x110000, so both are non-negative and a sign
+    /// extension would agree — but the runtime compares element words with `==`
+    /// (`aequum_verbum`'s `KIND_BOOL | KIND_CHAR` arm) and frees them by a
+    /// `word == 0` test, so the upper bits are not "nobody's business" the way
+    /// a return value's are. A `veritas` element carrying garbage above bit 0
+    /// compares unequal to an identical one built elsewhere.
+    ///
+    /// A pointer is already the full word and passes through untouched; the
+    /// test is on the value's own type rather than on a `Ty`, because both
+    /// callers have already lost the `Ty` by the time they have a `Value`.
+    fn verbum(&mut self, v: Value) -> Value {
+        if self.fb.func.dfg.value_type(v).bits() < 64 {
+            self.fb.ins().uextend(types::I64, v)
+        } else {
+            v
+        }
+    }
+
+    /// The inverse: one element word back to the machine type `ty` occupies.
+    ///
+    /// `liss_list_get` returns a `u64` whatever it read, so a `veritas lista`'s
+    /// element arrives 64 bits wide and every consumer of it — `brif`, `band`,
+    /// `liss_print_bool` — wants the `i8` [`genus`] gives that type. The
+    /// truncation is exact in the only direction that exists: the runtime
+    /// zero-extended the same word on the way in.
+    fn ex_verbo(&mut self, ty: &Ty, verbum: Value) -> Value {
+        let ptr = self.ptr();
+        let metrum = genus(ptr, ty);
+        if metrum.bits() < 64 {
+            self.fb.ins().ireduce(metrum, verbum)
+        } else {
+            verbum
         }
     }
 
@@ -1575,11 +1820,34 @@ impl<'a> Corpus<'a> {
             }
             Ty::Int | Ty::Frac(_) => self.voca_unum("liss_int_cmp", &[ptr, ptr], types::I8, &[a, b])?,
             Ty::Text => self.voca_unum("liss_text_cmp", &[ptr, ptr], types::I8, &[a, b])?,
-            Ty::List(_) => unimplemented!(
-                "Task 15: comparing lists. `liss_list_eq` exists and consumes \
-                 both; the checker already refuses `maior_est`/`minor_est` on a \
-                 series, so only `par_est`/`par_non_est` reach here",
-            ),
+            // **The one comparison that is not a three-way compare**, and
+            // routing it through the `icmp_imm_s(cc, ordo, 0)` below would be a
+            // silent wrong answer rather than a build failure: `liss_list_eq`
+            // returns **1 for equal**, so `IntCC::Equal` against zero — which
+            // is what `par_est` lowers to for every other type — would report
+            // exactly the lists that are *not* equal.
+            //
+            // Lists have no ordering to return a `-1` from. `Value`'s
+            // `PartialEq` recursed but its `Ord` never covered `List`, and the
+            // checker refuses `maior_est`/`minor_est` on a series
+            // (`errores/series-comparatio-ordinis`), so only the two arms below
+            // can arrive.
+            Ty::List(_) => {
+                let aequa =
+                    self.voca_unum("liss_list_eq", &[ptr, ptr], types::I8, &[a, b])?;
+                let cc = match op {
+                    BinOp::Eq => IntCC::NotEqual,
+                    BinOp::Ne => IntCC::Equal,
+                    op => unimplemented!(
+                        "the checker refuses `{op:?}` on a series; codegen \
+                         should never have been asked",
+                    ),
+                };
+                // Normalised back to the 0-or-1 `veritas` every consumer
+                // expects, rather than returned raw: `liss_list_eq` documents
+                // `1` or `0` and this does not depend on it.
+                return Ok(self.fb.ins().icmp_imm_s(cc, aequa, 0));
+            }
         };
         // `-1`, `0` or `1`, and **signed**: `minor_est` on `ni` is the `-1`
         // case, and an unsigned compare against zero would read it as 255.

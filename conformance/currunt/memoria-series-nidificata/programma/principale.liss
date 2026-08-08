@@ -1,0 +1,12 @@
+munus initium reddit ni {
+    voc lista lista tabula = [["unum", "duo"], ["tria"]];
+    scribe(tabula[°I][°II]);
+    scribe(tabula);
+    scribe(tabula par_est [["unum", "duo"], ["tria"]]);
+
+    ni lista lista lista altitudo = [[[°I]], [[°II], [°III, °IV]]];
+    scribe(altitudo);
+    scribe(altitudo[°II][°II][°I]);
+    scribe(longitudo(altitudo[°II]));
+    redde nullus;
+}

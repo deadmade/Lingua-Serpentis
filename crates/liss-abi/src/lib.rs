@@ -91,7 +91,15 @@ pub const LISS_MAGIC: u32 = 0x4C49_5353;
 /// The offset of the payload in **all three** heap layouts, so codegen carries
 /// one constant rather than three. `LissText::_rsv` exists solely to buy this
 /// and must not be removed.
-pub const ONUS: usize = 24;
+///
+/// **Defined in `liss_runtime::dispositio`, not here**, for the reason the kind
+/// codes are: codegen writes list element words itself — `liss_list_new`
+/// returns uninitialised memory by design — and this crate is never linked into
+/// the compiler (spec §11), so a second `24` in `emissio.rs` was the only other
+/// way. The `size_of` assertions below are what hold the three headers to it,
+/// and they are still here, which is what makes the shared constant a proof
+/// rather than a promise.
+pub use liss_runtime::dispositio::ONUS;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]

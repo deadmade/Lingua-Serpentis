@@ -16,6 +16,9 @@ use core::ffi::c_char;
 use core::ptr;
 
 use liss_runtime::Roman;
+/// One element word, the same constant codegen scales its stores by — see
+/// [`crate::ONUS`] for why the pair lives in `liss-runtime`.
+use liss_runtime::dispositio::VERBUM;
 
 use crate::defectus::{index_extra_fines, memoria_exhausta, memoria_violata};
 use crate::memoria::{abolere, allocare_nulla, verifica};
@@ -57,7 +60,7 @@ fn quantum(len: u64) -> usize {
     let Ok(len) = usize::try_from(len) else {
         memoria_exhausta()
     };
-    let Some(payload) = len.checked_mul(8) else {
+    let Some(payload) = len.checked_mul(VERBUM) else {
         memoria_exhausta()
     };
     let Some(total) = ONUS.checked_add(payload) else {

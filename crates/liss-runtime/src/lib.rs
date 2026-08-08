@@ -11,6 +11,7 @@
 //! either the host or the musl build. That is what makes compiling it twice,
 //! for two different targets, straightforward.
 
+pub mod dispositio;
 pub mod exitus;
 pub mod fraction;
 pub mod genus;

@@ -1,0 +1,15 @@
+munus initium reddit ni {
+    voc lista nomina = ["primum", "secundum", "tertium"];
+    nomina[°II] = "mutatum";
+    scribe(nomina);
+
+    voc lista lista tabula = [["a"], ["b", "c"]];
+    tabula[°I] = ["d", "e", "f"];
+    scribe(tabula);
+
+    dum (ni i = °I; i minor_est longitudo(nomina) + °I; i = i + °I) {
+        nomina[i] = nomina[i] + "!";
+    }
+    scribe(nomina);
+    redde nullus;
+}

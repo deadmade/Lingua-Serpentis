@@ -112,14 +112,41 @@ fn ir_programmatis(prog: lingua_serpentis::program::Program) -> liss_ir::Program
 
 /// One conformance case's blessed expectation, read the way
 /// `tests/support::Fixture` reads it: a missing stream file is an empty stream,
-/// a missing `exitus` is status 0.
+/// a missing `exitus` is status 0 — **less the checker's warnings**.
+///
+/// # Why the `Monitum` lines come out, and why that is not weakening the
+/// assertion
+///
+/// A compiled program never prints one. The checker's Latinity warnings are a
+/// **compile-time** diagnostic: spec §9.5 has the CLI write them to its own
+/// stderr and *then* spawn the child, so the child's stderr carries its own
+/// runtime diagnostics and nothing else. The blessed `nuntii` files record the
+/// interpreter's stderr, where the two streams are one because there is only
+/// one process.
+///
+/// This is the same subtraction [`interpretatum`] already makes for
+/// [`differentia`], and for the same stated reason — without it the comparison
+/// would quietly exclude every program with a non-Latin identifier in it, which
+/// is three of the five `lista-*` fixtures. **No fixture is edited**: the
+/// expectation on disk stays the interpreter's, because the corpus asserts
+/// interpreter behaviour and `conformance.rs` still reads it whole.
+///
+/// The filter is by line prefix, and it is exact: `Warning::fmt` writes one of
+/// four forms and all four begin `Monitum`, while `LinguaError`'s begin `Error`.
+/// A case whose stderr carries a warning *and* a diagnostic keeps the
+/// diagnostic.
 pub fn expectatum(casus: &str) -> lingua_serpentis::Rendered {
     let dir = radix().join("conformance/currunt").join(casus);
     let lege = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_default();
     let exitus = lege("exitus");
+    let nuntii: String = lege("nuntii")
+        .lines()
+        .filter(|l| !l.starts_with("Monitum"))
+        .flat_map(|l| [l, "\n"])
+        .collect();
     lingua_serpentis::Rendered {
         stdout: lege("emissio"),
-        stderr: lege("nuntii"),
+        stderr: nuntii,
         code: exitus.trim().parse().unwrap_or(0),
     }
 }
