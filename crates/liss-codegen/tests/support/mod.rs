@@ -64,7 +64,36 @@ pub fn ir_solum(fons: &str) -> liss_ir::Programma {
 /// file (`Error in 'principale.liss', linea N:`), which is the difference
 /// [`ir_solum`] exists to erase for single-file sources.
 pub fn ir_scrinii(dir: &Path) -> liss_ir::Programma {
-    let prog = lingua_serpentis::program::load_dir(dir).expect("the folder loads");
+    ir_programmatis(lingua_serpentis::program::load_dir(dir).expect("the folder loads"))
+}
+
+/// Lower a **multi-file program written in the test** — root files and package
+/// files named by their program-relative path, exactly as
+/// `lingua_serpentis::run_program_with_warnings` takes them.
+///
+/// The disk-free twin of [`ir_scrinii`], and the reason cross-package codegen
+/// tests need no fixture folder: `"principale.liss"` is a root file and
+/// `"mathematica/summa.liss"` is in the `mathematica` package, which is the
+/// whole of the folder rule (`program::assemble`). Sharing the *loaded* program
+/// shape with [`ir_scrinii`] rather than the parse is what keeps the two from
+/// drifting into different notions of what a package is.
+pub fn ir_fasciculorum(scidae: &[(&str, &str)]) -> liss_ir::Programma {
+    let files = scidae
+        .iter()
+        .map(|(via, fons)| lingua_serpentis::program::SourceFile {
+            path: (*via).to_owned(),
+            src: (*fons).to_owned(),
+        })
+        .collect();
+    ir_programmatis(lingua_serpentis::program::assemble(files).expect("the program assembles"))
+}
+
+/// Parse and check one already-loaded program, stopping at the typed IR.
+///
+/// `Func::file` is left alone here: a folder program's diagnostics name their
+/// file (`Error in 'principale.liss', linea N:`), which is the difference
+/// [`ir_solum`] exists to erase for single-file sources.
+fn ir_programmatis(prog: lingua_serpentis::program::Program) -> liss_ir::Programma {
     let uno = |f: lingua_serpentis::program::SourceFile| {
         let tokens = tokenize(&f.src).expect("the fixture lexes");
         let ast = parse_file(&tokens).expect("the fixture parses");
@@ -245,33 +274,58 @@ pub fn curre(fons: &str, nomen: &str) -> (Option<i32>, String, String) {
     exsequere(&imago(&ir_solum(fons), machina), nomen)
 }
 
-/// **The differential.** One source, run interpreted and compiled, both
-/// renderings returned as `(interpretatum, compilatum)`.
-///
-/// The interpreter's **warnings are cleared before rendering**, and that is not
-/// a convenience: a compiled program never prints them. The checker's Latinity
-/// warnings are written by the CLI, before it spawns the child (spec §9.5), so
-/// the child's stderr carries its own diagnostics and nothing else. Clearing
-/// them is what makes stderr comparable byte for byte rather than merely
-/// comparable when the source happens to draw none — which would have quietly
-/// excluded every program with a non-Latin identifier in it.
-pub fn differentia(
-    fons: &str,
+/// Compile, link and run one **multi-file** program; `(status, stdout, stderr)`.
+pub fn curre_fasciculos(
+    scidae: &[(&str, &str)],
     nomen: &str,
-) -> (lingua_serpentis::Rendered, lingua_serpentis::Rendered) {
-    let mut effectus = lingua_serpentis::run_file_with_warnings(fons);
+) -> (Option<i32>, String, String) {
+    let machina = Target::hospes().expect("the host is x86_64 or aarch64");
+    exsequere(&imago(&ir_fasciculorum(scidae), machina), nomen)
+}
+
+/// What the interpreter makes of one pipeline result, with its **warnings
+/// cleared**.
+///
+/// Clearing them is not a convenience: a compiled program never prints them.
+/// The checker's Latinity warnings are written by the CLI, before it spawns the
+/// child (spec §9.5), so the child's stderr carries its own diagnostics and
+/// nothing else. Clearing them is what makes stderr comparable byte for byte
+/// rather than merely comparable when the source happens to draw none — which
+/// would have quietly excluded every program with a non-Latin identifier in it,
+/// and cross-package tests are exactly where those live.
+fn interpretatum(
+    mut effectus: Result<
+        (String, u8, Vec<lingua_serpentis::Warning>),
+        lingua_serpentis::ProgramError,
+    >,
+) -> lingua_serpentis::Rendered {
     match &mut effectus {
         Ok((_, _, monita)) => monita.clear(),
         Err(e) => e.warnings.clear(),
     }
-    let interpretatum = lingua_serpentis::render(effectus);
-    let (code, stdout, stderr) = curre(fons, nomen);
-    let compilatum = lingua_serpentis::Rendered {
+    lingua_serpentis::render(effectus)
+}
+
+/// What a linked image made of the same program.
+fn compilatum(exitus: (Option<i32>, String, String)) -> lingua_serpentis::Rendered {
+    let (code, stdout, stderr) = exitus;
+    lingua_serpentis::Rendered {
         stdout,
         stderr,
         code: code.expect("the image was not killed by a signal"),
-    };
-    (interpretatum, compilatum)
+    }
+}
+
+/// **The differential.** One source, run interpreted and compiled, both
+/// renderings returned as `(interpretatum, compilatum)`.
+pub fn differentia(
+    fons: &str,
+    nomen: &str,
+) -> (lingua_serpentis::Rendered, lingua_serpentis::Rendered) {
+    (
+        interpretatum(lingua_serpentis::run_file_with_warnings(fons)),
+        compilatum(curre(fons, nomen)),
+    )
 }
 
 /// Assert that a source produces byte-identical output, stderr and status from
@@ -281,5 +335,21 @@ pub fn par_est(fons: &str, nomen: &str) {
     assert_eq!(
         i, c,
         "the two backends disagree on:\n{fons}\ninterpretatum: {i:?}\ncompilatum:    {c:?}",
+    );
+}
+
+/// [`par_est`] for a **multi-file** program.
+///
+/// **The interpreter is only an oracle 64 frames deep** (`interp.rs`'s
+/// `VOCATIONES_MAXIMAE`), so nothing that recurses further may come through
+/// here — that is `curre_fasciculos` and a written expectation, because the two
+/// backends are *meant* to disagree about depth until the interpreter is gone.
+pub fn par_est_fasciculorum(scidae: &[(&str, &str)], nomen: &str) {
+    let i = interpretatum(lingua_serpentis::run_program_with_warnings(scidae));
+    let c = compilatum(curre_fasciculos(scidae, nomen));
+    assert_eq!(
+        i, c,
+        "the two backends disagree on {scidae:?}\n\
+         interpretatum: {i:?}\ncompilatum:    {c:?}",
     );
 }
