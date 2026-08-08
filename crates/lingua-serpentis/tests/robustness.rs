@@ -11,7 +11,8 @@ use std::time::Duration;
 use support::diag::{judge, parse_diagnostic, Diagnostic, Verdict, RECORDED_RULES};
 use support::proc::{run_binary, temp_dir, Outcome};
 
-/// The per-input deadline the `terminates` rule is judged against.
+/// The **wide** deadline: the fuzzer's, and the one curated case whose cost is
+/// genuinely codegen's. [`MORA_ARTA`] is the other, and the reason there are two.
 ///
 /// **Ten seconds until Task 19, and it had to rise when `BINARY` became `liss`**
 /// — not because anything got slower to *run*, but because each case now pays a
@@ -38,6 +39,9 @@ use support::proc::{run_binary, temp_dir, Outcome};
 /// This is spec §10.2's "a careless default turns `cargo test` from seconds into
 /// minutes" arriving in `robustness.rs`, where the plan only anticipated it in
 /// `generative.rs`. The budget there is a case count; here it is this.
+///
+/// **Only `series longissima` and the fuzzer get this number.** Applying it to
+/// the whole sweep is what retired D-23's guard; see [`MORA_ARTA`].
 const T: Duration = Duration::from_secs(60);
 
 #[test]
@@ -102,11 +106,17 @@ fn a_child_killed_by_a_signal_is_an_abort_however_politely_it_is_reported() {
     );
 }
 
-/// Run one single-file source through the binary and judge it.
+/// Run one single-file source through the binary and judge it against the
+/// **general** deadline. The curated sweep passes its own per-case one.
 fn judge_source(name: &str, src: &str) -> Verdict {
+    judge_source_intra(name, src, T)
+}
+
+/// [`judge_source`] with the deadline named.
+fn judge_source_intra(name: &str, src: &str, mora: Duration) -> Verdict {
     let d = temp_dir("liss-rob");
     let p = d.write("fons.liss", src);
-    let outcome = run_binary(&[OsStr::new(p.to_str().unwrap())], T);
+    let outcome = run_binary(&[OsStr::new(p.to_str().unwrap())], mora);
     let verdict = judge(&outcome, &[("fons.liss".to_string(), src.to_string())]);
     if let Verdict::Violation { rule, detail } = &verdict {
         eprintln!("[{name}] {rule}: {detail}");
@@ -114,17 +124,44 @@ fn judge_source(name: &str, src: &str) -> Verdict {
     verdict
 }
 
-/// Every curated pathology with the rule it is known to break — `None` means
-/// it must satisfy the invariant. The rule, not a defect ID: both stack
-/// overflows break `no abort`, and the register is what maps rules to IDs.
-fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
+/// **The tight deadline, for the cases that are a bound rather than a shape.**
+///
+/// `T` had to rise to 60 s when `BINARY` became `liss` — every case now pays a
+/// Cranelift pass and a link, and one of them takes 17.1 s in a debug-built
+/// compiler. Raising it *globally* was the cheap fix, and it silently retired a
+/// different guard.
+///
+/// `nomen longissimum` is that guard. It timed out under the old 10 s deadline
+/// until D-23 was fixed, and its note below calls itself the regression guard
+/// for `latinitas::analyze`'s bound: ~24 s for 100,000 characters before the
+/// fix, 0.32 s after. **Nothing else in the workspace times `analyze` at all**,
+/// so under a 60 s deadline a full D-23 regression passes unnoticed. Five
+/// seconds is ample for the 0.39 s the case actually costs — most of which is
+/// the process's own dictionary build — and far under the ~24 s a regression
+/// measures.
+///
+/// So the deadline is **data, like the expected rule beside it**. This is the
+/// milestone's own "rules may only shrink" principle applied to a number: a
+/// bound raised for one case must not be raised for the others by accident.
+const MORA_ARTA: Duration = Duration::from_secs(5);
+
+/// Every curated pathology with the deadline it is judged against and the rule
+/// it is known to break — `None` means it must satisfy the invariant. The rule,
+/// not a defect ID: both stack overflows break `no abort`, and the register is
+/// what maps rules to IDs.
+///
+/// Only the cases whose cost is genuinely in *codegen* get `T`. Everything else
+/// gets [`MORA_ARTA`], so that a case which starts taking twenty seconds is a
+/// failure rather than a shrug.
+fn pathologies() -> Vec<(&'static str, String, Duration, Option<&'static str>)> {
     vec![
-        ("vacuum", String::new(), None),
-        ("spatia sola", "   \n\t\n".to_string(), None),
-        ("BOM", "\u{feff}munus initium reddit ni { redde nullus; }".to_string(), None),
+        ("vacuum", String::new(), MORA_ARTA, None),
+        ("spatia sola", "   \n\t\n".to_string(), MORA_ARTA, None),
+        ("BOM", "\u{feff}munus initium reddit ni { redde nullus; }".to_string(), MORA_ARTA, None),
         (
             "CRLF",
             "munus initium reddit ni {\r\n  scribe(°I);\r\n  redde nullus;\r\n}".to_string(),
+            MORA_ARTA,
             None,
         ),
         (
@@ -140,12 +177,16 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             // the name is. Re-measured 2026-08-05, same machine: 20_000 chars
             // 318ms, 50_000 317ms, 100_000 322ms — flat, and the remainder is
             // the process's own dictionary-build cost, not the name. This case
-            // stays in the sweep as the regression guard for that bound.
+            // stays in the sweep as the regression guard for that bound —
+            // which is why it is judged against MORA_ARTA and not T. Under a
+            // 60s deadline the pre-fix ~24s passes, and this case silently
+            // stops being a guard at all.
             "nomen longissimum",
             format!(
                 "munus initium reddit ni {{ ni {} = °I; redde nullus; }}",
                 "a".repeat(100_000)
             ),
+            MORA_ARTA,
             None,
         ),
         (
@@ -154,6 +195,7 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
                 "munus initium reddit ni {{ scribe(°{}); redde nullus; }}",
                 "M".repeat(5_000)
             ),
+            MORA_ARTA,
             None,
         ),
         (
@@ -162,6 +204,7 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
                 "munus initium reddit ni {{ ni lista xs = [{}°I]; scribe(longitudo(xs)); redde nullus; }}",
                 "°I, ".repeat(5_000)
             ),
+            T,
             None,
         ),
         (
@@ -171,6 +214,7 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
                 "(".repeat(20_000),
                 ")".repeat(20_000)
             ),
+            MORA_ARTA,
             None,
         ),
         (
@@ -178,12 +222,14 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             "munus recurre capit (ni n) reddit ni { redde recurre(n + °I); }\n\
              munus initium reddit ni { scribe(recurre(°I)); redde nullus; }"
                 .to_string(),
+            MORA_ARTA,
             None,
         ),
         (
             "index extra fines",
             "munus initium reddit ni {\n  ni lista xs = [°I];\n  scribe(xs[°X]);\n  redde nullus;\n}"
                 .to_string(),
+            MORA_ARTA,
             None,
         ),
         (
@@ -205,6 +251,7 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
             "chorda multilinea",
             "munus initium reddit ni {\n  voc s = \"prima\nsecunda\ntertia\";\n  ni x = °I\n  redde nullus;\n}"
                 .to_string(),
+            MORA_ARTA,
             None,
         ),
     ]
@@ -213,8 +260,8 @@ fn pathologies() -> Vec<(&'static str, String, Option<&'static str>)> {
 #[test]
 fn every_curated_pathology_matches_its_recorded_verdict() {
     let mut surprises = Vec::new();
-    for (name, src, expected_rule) in pathologies() {
-        let verdict = judge_source(name, &src);
+    for (name, src, mora, expected_rule) in pathologies() {
+        let verdict = judge_source_intra(name, &src, mora);
         match (&verdict, expected_rule) {
             (Verdict::Acceptable, None) => {}
             (Verdict::Violation { rule, .. }, Some(want)) if *rule == want => {}
