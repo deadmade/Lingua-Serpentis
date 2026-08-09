@@ -85,7 +85,9 @@ open file description* — `Stdio::from(File)` hands the child a dup of the hand
 flushes before it spawns. Captured to files rather than pipes because a program that outruns a pipe
 buffer would deadlock a harness that waits before it reads, and some of these do so on purpose.
 `curre` polls with `try_wait` every `PAUSA` = 2 ms against `MORA` = 120 s, a backstop rather than a
-performance budget; `liss run` on the slowest thing in the corpus is two orders of magnitude inside
+performance budget — through `support::proc::wait_or_kill`, which takes the interval as a parameter
+because `proc.rs`'s own two callers poll at 5 ms and unifying them would change a documented number
+for nothing; `liss run` on the slowest thing in the corpus is two orders of magnitude inside
 it. A signalled *parent* is reported as a harness error, because `liss` maps a signalled **child**
 to `Error: programma abrupte cessavit` and exit 1 (§9.5), so that arm means the compiler itself was
 killed.
@@ -102,125 +104,138 @@ The catalogue of every diagnostic the source can emit, and whether a fixture pro
 message added without a fixture changes the `insta` snapshot and fails review — which is what keeps
 this suite from rotting.
 
-### What it scans, and the consequence
+### What it parses, and the consequence
 
-`extract_sites` reads `crates/<c>/src` for six crates — `lingua-serpentis`, `latinitas`,
-`liss-runtime`, `liss-ir`, `liss-codegen`, `liss-abi` — with a **non-recursive `read_dir`**, keeping
-`.rs` files and sorting them. That list is now complete: `liss-runtime` joined when `roman.rs` and
-`exitus.rs` moved out of `lingua-serpentis`; `liss-abi` joined on creation, ahead of need, so that
-no message could slip in unrecorded between its birth and its marker; `liss-ir` and `liss-codegen`
-joined with `Defectus::novus(`.
+**It parses, and does not scan.** `extract_sites` reads `crates/<c>/src` for six crates —
+`lingua-serpentis`, `latinitas`, `liss-runtime`, `liss-ir`, `liss-codegen`, `liss-abi` — with a
+**non-recursive `read_dir`**, keeping `.rs` files and sorting them, and hands each to
+`syn::parse_file`. A file that does not parse is a panic naming it, deliberately: softening that
+would silently drop every site in the file.
+
+That list is complete: `liss-runtime` joined when `roman.rs` and `exitus.rs` moved out of
+`lingua-serpentis`; `liss-abi` joined on creation, ahead of need, so that no message could slip in
+unrecorded between its birth and its marker; `liss-ir` and `liss-codegen` joined with
+`Defectus::novus(`.
 
 **Nothing under `src/bin/` is visible to it.** That is why the `liss` driver lives in `cli.rs` and
 `src/bin/liss.rs` is a shim that says nothing — its own header records the reason. New user-facing
 sentences belong in module files.
 
-**`production_source`** truncates each file at the first `"\n#[cfg(test)]\n"`, keeping everything up
-to and including that newline. Every file in this workspace has at most one such module and it
-always runs to EOF, so truncating is exact — and a Latin sentence written inside a unit test is not
-a diagnostic.
+**A unit test's Latin is not a diagnostic.** `visit_item_mod` and `visit_item_fn` stop at any item
+carrying `#[cfg(test)]`. This replaced a `production_source` that truncated each file at the first
+`"\n#[cfg(test)]\n"`, which was exact only because every file in this workspace happens to have at
+most one such module and it always runs to EOF; the attribute check holds however many a file
+grows and wherever they sit.
+
+**This is why the source may carry block comments** everywhere except `crates/liss-abi/src`. Until
+2026-08-09 the ratchet searched source text for eleven marker strings, and could not tell a
+statement from a sentence about one — so `CLAUDE.md` forbade `/* … */` under all of `crates/*/src`,
+and a comment could not sit between a marker and its literal. Comments are not tokens. See
+`docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md`, and §6 there for why
+`liss-abi/tests/abi.rs`'s own line-oriented scanner keeps the rule.
 
 ### The eleven markers
 
-```rust
-const MARKERS: [&str; 11] = [
-    "LinguaError {", ".err(", "ProgramError::structural(", "Warning {", "eprintln!(",
-    "Err(\"", ".ok_or(\"", "ok_or_else(|| format!(",
-    "liss_panic(", "Defectus::novus(", "NUNTIUS_",
-];
-```
+Eleven predicates over `syn` nodes. The right-hand column is not decoration: the span is taken from
+the named sub-node, because `Expr::MethodCall::span()` starts at the *receiver*, which for a
+multi-line chain is a different line from the call.
 
-`ProgramError::in_file` is deliberately absent: it re-wraps an existing error rather than producing
-one. The three `String`-shaped markers exist because `roman.rs` is the one module whose errors are
-bare `String`s, wrapped into a `LinguaError` only later in `lexer.rs`; its six Latin diagnostics
-carry none of the first five markers and would otherwise be invisible to the ratchet. They are
-exact: between them they match those six sites and nothing else in the workspace.
+| Marker | AST node | Span from |
+|---|---|---|
+| `LinguaError {` | `Expr::Struct`, path ends `LinguaError` | `path` |
+| `Warning {` | `Expr::Struct`, path ends `Warning` | `path` |
+| `ProgramError::structural(` | `Expr::Call`, callee path ends `ProgramError::structural` | `func` |
+| `.err(` | `Expr::MethodCall`, method `err` | `method` |
+| `Err("` | `Expr::Call`, callee path `Err`, argument list **opening** with a string literal token | `func` |
+| `.ok_or("` | `Expr::MethodCall`, method `ok_or`, argument list opening with a string literal token | `method` |
+| `ok_or_else(\|\| format!(` | `Expr::MethodCall`, method `ok_or_else`, closure body an `Expr::Macro` with path `format` | `method` |
+| `eprintln!(` | `Expr::Macro` **and `Stmt::Macro`**, macro path `eprintln` | `mac.path` |
+| `liss_panic(` | `Expr::Call`, callee path ends `liss_panic` | `func` |
+| `Defectus::novus(` | `Expr::Call`, callee path ends `Defectus::novus` | `func` |
+| `NUNTIUS_` | `Item::Const` / `Item::Static`, ident begins `NUNTIUS_` | `ident` |
+
+Two of those rows are written the way they are because the first attempt was wrong and the
+differential test against the old scanner said so. **`eprintln!` needs both node kinds:** a macro
+in statement position — `eprintln!("…");`, which is how all twelve of `cli.rs`'s are written — is a
+`Stmt::Macro`, not an `Expr::Macro`. **`Err("` is about the first token, not the first argument:**
+the marker always meant the quote follows the paren, and `Err("numerus Romanus vacuus".into())` in
+`roman.rs` satisfies it while its first *argument* is a method call.
+
+**Why each marker exists is unchanged by how it is found.** `ProgramError::in_file` is deliberately
+absent: it re-wraps an existing error rather than producing one. The three `String`-shaped markers
+exist because `roman.rs` is the one module whose errors are bare `String`s, wrapped into a
+`LinguaError` only later in `lexer.rs`; its six Latin diagnostics carry none of the first five and
+would otherwise be invisible.
 
 The last three are the back end's, added in Task 19 with the crates that own them (spec §10.3).
 `liss_panic(` finds the runtime's raises; `Defectus::novus(` finds the compiler's own failures;
 `NUNTIUS_` finds the signal handler's messages, which are not call sites at all but `static` byte
-constants with no marker near them — the same situation that already forced `Err("` and `.ok_or("`
-into the list.
-
-They were deferred to Task 19 on purpose. `liss-abi` re-raises `divisio per nullum`, `modulus per
-nullum` and `index extra fines: {} (longitudo {})`, and `interp.rs` raised all three too; adding
-`liss_panic(` while both implementations stood would have made each pattern non-unique, so six
-sites would have read `ambiguous` and the count would have recorded a *loss* of coverage where
-nothing was lost. The interpreter went in the same commit.
+constants. They were deferred to Task 19 on purpose: `liss-abi` re-raises `divisio per nullum`,
+`modulus per nullum` and `index extra fines: {} (longitudo {})`, and `interp.rs` raised all three
+too; adding `liss_panic(` while both implementations stood would have made each pattern non-unique,
+so six sites would have read `ambiguous` and the count would have recorded a *loss* of coverage
+where nothing was lost. The interpreter went in the same commit.
 
 **The runtime writes its sentences inline at the call site**, never as a reference to a shared
 table, and §10.3 makes that a rule rather than a habit: a site written
-`liss_panic(nuntii::DIVISIO_PER_NULLUM.as_ptr(), …)` carries no literal of its own, reports
-`UNPARSED`, and hides the message from the ratchet entirely.
+`liss_panic(nuntii::DIVISIO_PER_NULLUM.as_ptr(), …)` carries no literal of its own and reports
+`UNPARSED`. Parsing does not make an absent literal present.
 
 ### Finding the message literal
 
-**`literal_after(src, from, window)`** takes the first string literal after `from`, within
-`window` bytes — always **300** — and before the next marker. The window is a byte count, so it can
-land inside a multi-byte character (`°` and the Latin text are not all ASCII); it is grown to the
-next `char_boundary` rather than panicking on the slice. Within the window, the scan stops at the
-earliest occurrence of any marker, so a site with no literal of its own does not steal the next
-site's. Escapes are decoded (`\n`, `\t`, and any other escaped character as itself), and a `"` ends
-the literal.
+**`primum_literale`** takes the first string, byte-string or C-string literal in the site's own
+token stream, descending into groups. `liss-abi`'s messages are byte strings and C strings —
+`b"Error: "`, `c"acervus vocationum exhaustus est"` — never plain `&str`, because the crate is
+`no_std`-shaped and async-signal-safe; all three are `syn::Lit` arms and all three are read. A char
+literal is not: `Lit::Char` falls through, which is what lets
+`self.err(if c == '"' { "chorda non clausa" } else { … })` find its message.
 
-**`opening_quote`** finds the first `"` that *opens* a literal, skipping one written as the char
-literal `'"'`. Without it, the `°`-parsing site in `lexer.rs` — which forwards a message built
-elsewhere and so has no literal of its own — lifts `chars[i] != '"'` out of the *next* match arm and
-reports four lines of unrelated code as its "pattern".
+That the three arms are load-bearing is why
+`byte_and_c_string_literals_are_extracted_like_any_other` exists. An edit that dropped `Lit::CStr`
+would silently stop reading every message the runtime can say — with the ratchet's own header
+unmoved, because the sites would go `UNPARSED` rather than disappear.
 
-`liss-abi`'s messages are byte strings and C strings — `b"Error: "`, `c"acervus vocationum exhaustus
-est"` — never plain `&str`, because the crate is `no_std`-shaped and async-signal-safe. Both forms
-already work, because the first `"` that opens a literal is the quote *after* the prefix letter.
-"Already work" is exactly why `byte_and_c_string_literals_are_extracted_like_any_other` exists:
-nothing in the extractor mentions `b` or `c`, and a future `opening_quote` that anchored on a
-preceding delimiter, or skipped a quote whose previous byte is a letter, would silently stop reading
-every message the runtime can say — with the ratchet's own header unmoved, because the sites would
-go `UNPARSED` rather than disappear.
+The scanner this replaced took the first literal within a **300-byte forward window**, stopping at
+the next marker, growing the window to the next `char_boundary` so it would not split a `°`, and
+skipping a `"` written as the char literal `'"'`. All of that was a consequence of reading bytes,
+and all of it is gone. A subtree search is also strictly narrower: the window could reach past a
+site's own arguments into a sibling's literal.
 
-A marker that ends in the literal's own opening quote must not consume it, so the scan starts at
-`marker.len() - usize::from(marker.ends_with('"'))` past the marker.
+### The one guard
 
-### The four guards
+There were four. Three are now structural:
 
-1. **A declaration is not a raise.** If the text before the marker ends with `->` or `fn`, the
-   match is skipped. `-> LinguaError {` is a return type followed by the function body's brace, and
-   a function that *builds* a diagnostic is not a site that *raises* one; without this, every helper
-   introduced to collapse duplicated wording adds a phantom `UNPARSED` entry directly above the site
-   it exists to consolidate. `fn liss_panic(` is the same distinction one crate down, and needs the
-   `fn` test because the marker ends in `(` rather than `{`: `defectus.rs`'s
-   `pub unsafe extern "C" fn liss_panic(` would otherwise read `UNPARSED` and the ratchet would grow
-   a row for the door rather than for anyone who walked through it. Pinned by
-   `a_diagnostic_entry_points_own_definition_is_not_a_site`, which also requires at least five real
-   sites in `defectus.rs` so the guard cannot swallow what the marker exists to find.
+- **A declaration is not a raise.** A return type is a `Type`, a function definition an `ItemFn`, a
+  struct definition an `ItemStruct` and an impl header an `ItemImpl` — none is an `Expr::Struct` or
+  an `Expr::Call`. The old guard tested whether the text before a marker ended in `->` or `fn`, and
+  because it never considered `struct` or `impl … for`, it carried five phantom rows of its own;
+  see §8 of the 2026-08-09 design for which.
+- **Prose about a diagnostic is not a diagnostic.** The old guard looked left from the marker for
+  `//` and assumed no block comment existed anywhere in a scanned tree. A token stream has no
+  comments.
+- **A `NUNTIUS_*` constant is a site where it is declared, and nowhere else.** A declaration is an
+  `Item::Const` or `Item::Static`; a use is an `Expr::Path`, and only the first is visited.
+  `custos.rs` uses each of its two message constants two or three times, and each use carries no
+  literal, so without this one message became four rows, three of them `UNPARSED`.
 
-2. **Prose about a diagnostic is not a diagnostic.** The scanner reads whole files, comments
-   included, which was harmless while every marker was punctuation-heavy enough not to appear in
-   English. `NUNTIUS_` and `Defectus::novus(` are not: the notes explaining them mention them by
-   name, and each mention became a site — one of them reading `Error: ` as its message, quoted out
-   of a sentence explaining why `Error: ` is *not* a message. Eight phantom `UNPARSED` rows, and a
-   fixtured fraction that fell because the file documented itself. The guard looks left from the
-   marker to the start of its line and skips the match if that span contains `//`. Looking left
-   rather than at the whole line is deliberate: a `//` *after* the marker is an ordinary trailing
-   note and must not erase a real site. **Only `//` needs handling, because nothing in this
-   workspace writes a block comment.** Both directions are asserted by
-   `a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not`: no site may have the pattern
-   `Error: `, and `custos.rs`'s two real declarations —
-   `acervus vocationum exhaustus est` and `defectus internus: memoria violata est: signum` — must
-   still be found.
+The fourth is semantic, has no structural equivalent, and is kept verbatim:
 
-3. **A `NUNTIUS_*` constant is a site where it is declared, and nowhere else.** The marker only
-   counts when the preceding text ends with `const` or `static`. `custos.rs` uses each of its two
-   message constants two or three times — `erratum(NUNTIUS_ACERVUS)` and the arms that choose
-   between them — and each use carries no literal, so without this one message becomes four rows,
-   three of them `UNPARSED`. This is also what makes the marker match §10.3's *rule* rather than its
-   spelling: the rule is that every async-signal-safe message constant is named `NUNTIUS_*`, and a
-   constant is where it is declared. Pinned by `only_a_nuntius_declaration_is_a_site_not_its_uses`,
-   which requires exactly two `custos.rs` sites and no `UNPARSED` among them.
+**A pattern that is nothing but holes identifies nothing.** If removing every `{}` leaves an empty
+string, the site is dropped: `eprintln!("{}", e)` prints an error built elsewhere, and matching it
+against observed messages would match every one of them. Same reasoning that keeps
+`ProgramError::in_file` out of the marker list — forwarding a diagnostic is not raising one.
 
-4. **A pattern that is nothing but holes identifies nothing.** If removing every `{}` leaves an
-   empty string, the site is dropped: `eprintln!("{}", e)` prints an error built elsewhere, and
-   matching it against observed messages would match every one of them. Same reasoning that keeps
-   `ProgramError::in_file` out of `MARKERS` — forwarding a diagnostic is not raising one.
+**The three meta-tests are kept**, and two of them can no longer fail.
+`a_diagnostic_entry_points_own_definition_is_not_a_site` and
+`a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not` hold by construction; they are
+statements of intent at negligible cost, and the second now asserts the positive case the old rule
+forbade — a `/* … */` block quoting `NUNTIUS_`, `Defectus::novus(` and `Error: ` in prose, which
+invents nothing. `only_a_nuntius_declaration_is_a_site_not_its_uses` still requires exactly two
+`custos.rs` sites and no `UNPARSED` among them. Both fragment-level tests go through `sites_of`,
+which wraps a fragment in `fn probatio() { … }` before parsing: at file level `eprintln!(…);` is an
+`Item::Macro`, which no visitor here looks at, so a bare `parse_file` would find nothing and the
+test would pass for the wrong reason.
+
 
 ### Matching, and the four statuses
 
@@ -262,7 +277,7 @@ tail naming which failure it is, and every pattern in the workspace is unique.
 Each row prints as `{file}:{line}  {pattern}  → {status}`, under a header the snapshot pins:
 
 ```
-123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed
+118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 ```
 
 `UNCOVERED` and `UNPARSED` are legal states, but they are *visible* states — the header is the
@@ -492,10 +507,13 @@ left, a fixture would settle the question by implication rather than by decision
 
 ## The CLI suites
 
-**`cli.rs`** covers what the fixture format cannot express, one named test each, every one spawning
-the binary through `support::proc`. `BINARY` is `liss`; nineteen of the twenty-three tests were
-untouched by that flip, because the front end and `program::load_dir` are shared and the runtime
-reproduces the rest. It covers argv arity, `.liss` extension enforcement and its interaction with
+**`cli.rs`** covers what the fixture format cannot express, one named test each. Twenty-three of
+its twenty-five spawn the binary through `support::proc`; the other two are
+`wait_or_kill_returns_the_status_of_a_child_that_finishes` and
+`wait_or_kill_reaps_a_child_that_outlives_its_deadline`, which drive that module's shared wait
+helper directly — its deadline arm had no coverage of its own while it was three copied loops.
+`BINARY` is `liss`; nineteen of the twenty-three were untouched by that flip, because the front end
+and `program::load_dir` are shared and the runtime reproduces the rest. It covers argv arity, `.liss` extension enforcement and its interaction with
 `is_dir()` (a *directory* named `x.liss` runs as a program folder), missing paths, unreadable files
 and directories, non-UTF-8 content, the stdout/stderr split, real process exit status including the
 truncated and negative cases, hidden-directory skipping (D-17), broken pipe (D-06), unbounded
@@ -802,31 +820,27 @@ means nothing. With `ulimit -s 2048`, `qemu-user` floors the guest stack at 8 Mi
 says, the derived floor lands about 6 MiB above the real one, and a correct build reports `defectus
 internus: memoria violata est: signum` — a failure any reader takes for a §8 runtime regression.
 Measured: 8192 is the boundary, 2048 fails, 8192 passes.
-
 ## Source-reading tests, and the rules they impose
 
-Four tests read Rust source as text. They are cheap and they catch things no type system can, but
-they constrain how source in the scanned trees may be written. **These are the rules a future
-maintainer must keep.**
+Four tests read Rust source. Two of them **parse** it — `catalogus.rs` since 2026-08-09 — and
+impose nothing; the rules below are what the two remaining *text* scanners still need. They are
+cheap and they catch things no type system can. **These are the rules a future maintainer must
+keep.**
 
-### Never introduce a block comment into a scanned `src` tree
+### Never introduce a block comment into `crates/liss-abi/src`
 
-Two independent scanners assume `//` is the only comment form in the workspace:
+`liss-abi/tests/abi.rs`'s `sententiae()` skips a line only when its trimmed start is `//`. A
+`/* … */` containing `c"…"` becomes a phantom sentence, and one hiding a real `c"…"` removes it.
+The affected tree is `crates/liss-abi/src` only.
 
-- `catalogus.rs`'s comment guard tests whether the text to the left of a marker, on its own line,
-  contains `//`. A `/* … */` mentioning `Defectus::novus(` or `NUNTIUS_` becomes a phantom site.
-- `liss-abi/tests/abi.rs`'s `sententiae()` skips a line only when its trimmed start is `//`. A block
-  comment containing `c"…"` becomes a phantom sentence.
-
-The affected trees are the six `catalogus.rs` scans — `crates/{lingua-serpentis, latinitas,
-liss-runtime, liss-ir, liss-codegen, liss-abi}/src`, top level only — and `crates/liss-abi/src` for
-`sententiae()`.
-
-### Never insert a comment between a marker and its message literal
-
-`literal_after` takes the first string literal within 300 bytes of the marker, stopping only at the
-next marker. A comment in between whose text contains a quoted phrase donates that phrase as the
-site's pattern. Keep the literal adjacent to its marker.
+**This rule used to cover all six trees `catalogus.rs` reads.** Its comment guard tested whether the
+text left of a marker on its own line contained `//`, so a block comment mentioning
+`Defectus::novus(` or `NUNTIUS_` invented a phantom site. `catalogus.rs` parses now and a token
+stream has no comments, so `crates/{lingua-serpentis, latinitas, liss-runtime, liss-ir,
+liss-codegen}/src` are free of it —
+`docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6, and
+`a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not` asserts the freedom rather than
+assuming it.
 
 ### Never write a `c"…"` — or an unpaired `c"` — in a trailing comment in `liss-abi/src`
 
@@ -894,8 +908,15 @@ Two sites worded identically can never be better than `ambiguous`, and no fixtur
 When a new site would duplicate an existing sentence, give it a distinguishing tail rather than
 reusing the wording.
 
-### `#[cfg(test)]` marks the end of production source
+### `#[cfg(test)]` no longer has to end the file — except in `liss-abi/src`
 
-`production_source` truncates at the first `"\n#[cfg(test)]\n"`. A file with a `#[cfg(test)]` module
-that does *not* run to EOF would hide every diagnostic below it. Keep unit-test modules last, and
-keep the attribute at column 0 on its own line.
+**This rule is retired for `catalogus.rs`.** It read: keep unit-test modules last and the attribute
+at column 0 on its own line, because `production_source` truncated each file at the first
+`"\n#[cfg(test)]\n"` and a test module that did not run to EOF would hide every diagnostic below it.
+The ratchet now skips items by their `#[cfg(test)]` attribute, which holds however many such modules
+a file has and wherever they sit.
+
+It still binds `crates/liss-abi/src`, for a different reason and by a different test:
+`sententiae()` reads whole files with no notion of a test module, and
+`every_latin_sentence_this_crate_can_say_is_listed_here` asserts an exact eight-element set, so a
+`c"…"` written inside a unit test in that crate is a ninth sentence and a failure.

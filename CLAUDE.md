@@ -25,23 +25,26 @@ Do not "fix" this by adding it to `members`.
 - **Zero runtime dependencies is a rule** (spec §11), not a coincidence. `liss-runtime`, `liss-ir`
   and `lingua-serpentis` have none. Only `liss-abi` may use `libc`; `liss-codegen` may use the crates
   its `Cargo.toml` already names and no others. Adding a dependency is a change to the spec.
-- **Diagnostics are Latin, and ratcheted.** `tests/catalogus.rs` scans `crates/*/src` with a
-  **non-recursive** `read_dir`, so anything under `src/bin/` is invisible to it. That is why the
-  `liss` driver lives in `cli.rs` and `src/bin/liss.rs` is a shim that says nothing. New
-  user-facing sentences belong in module files.
+- **Diagnostics are Latin, and ratcheted.** `tests/catalogus.rs` parses `crates/*/src` with `syn`
+  and a **non-recursive** `read_dir`, so anything under `src/bin/` is invisible to it. That is why
+  the `liss` driver lives in `cli.rs` and `src/bin/liss.rs` is a shim that says nothing. New
+  user-facing sentences belong in module files. A message whose literal is not written at the call
+  site reads `UNPARSED` and is invisible to the ratchet, so write the sentence inline (spec §10.3).
 - **The source does not explain itself; `docs/internals/` does.** The comments were a design
   document typed as `//!`, and they are now four reference documents. What stays in the source is
   the `# Safety` clauses, the fixture and test pointers, and a bare `D-NN`. Write the reasoning for
   a new decision in `docs/internals/`, not above the line it defends.
 - **Comments move the catalogue snapshot.** `catalogus__catalogus.snap` records `file:line` for
-  123 diagnostic sites, so deleting or adding a comment line above any of them fails
+  118 diagnostic sites, so deleting or adding a comment line above any of them fails
   `tests/catalogus.rs`. Re-bless it, then check the header still reads
-  `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed` and that only the `:line`
+  `118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed` and that only the `:line`
   field moved — a changed count means a site was gained, lost or reclassified.
-- **Never write a `/* … */` block comment under `crates/*/src`.** The scanner suppresses a marker
-  found in prose by looking for `//` earlier on the line, and assumes no block comment exists. One
-  would invent phantom diagnostic sites. `liss-abi/tests/abi.rs` makes the same assumption about
-  the `c"…"` literals it greps, and skips whole-line comments only.
+- **Never write a `/* … */` block comment under `crates/liss-abi/src`.** `liss-abi/tests/abi.rs`'s
+  `sententiae` greps that crate's own source for the `c"…"` literals it must enumerate, and skips
+  whole-line `//` comments only; a block comment would hide a sentence or invent one. The rule used
+  to cover all of `crates/*/src` because `catalogus.rs` scanned text too — it parses now, and a
+  token stream has no comments, so the other five crates are free of it
+  (`docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6).
 
 ## The conformance corpus
 
