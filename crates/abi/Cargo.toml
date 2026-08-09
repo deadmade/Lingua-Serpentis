@@ -4,11 +4,6 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.94"
 
-# Its own workspace, deliberately (spec §9.1). Task 10's `build.rs` invokes
-# cargo on this crate while the outer build is already running; a member of the
-# root workspace would contend for the outer `.cargo-lock` and deadlock.
-[workspace]
-
 # `staticlib` is what the musl cross-build embeds (Task 10) — every
 # `#[unsafe(no_mangle)]` symbol here is garbage-collected out of an rlib.
 # `rlib` is what the host test binary links against, which is how this task
@@ -42,18 +37,9 @@ name = "custos"
 path = "tests/custos.rs"
 harness = false
 
-# The embedded runtime is always built `--release` regardless of the compiler's
-# own profile (`codegen/build.rs`), so "debug build" never becomes a
-# property of *which* prebuilt musl archive shipped.
-#
-# `panic = "abort"` because `liss_panic` never unwinds (spec §6): no landing
-# pads and no `_Unwind_Resume` from this crate's own code. It does **not**
-# remove the need to prelink `libunwind.a` — the precompiled musl `libstd` is
-# built with unwinding and references `_Unwind_*` regardless — and cargo ignores
-# the setting for the `test` profile, so `cargo test --release` is unaffected.
-[profile.release]
-panic = "abort"
-
+# No `[profile.release]` here: a member's profile is ignored, so `--release`
+# and `panic = "abort"` are named by `codegen/build.rs` on the inner build.
+# `codegen/tests/pondus.rs` holds both; `docs/internals/abi.md` says why.
 [dev-dependencies]
 # `tests/abi.rs` redirects fd 1 through a pipe to read back what the output
 # buffer flushed, and re-executes itself to observe `liss_panic`, which does

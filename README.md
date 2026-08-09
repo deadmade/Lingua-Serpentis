@@ -75,7 +75,7 @@ design but is not implemented; macOS is not planned.
 | `crates/ir` | The typed IR the checker emits |
 | `crates/codegen` | Cranelift code generation, and the linker |
 | `crates/runtime` | Roman numerals; compiled for both host and target |
-| `crates/abi` | The musl-side runtime — its own workspace, see `Cargo.toml` |
+| `crates/abi` | The musl-side runtime — cross-built for musl by `crates/codegen/build.rs` |
 | `crates/latinitas` | Latin morphology, backed by Whitaker's WORDS |
 | `conformance/` | 118 fixtures: programs that run, that are rejected, that warn |
 | `examples/` | Sample programs |
@@ -85,11 +85,9 @@ design but is not implemented; macOS is not planned.
 
 ```console
 $ cargo test
-$ cargo test --manifest-path crates/abi/Cargo.toml
 ```
 
-`abi` is excluded from the workspace on purpose and needs the second command; the root
-`Cargo.toml` says why.
+One workspace, one lock file, one command.
 
 ## Documentation
 

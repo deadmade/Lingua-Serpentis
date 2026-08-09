@@ -1,11 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/lingua-serpentis", "crates/latinitas", "crates/runtime", "crates/ir", "crates/codegen"]
-# `abi` is its own workspace (spec §9.1). Task 10's `build.rs` invokes
-# cargo on it from inside a build of this workspace, and a member would
-# contend for the outer `.cargo-lock`. Test it with
-# `cargo test --manifest-path crates/abi/Cargo.toml`.
-exclude = ["crates/abi"]
+members = ["crates/lingua-serpentis", "crates/latinitas", "crates/runtime", "crates/ir", "crates/codegen", "crates/abi"]
+# `abi` is a member like the rest, though `codegen/build.rs` cross-builds it
+# from inside a build of this workspace: `docs/internals/abi.md`.
 
 [workspace.package]
 edition = "2024"

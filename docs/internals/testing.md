@@ -1,6 +1,6 @@
 # Testing
 
-How this repository proves itself: the two cargo invocations, the fixture corpus, the diagnostic
+How this repository proves itself: the one cargo invocation, the fixture corpus, the diagnostic
 ratchet, the robustness invariant, the generated-program property, and the several tests that read
 Rust source as text and therefore constrain how Rust source may be written. This document is a
 reference for the machinery, not a list of what is covered — the corpus and the `catalogus`
@@ -8,18 +8,16 @@ snapshot are the authority on coverage. Everything measured here (deadlines, cas
 rates, symbol names, exact Latin sentences) is carried over from the tests themselves; where a
 number is stated, a test asserts it.
 
-## The two commands
+## The one command
 
 ```console
 $ cargo test
-$ cargo test --manifest-path crates/abi/Cargo.toml
 ```
 
-`crates/abi` is `exclude`d from the root workspace on purpose — `codegen/build.rs`
-invokes cargo on it *during* an outer build, and a member would contend for the outer
-`.cargo-lock` — so the first command does not reach it and the second is not optional. A run that
-only does the first leaves `abi.rs`, `custos.rs` and `emissio.rs` unexecuted, which is most of what
-guards the runtime.
+There used to be a second, because `crates/abi` was `exclude`d from the root workspace and a run
+that skipped it left `abi.rs`, `custos.rs` and `emissio.rs` unexecuted — most of what guards the
+runtime. `abi` is a member as of 2026-08-09 and one command reaches everything;
+`docs/internals/abi.md` has the reasoning and the one trap that came with it.
 
 Work inside `nix develop`. Two environment facts are asserted rather than assumed, in
 `lingua-serpentis/tests/instrumenta.rs`; see **Environment assertions** below.
@@ -40,6 +38,7 @@ Work inside `nix develop`. Two environment facts are asserted rather than assume
 | `salve.rs`, `scalares.rs` | codegen | Compile-and-run: the pipeline, every type, every operator |
 | `regimen.rs`, `series.rs`, `vocationes.rs` | codegen | Control flow, lists, calls — and object inspection |
 | `aemulatio.rs` | codegen | aarch64 images run under `qemu-aarch64` |
+| `pondus.rs` | codegen | What the embedded runtime was built *with*, read off the bytes |
 | `golden.rs` | runtime | The captured `scribe` golden vectors |
 | `abi.rs`, `custos.rs`, `emissio.rs` | abi | The C ABI: representation, ownership, guard page, output |
 

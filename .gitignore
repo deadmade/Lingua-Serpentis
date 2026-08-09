@@ -1,5 +1,5 @@
-# Rust build artefacts. The unanchored form is not redundant with the anchored
-# one: `crates/abi` is a second workspace with its own `target/`.
+# Rust build artefacts. The unanchored form catches the inner cross-build's
+# `target/` under `$OUT_DIR`, which the anchored one does not reach.
 /target
 target/
 

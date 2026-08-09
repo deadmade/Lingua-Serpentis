@@ -26,10 +26,31 @@ crates cannot be one (spec §11). `runtime` is dependency-free by construction: 
 may depend on any crate, in either the host or the musl build. That is what makes compiling it
 twice, for two different targets, straightforward.
 
-**`abi` is its own workspace, deliberately** (spec §9.1). `codegen`'s `build.rs` invokes
-cargo on it *while the outer build is already running*; a member of the root workspace would contend
-for the outer `.cargo-lock` and deadlock. The root `Cargo.toml` says so, and the second test command
-(`cargo test --manifest-path crates/abi/Cargo.toml`) exists because of it.
+**`abi` is an ordinary member of the one workspace**, though `codegen`'s `build.rs` invokes cargo
+on it *while the outer build is already running*. It was its own workspace until 2026-08-09, on the
+reasoning that a member would contend for the outer `.cargo-lock` and deadlock. What actually keeps
+the two builds apart is the `--target-dir` that build script passes: cargo's exclusive lock lives in
+the target directory, so pointing the inner build at `$OUT_DIR/aedificium` is the whole of the fix.
+The exclusion predated that build script by eight commits — it was precautionary, and the
+precaution outlived the danger.
+
+Two things were paid for the second workspace, and both are recovered by dropping it.
+
+`cargo test` now reaches `abi.rs`, `custos.rs` and `emissio.rs`; there is no second command to
+forget. And the shipped runtime no longer carries the **absolute path of the machine that built
+it**. `runtime` is a path dependency of `abi`; across a workspace boundary cargo named it
+absolutely, so every `#[track_caller]` location baked into the musl runtime — and therefore into
+every compiled program — read `/home/<user>/<checkout>/crates/runtime/src/roman.rs`. Inside one
+workspace the same names are relative. That is four strings out of the artefact, next to the four
+English ones **D-28** records; it fixes none of D-28, which is about the messages, not the paths.
+
+The cost is one trap, and it is silent. **A workspace member's `[profile.release]` is ignored** —
+cargo honours profiles at the workspace root only, and warns rather than failing. The root's
+release profile belongs to the compiler, so `panic = "abort"` for the runtime is named by
+`build.rs` on the inner build instead, as `--config profile.release.panic="abort"`. Dropped, it
+costs 28 landing pads in `abi`'s and `runtime`'s own code inside a runtime whose panic never
+unwinds, and **every test in the repository still passes** — which is why
+`codegen/tests/pondus.rs` exists and asserts both properties on the embedded bytes.
 
 **`abi` is the only crate permitted `libc`** — the one dependency the whole workspace has
 (spec §11): `write`, `_exit`, `malloc`, `free`, and, from Task 9, `sigaltstack`/`sigaction`, none
@@ -49,7 +70,8 @@ build" never becomes a property of *which* prebuilt musl archive shipped. `panic
 `liss_panic` never unwinds (spec §6): no landing pads and no `_Unwind_Resume` from this crate's own
 code. That does **not** remove the need to prelink `libunwind.a` — the precompiled musl `libstd`
 is built with unwinding and references `_Unwind_*` regardless — and cargo ignores the setting for
-the `test` profile, so `cargo test --release` is unaffected.
+the `test` profile, so `cargo test --release` is unaffected. Both flags are arguments to the inner
+cargo in `codegen/build.rs`, for the reason given above; neither is in `abi/Cargo.toml`.
 
 ---
 

@@ -9,19 +9,23 @@ Work inside `nix develop`. The build cross-compiles `abi` for both musl targets 
 build time and fails without both musl `std`s; `crates/codegen/build.rs` names the missing
 target and the flake when that happens.
 
-- `cargo test` — the workspace.
-- `cargo test --manifest-path crates/abi/Cargo.toml` — the second workspace, which the first
-  command does not reach.
+- `cargo test` — the whole workspace, `abi` included. There is one lock file and one command.
 
-`crates/abi` is `exclude`d from the root workspace deliberately: `codegen/build.rs`
-invokes cargo on it *during* an outer build, and a member would contend for the outer `.cargo-lock`.
-Do not "fix" this by adding it to `members`.
+`crates/abi` was a second workspace until 2026-08-09, on the theory that `codegen/build.rs`
+invoking cargo on it *during* an outer build would contend for the outer `.cargo-lock`. The
+`--target-dir` that build script passes is what actually prevents that. Do not restore the split.
 
 ## Invariants
 
 - **There is no interpreter.** The tree-walker was deleted in `677c4b3`; `parse`, `check` and
   `interp::execute` no longer exist. The entry points are `parse_file` and `check_program`. The
   compiler is the only backend.
+- **The embedded runtime's profile lives in `codegen/build.rs`, not in `abi/Cargo.toml`.** A
+  workspace member's `[profile.release]` is ignored — cargo warns and carries on — so `--release`
+  and `--config profile.release.panic="abort"` are arguments to the inner build. Drop the `--config`
+  and 28 landing pads reappear in `abi`'s and `runtime`'s own code while every other test in the
+  repository still passes. `codegen/tests/pondus.rs` is the only thing that notices; it also holds
+  the property that no build-machine path reaches the shipped bytes.
 - **Zero runtime dependencies is a rule** (spec §11), not a coincidence. `runtime`, `ir` and
   `lingua-serpentis` have none. Only `abi` may use `libc`; `codegen` may use the crates its
   `Cargo.toml` already names and no others. Adding a dependency is a change to the spec.

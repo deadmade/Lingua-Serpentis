@@ -1256,8 +1256,8 @@ undefined `_Unwind_*` symbols and the program link fails. With it, the only stro
 
 ### The four traps
 
-- **Recursive cargo deadlock.** `abi` is its own workspace root *and* the inner build gets an
-  `OUT_DIR`-local `--target-dir`. Either alone still contends on a `.cargo-lock`.
+- **Recursive cargo deadlock.** The inner build gets an `OUT_DIR`-local `--target-dir`. Cargo's
+  exclusive lock lives in the target directory, so that is what keeps the two builds apart.
 - **Inherited environment.** Outer `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, `RUSTC_WRAPPER`,
   `CARGO_BUILD_TARGET` and the make jobserver variables all break a cross-build; each is removed
   explicitly, and rustflags are *set empty* rather than removed, because removal leaves a
@@ -1287,9 +1287,16 @@ for no benefit — the runtime is not what anyone debugs.
 **`--features ingressus`** is what adds `main`. It is off by default because `abi` is also
 built as an rlib for its own tests, and a test binary already has a `main`.
 
-The target directory is `OUT_DIR`-local, **and this is half of the deadlock fix**: `abi` being
-its own workspace root stops it contending for the *outer* `.cargo-lock`; a private target directory
-stops it contending for the one in the shared `target/`. Either alone still blocks.
+The target directory is `OUT_DIR`-local, **and this is the deadlock fix**. Cargo's exclusive build
+lock is a file in the target directory, so a private one is what stops the inner build contending
+with the outer. This was long believed to be only half of it, the other half being that `abi` was
+its own workspace root; `abi` became an ordinary member on 2026-08-09 and the inner build is
+unaffected. `internals/abi.md` records what that did change.
+
+**`--config profile.release.panic="abort"`** is here rather than in `abi/Cargo.toml` because a
+workspace member's own profile is ignored — cargo warns and builds it with unwinding anyway. This
+argument is the only thing keeping landing pads out of the runtime, and `tests/pondus.rs` is the
+only thing that would notice if it went.
 
 ### `cargo_mundum` — the environment scrub
 

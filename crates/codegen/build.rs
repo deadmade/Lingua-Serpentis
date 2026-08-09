@@ -141,8 +141,8 @@ fn aedifica(meta: &str, out: &Path) -> PathBuf {
         .join("..")
         .join("abi")
         .join("Cargo.toml");
-    // `OUT_DIR`-local: half of the deadlock fix, the other half being that
-    // `abi` is its own workspace root.
+    // `OUT_DIR`-local, so this build and the outer one never contend for the
+    // same `target/*/.cargo-lock`.
     let aedificium = out.join("aedificium");
 
     let status = cargo_mundum()
@@ -150,6 +150,10 @@ fn aedifica(meta: &str, out: &Path) -> PathBuf {
         .arg("--manifest-path")
         .arg(&manifestum)
         .arg("--release")
+        // A member's own `[profile.release]` is ignored, and the root's
+        // belongs to the compiler. `tests/pondus.rs` fails if this is dropped.
+        .arg("--config")
+        .arg("profile.release.panic=\"abort\"")
         .arg("--features")
         .arg("ingressus")
         .arg("--target")

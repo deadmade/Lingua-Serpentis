@@ -64,7 +64,7 @@ used to be Z", every "without this line, *measured failure*" — from all six cr
 and symbol. Where a defect has a number, Part 2 keeps the one-line statement of what would break and
 points at the register.
 
-**`internals/testing.md` — testing.** The two cargo invocations and why the second is not optional,
+**`internals/testing.md` — testing.** The one cargo invocation and the second it replaced,
 the fixture corpus, the diagnostic ratchet (`catalogus.rs`), the robustness invariant, the
 generated-program property (`generative.rs`), the CLI suites, and the several tests that read Rust
 source as text and therefore constrain how Rust source may be written. It documents the machinery,
@@ -173,7 +173,11 @@ decision made by the one before:
   the spec an unqualified `§N` refers to. **Amended 2026-08-09** by the caret-diagnostics design,
   for §5.4 and §10 only: the diagnostic grammar it fixes at one line becomes three levels, and the
   `(file, line)` pair every fallible runtime entry point takes renders its line as a Roman numeral.
-  Everything else in it stands.
+  Everything else in it stands, with one correction: **§9.1's diagram calls `abi` its "own
+  workspace", and since 2026-08-09 it is not.** The crate is an ordinary member of the one
+  workspace; the deadlock the split was meant to prevent is prevented by the `--target-dir` its
+  cross-build passes. Only the parenthetical is wrong — the reason `abi` is split from `runtime`,
+  which is the point §9.1 exists to make, is untouched. `internals/abi.md` has the current account.
 - **`2026-08-09-test-harness-libraries-design.md`** settles the conformance design's open question
   §11.1 — *"whether the grep needs to become a real parse"* — in the affirmative: the diagnostic
   ratchet reads a `syn` AST rather than source bytes. It amends nothing and supersedes nothing. It
