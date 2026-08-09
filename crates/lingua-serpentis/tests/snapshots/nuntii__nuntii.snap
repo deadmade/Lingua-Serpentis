@@ -1,0 +1,191 @@
+---
+source: crates/lingua-serpentis/tests/nuntii.rs
+expression: report
+---
+86 fixtures · 99 diagnostics
+
+currunt::exemplum-praecisio
+  monitum  linea 11  nomen 'tertia_brevis' fortasse non Latinum est
+  monitum  linea 12  nomen 'tertia_longa' fortasse non Latinum est
+currunt::lista-index-lectio
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+currunt::lista-litteralis
+  monitum  principale.liss:3  nomen 'xs' fortasse non Latinum est
+currunt::longitudo-numerat
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+currunt::scribe-ante-acervum
+  erratum  -  acervus vocationum exhaustus est
+errores::abrumpe-extra-iterationem
+  erratum  principale.liss:3  'abrumpe' extra iterationem
+errores::acervus-exhaustus
+  erratum  -  acervus vocationum exhaustus est
+errores::adde-argumenta
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  'adde' duo argumenta accipit
+errores::adde-elementum-alienum
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  'adde': series 'ni' elementum 'voc' non accipit
+errores::adde-non-series
+  erratum  principale.liss:2  'adde' seriem expectat, non 'ni'
+errores::affer-post-munus
+  erratum  principale.liss:4  'affer' ante omnia munera ponendum
+errores::argumentum-typi-falsi
+  erratum  principale.liss:2  argumentum typum 'ni' expectat, sed 'voc' datum est
+errores::chorda-non-clausa
+  erratum  principale.liss:2  chorda non clausa
+errores::condicio-non-veritas
+  erratum  principale.liss:2  condicio 'veritas' esse debet
+errores::continua-extra-iterationem
+  erratum  principale.liss:3  'continua' extra iterationem
+errores::declarationes-solae
+  erratum  principale.liss:2  extra munera nihil nisi declarationes licet
+errores::divisio-per-nullum
+  erratum  principale.liss:3  divisio per nullum
+errores::divisio-per-nullum-mnr
+  erratum  principale.liss:3  divisio per nullum
+errores::divisio-per-nullum-nr
+  erratum  principale.liss:3  divisio per nullum
+errores::elementa-discrepantia
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:2  elementa seriei discrepant: 'ni' et 'voc'
+errores::elementum-typi-falsi
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  elementum typum 'ni' expectat, sed 'voc' datum est
+errores::emissio-ante-erratum
+  erratum  principale.liss:4  divisio per nullum
+errores::et-utrumque-latus
+  erratum  principale.liss:2  divisio per nullum
+errores::expectatum-rparen
+  erratum  principale.liss:2  expectatum: ')'
+errores::expectatum-semicolon
+  erratum  principale.liss:3  expectatum: ';'
+errores::expressio-expectata
+  erratum  principale.liss:2  expressio expectata
+errores::expressio-nimis-alte-implicata
+  erratum  principale.liss:2  expressio nimis alte implicata
+errores::fasciculus-bis-allatus
+  erratum  principale.liss:2  fasciculus 'mathematica' bis allatus
+errores::fasciculus-in-fasciculo
+  erratum  -  fasciculus in fasciculo non licet: 'mathematica/interior'
+errores::fasciculus-non-allatus
+  erratum  principale.liss:3  fasciculus 'mathematica' non allatus est
+errores::fasciculus-non-inventus
+  erratum  principale.liss:2  fasciculus 'ignota' non inventus
+errores::fractio-sine-denominatore
+  erratum  principale.liss:2  fractio sine denominatore
+errores::functio-bis-definita
+  erratum  principale.liss:2  functio 'duplum' bis definita
+errores::functio-ignota
+  erratum  principale.liss:2  functio ignota: 'nusquam'
+errores::functio-in-fasciculo-non-inventa
+  erratum  principale.liss:3  functio 'differentia' in fasciculo 'mathematica' non inventa
+errores::index-assignationis-non-ni
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  index assignationis 'ni' esse debet
+errores::index-extra-fines
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  index extra fines: X (longitudo II)
+errores::index-infra-fines
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  index extra fines: nullus (longitudo II)
+errores::index-scriptio-extra-fines
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  index extra fines: II (longitudo I)
+errores::index-seriei-non-ni
+  monitum  principale.liss:2  nomen 'xs' fortasse non Latinum est
+  erratum  principale.liss:3  index seriei 'ni' esse debet
+errores::initium-cum-parametris
+  erratum  principale.liss:2  munus 'initium' nihil capere et 'ni' reddere debet
+errores::initium-non-inventum
+  erratum  -  munus 'initium' in programmate non inventum
+errores::linea-post-chordam
+  erratum  principale.liss:5  variabilis ignota: 'ignota'
+errores::littera-invalida
+  erratum  principale.liss:2  littera invalida
+errores::longitudo-non-series
+  erratum  principale.liss:2  'longitudo' seriem expectat, non 'ni'
+errores::longitudo-sine-argumento
+  erratum  principale.liss:2  'longitudo' unum argumentum accipit
+errores::modulus-per-nullum
+  erratum  principale.liss:3  modulus per nullum
+errores::monitum-cum-errato
+  monitum  principale.liss:2  nomen 'counter' fortasse non Latinum est
+  erratum  principale.liss:4  divisio per nullum
+errores::munus-ante-definitionem
+  erratum  principale.liss:2  munus ante definitionem expectatum
+errores::munus-capit-omissum
+  erratum  principale.liss:4  'capit' ante parametra expectatum
+errores::munus-capit-vacuum
+  erratum  principale.liss:4  munus sine parametris 'capit' omittat
+errores::munus-nidificatum
+  erratum  principale.liss:2  functio 'interior' intra corpus definiri non potest; functiones nidificatae non sustinentur
+errores::munus-reddit-omissum
+  erratum  principale.liss:4  'reddit' et typus reditus expectati
+errores::munus-typus-ante-nomen
+  erratum  principale.liss:4  typus reditus post 'reddit' ponendus, non ante nomen
+errores::munus-typus-parametri
+  erratum  principale.liss:4  typus parametri expectatus
+errores::munus-typus-reditus
+  erratum  principale.liss:4  typus post 'reddit' expectatus
+errores::nomen-expectatum
+  erratum  principale.liss:2  nomen expectatum
+errores::nomen-fasciculi-non-validum
+  erratum  -  nomen fasciculi 'si' non validum est
+errores::nomen-reservatum
+  erratum  principale.liss:4  nomen 'longitudo' reservatum est
+errores::non-veritatis
+  erratum  principale.liss:2  'non' veritatem requirit
+errores::numerus-argumentorum
+  erratum  principale.liss:3  functio 'geminus' numerum argumentorum falsum accepit
+errores::numerus-fractus-in-ni
+  erratum  principale.liss:2  numerus fractus typum 'mnr' vel 'nr' requirit, non 'ni'
+errores::numerus-romanus-invalidus
+  erratum  principale.liss:2  numerus Romanus invalidus: 'II/III'
+errores::numerus-romanus-vacuus
+  erratum  principale.liss:2  numerus Romanus vacuus
+errores::operatio-binaria
+  erratum  principale.liss:2  operatio typis 'ni' et 'voc' non convenit
+errores::operatio-unaria-typo
+  erratum  principale.liss:2  negatio numerum requirit
+errores::parametri-gemini
+  erratum  principale.liss:2  parametrum 'a' bis nominatum
+errores::reditus-omissus
+  erratum  principale.liss:2  munus 'nomen' non in omni via reddit
+errores::res-non-subscribenda
+  erratum  principale.liss:3  res typi 'ni' subscribi non potest (non est series)
+errores::series-comparatio-ordinis
+  erratum  principale.liss:2  series ordine comparari non potest (par_est/par_non_est tantum)
+errores::series-vacua-sine-typo
+  erratum  principale.liss:2  typus elementorum seriei vacuae ignotus
+errores::signum-ignotum
+  erratum  principale.liss:2  numerus Arabicus '5' non licet; scribe '°V' vel simile
+errores::signum-ignotum-extra-numerum
+  erratum  principale.liss:2  signum ignotum: ':'
+errores::sinistra-subscriptionis
+  erratum  principale.liss:2  sinistra subscriptionis variabilis esse debet
+errores::subscriptio-non-seriei
+  erratum  principale.liss:3  'x' non est series (typus 'ni')
+errores::typus-assignationis
+  erratum  principale.liss:3  'x' iam typum 'ni' habet, sed 'voc' datum est
+errores::typus-let
+  erratum  principale.liss:2  'x' typum 'ni' expectat, sed 'voc' datum est
+errores::typus-litterae
+  erratum  principale.liss:2  'c' typum 'lit' expectat, sed 'voc' datum est
+errores::typus-reditus-in-fasciculo
+  erratum  mathematica/summa.liss:2  reditus typum 'ni' expectat, sed 'voc' datum est
+errores::uncus-non-clausus
+  erratum  principale.liss:2  '}' expectatum
+errores::variabilis-ignota
+  erratum  principale.liss:2  variabilis ignota: 'y'
+errores::vel-utrumque-latus
+  erratum  principale.liss:2  divisio per nullum
+errores::vocatio-post-fasciculum
+  erratum  principale.liss:2  vocatio functionis post nomen fasciculi expectata
+monita::fons-unicus
+  monitum  linea 2  nomen 'result' fortasse non Latinum est
+monita::ordo-trans-scidas
+  monitum  -  nomen fasciculi 'foobar' fortasse non Latinum est
+  monitum  principale.liss:3  nomen 'result' fortasse non Latinum est
+  monitum  foobar/x.liss:2  nomen 'answer' fortasse non Latinum est
+monita::status-exitus-redactus
+  monitum  -  reditus 'initium' extra fines status exitus est; ad XLIV redactus
