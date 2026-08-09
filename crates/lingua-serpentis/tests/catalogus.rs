@@ -61,20 +61,11 @@ fn observed_messages() -> Vec<String> {
             // that happened to read like a diagnostic would mark its pattern
             // `fixtured` when no fixture provokes it, which is a false green in
             // the one test that guards every user-facing sentence.
-            //
-            // Both grammars, because the compiled image has not adopted the block
-            // form yet and its thirteen sentences would otherwise all go
-            // `UNCOVERED` at once.
-            let msg = match line.strip_prefix("erratum: ").or_else(|| line.strip_prefix("monitum: "))
-            {
-                Some(m) => m,
-                None if line.starts_with("Error") || line.starts_with("Monitum") => {
-                    match line.split_once(": ") {
-                        Some((_, m)) => m,
-                        None => continue,
-                    }
-                }
-                None => continue,
+            let Some(msg) = line
+                .strip_prefix("erratum: ")
+                .or_else(|| line.strip_prefix("monitum: "))
+            else {
+                continue;
             };
             out.push(msg.to_string());
         }

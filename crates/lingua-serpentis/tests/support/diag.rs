@@ -3,55 +3,6 @@
 
 use super::proc::Outcome;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Diagnostic {
-    /// `Error: <message>`
-    Structural { message: String },
-    /// `Error in linea N: <message>`
-    Line { line: usize, message: String },
-    /// `Error in '<file>', linea N: <message>`
-    FileLine { file: String, line: usize, message: String },
-}
-
-impl Diagnostic {
-    pub fn message(&self) -> &str {
-        match self {
-            Diagnostic::Structural { message }
-            | Diagnostic::Line { message, .. }
-            | Diagnostic::FileLine { message, .. } => message,
-        }
-    }
-    pub fn line(&self) -> Option<usize> {
-        match self {
-            Diagnostic::Structural { .. } => None,
-            Diagnostic::Line { line, .. } | Diagnostic::FileLine { line, .. } => Some(*line),
-        }
-    }
-}
-
-/// `None` when the line does not match the grammar at all — itself a finding.
-pub fn parse_diagnostic(s: &str) -> Option<Diagnostic> {
-    let rest = s.strip_prefix("Error")?;
-    if let Some(m) = rest.strip_prefix(": ") {
-        return Some(Diagnostic::Structural { message: m.to_string() });
-    }
-    let rest = rest.strip_prefix(" in ")?;
-    if let Some(m) = rest.strip_prefix("linea ") {
-        let (n, msg) = m.split_once(": ")?;
-        return Some(Diagnostic::Line { line: n.parse().ok()?, message: msg.to_string() });
-    }
-    let rest = rest.strip_prefix('\'')?;
-    let (file, rest) = rest.split_once("', linea ")?;
-    let (n, msg) = rest.split_once(": ")?;
-    Some(Diagnostic::FileLine {
-        file: file.to_string(),
-        line: n.parse().ok()?,
-        message: msg.to_string(),
-    })
-}
-
-// ------------------------------------------------------------- the block grammar
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Genus {
     Erratum,
@@ -69,19 +20,17 @@ pub struct Pictura {
     pub latitudo: usize,
 }
 
-/// One diagnostic, however it was framed. `nova` records which grammar it arrived
-/// in, so the checks that only make sense for the block form can be skipped while
-/// both are accepted; it goes away with the old grammar.
+/// One diagnostic, read back off stderr.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostica {
     pub genus: Genus,
     pub file: Option<String>,
     pub line: Option<usize>,
-    /// The line number as rendered, present only under the block grammar.
+    /// The line number exactly as rendered, so it can be checked against the way
+    /// the language writes that number.
     pub numeralis: Option<String>,
     pub message: String,
     pub pictura: Option<Pictura>,
-    pub nova: bool,
 }
 
 /// True for a gutter row: everything left of the first `|` is blank or Roman.
@@ -118,44 +67,6 @@ pub fn parse_stderr(stderr: &str) -> (Vec<Diagnostica>, Vec<String>) {
     while i < lineae.len() {
         let linea = lineae[i];
 
-        // The old grammar: one line, complete in itself.
-        if let Some(d) = parse_diagnostic(linea) {
-            diagnostica.push(Diagnostica {
-                genus: Genus::Erratum,
-                file: match &d {
-                    Diagnostic::FileLine { file, .. } => Some(file.clone()),
-                    _ => None,
-                },
-                line: d.line(),
-                numeralis: None,
-                message: d.message().to_string(),
-                pictura: None,
-                nova: false,
-            });
-            i += 1;
-            continue;
-        }
-        if let Some(m) = linea.strip_prefix("Monitum") {
-            let message = m
-                .strip_prefix(": ")
-                .map(str::to_string)
-                .or_else(|| m.split_once(": ").map(|(_, r)| r.to_string()));
-            if let Some(message) = message {
-                let (file, line) = monitum_locus(m);
-                diagnostica.push(Diagnostica {
-                    genus: Genus::Monitum,
-                    file,
-                    line,
-                    numeralis: None,
-                    message,
-                    pictura: None,
-                    nova: false,
-                });
-                i += 1;
-                continue;
-            }
-        }
-
         // The block grammar: a header at column 0, then its framing.
         let caput = linea
             .strip_prefix("erratum: ")
@@ -190,7 +101,6 @@ pub fn parse_stderr(stderr: &str) -> (Vec<Diagnostica>, Vec<String>) {
             numeralis,
             message: message.to_string(),
             pictura: pictura(&canales),
-            nova: true,
         });
     }
 
@@ -207,19 +117,6 @@ fn block_locus(s: &str) -> (Option<String>, Option<String>) {
         return (Some(file.to_string()), Some(n.to_string()));
     }
     (rest.strip_suffix('\'').map(str::to_string), None)
-}
-
-/// The old warning grammar's four shapes, minus the leading `Monitum`.
-fn monitum_locus(s: &str) -> (Option<String>, Option<usize>) {
-    let Some(rest) = s.strip_prefix(" in ") else { return (None, None) };
-    if let Some(m) = rest.strip_prefix("linea ") {
-        return (None, m.split_once(": ").and_then(|(n, _)| n.parse().ok()));
-    }
-    let Some(rest) = rest.strip_prefix('\'') else { return (None, None) };
-    if let Some((file, m)) = rest.split_once("', linea ") {
-        return (Some(file.to_string()), m.split_once(": ").and_then(|(n, _)| n.parse().ok()));
-    }
-    (rest.split_once("': ").map(|(f, _)| f.to_string()), None)
 }
 
 /// The source row and the caret row, read back out of the gutter.
@@ -360,7 +257,7 @@ pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
     // The location's numeral must be the one the language would have written, which
     // is the check that keeps an Arabic line number out of the location row.
     for d in &diagnostica {
-        let (true, Some(numeralis)) = (d.nova, &d.numeralis) else { continue };
+        let Some(numeralis) = &d.numeralis else { continue };
         // An unreadable numeral must fail here rather than leave `line` at `None`
         // and be skipped: `linea 3` parses as no numeral at all, and skipping is
         // exactly how an Arabic line number would survive the rule meant to ban it.

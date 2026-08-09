@@ -4,7 +4,7 @@ mod support;
 use std::ffi::OsStr;
 use std::time::Duration;
 use support::diag::{
-    judge, parse_diagnostic, parse_stderr, Diagnostic, Genus, Verdict, RECORDED_RULES,
+    judge, parse_stderr, Genus, Verdict, RECORDED_RULES,
 };
 use support::proc::{run_binary, temp_dir, Outcome};
 
@@ -12,27 +12,14 @@ use support::proc::{run_binary, temp_dir, Outcome};
 const T: Duration = Duration::from_secs(60);
 
 #[test]
-fn the_diagnostic_grammar_parses_all_three_shapes() {
-    assert_eq!(
-        parse_diagnostic("Error: munus 'initium' in programmate non inventum"),
-        Some(Diagnostic::Structural {
-            message: "munus 'initium' in programmate non inventum".into()
-        })
-    );
-    assert_eq!(
-        parse_diagnostic("Error in linea 2: chorda non clausa"),
-        Some(Diagnostic::Line { line: 2, message: "chorda non clausa".into() })
-    );
-    assert_eq!(
-        parse_diagnostic("Error in 'mathematica/summa.liss', linea 2: res mala"),
-        Some(Diagnostic::FileLine {
-            file: "mathematica/summa.liss".into(),
-            line: 2,
-            message: "res mala".into(),
-        })
-    );
-    assert_eq!(parse_diagnostic("Monitum in linea 2: nomen"), None);
-    assert_eq!(parse_diagnostic("thread 'main' panicked"), None);
+fn a_warning_is_not_a_failure_however_it_is_framed() {
+    // The grammar recognises errors only. Were a warning to count as one, `judge`
+    // would accept a run that warned and never failed as a well-formed failure.
+    let (d, reliquum) = parse_stderr("monitum: nomen 'x' fortasse non Latinum est\n");
+    assert!(reliquum.is_empty());
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].genus, Genus::Monitum);
+    assert!(d.iter().all(|x| x.genus != Genus::Erratum));
 }
 
 /// The block grammar, before anything emits it. Nothing else would catch a parser
@@ -152,7 +139,7 @@ fn a_child_killed_by_a_signal_is_an_abort_however_politely_it_is_reported() {
     let outcome = Outcome::Exited {
         code: 1,
         stdout: String::new(),
-        stderr: "Error: programma abrupte cessavit\n".to_string(),
+        stderr: "erratum: programma abrupte cessavit\n".to_string(),
     };
     match judge(&outcome, &[("fons.liss".to_string(), "munus initium reddit ni { redde nullus; }".to_string())]) {
         Verdict::Violation { rule: "no abort", .. } => {}
@@ -161,7 +148,7 @@ fn a_child_killed_by_a_signal_is_an_abort_however_politely_it_is_reported() {
     let ordinarium = Outcome::Exited {
         code: 1,
         stdout: String::new(),
-        stderr: "Error: acervus vocationum exhaustus est\n".to_string(),
+        stderr: "erratum: acervus vocationum exhaustus est\n".to_string(),
     };
     assert_eq!(
         judge(&ordinarium, &[("fons.liss".to_string(), "munus initium reddit ni { redde nullus; }".to_string())]),
@@ -181,7 +168,7 @@ fn the_compilers_own_failures_are_violations_and_not_diagnostics() {
         let outcome = Outcome::Exited {
             code: 1,
             stdout: String::new(),
-            stderr: format!("Error: {nuntius}\n"),
+            stderr: format!("erratum: {nuntius}\n"),
         };
         match judge(&outcome, &fons()) {
             Verdict::Violation { rule, .. } if rule == regula => {}
@@ -192,7 +179,7 @@ fn the_compilers_own_failures_are_violations_and_not_diagnostics() {
     let ordinarium = Outcome::Exited {
         code: 1,
         stdout: String::new(),
-        stderr: "Error: memoria exhausta est\n".to_string(),
+        stderr: "erratum: memoria exhausta est\n".to_string(),
     };
     assert_eq!(judge(&ordinarium, &fons()), Verdict::Acceptable);
 }
