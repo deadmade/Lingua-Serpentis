@@ -22,6 +22,7 @@ amended or superseded by a later document and the front matter alone does not te
 | Why is the front end shaped like this; what was tried and broke | `internals/rationale.md` |
 | How is any of this tested | `internals/testing.md` |
 | Why may I not write a block comment there | `superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6 |
+| What shape does a diagnostic have, and why | `superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3 |
 | Is this known to be wrong | `defectus/2026-08-03-index.md` |
 
 **An unqualified "spec §N" anywhere in this repository — in a comment, a doc, a commit message —
@@ -91,9 +92,10 @@ carries **Date**, **Status**, **Author**, and — where one exists — a **Relat
 | `2026-08-03-conformance-and-robustness-suite-design.md` | 2026-08-03 | Proposed | The conformance corpus, the robustness invariant, the diagnostic catalogue ratchet, and the defect register it opened |
 | `2026-08-07-compiler-backend-design.md` | 2026-08-07 | Proposed | **The canonical current spec.** The ahead-of-time compiler, the typed IR, the C ABI, ownership, stack exhaustion, linking — and the removal of the interpreter |
 | `2026-08-09-test-harness-libraries-design.md` | 2026-08-09 | Proposed | The diagnostic ratchet parses rather than scans, which lifts the block-comment rule from five crates; `tempfile` and one shared wait loop in the test support |
+| `2026-08-09-caret-diagnostics-design.md` | 2026-08-09 | Proposed | Spans through the front end, and a three-level diagnostic grammar with a caret under the offending expression. `Error` becomes `erratum`; the line number becomes a Roman numeral everywhere |
 
 The **Status** lines record the state at the moment each document was written and have not been
-maintained since. Every one of the twelve has an implementation plan in `superpowers/plans/`, so a
+maintained since. Every one of the thirteen has an implementation plan in `superpowers/plans/`, so a
 status of "pending implementation plan" or "plan not yet written" should be read as history, not as
 the current state of the tree.
 
@@ -167,13 +169,21 @@ decision made by the one before:
     freeze — no benchmark suite, no speculative language features — still stand.
   - its **§3.2** (in-process by default) is superseded by the compiler-backend design.
 - **`2026-08-07-compiler-backend-design.md`** adds the ahead-of-time compiler, **removes the
-  interpreter**, supersedes §3.2 of the conformance design, and closes deferred defect D-19. Nothing
-  amends it. It is the spec an unqualified `§N` refers to.
+  interpreter**, supersedes §3.2 of the conformance design, and closes deferred defect D-19. It is
+  the spec an unqualified `§N` refers to. **Amended 2026-08-09** by the caret-diagnostics design,
+  for §5.4 and §10 only: the diagnostic grammar it fixes at one line becomes three levels, and the
+  `(file, line)` pair every fallible runtime entry point takes renders its line as a Roman numeral.
+  Everything else in it stands.
 - **`2026-08-09-test-harness-libraries-design.md`** settles the conformance design's open question
   §11.1 — *"whether the grep needs to become a real parse"* — in the affirmative: the diagnostic
   ratchet reads a `syn` AST rather than source bytes. It amends nothing and supersedes nothing. It
   changes only test machinery, but it is the reason `CLAUDE.md`'s block-comment prohibition applies
   to `crates/liss-abi/src` alone and no longer to `crates/*/src`.
+- **`2026-08-09-caret-diagnostics-design.md`** amends the compiler-backend spec's §5.4 and §10 and
+  supersedes the four-shape `Display` table in `internals/rationale.md`. It adds no dependency:
+  §11's table is untouched. Read its §3 before changing anything that writes to stderr — every
+  diagnostic in the language, compiler and compiled image alike, is a prefix of the one grammar it
+  fixes there.
 
 ### There is no consolidated language reference
 
@@ -207,7 +217,7 @@ language spec.** Read its §5 for the language; do not read the rest as a descri
 
 ## `superpowers/plans/` — the implementation plans
 
-Thirteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
+Fourteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
 its own — it works from the conformance design (§5, §7, §8.1) and the defect register. Each plan
 opens with a Goal, an Architecture paragraph, a Tech Stack line and, usually, a pointer to its spec,
 and is written as numbered tasks with checkbox steps. The house convention is that every code task
