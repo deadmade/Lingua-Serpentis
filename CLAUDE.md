@@ -29,6 +29,19 @@ Do not "fix" this by adding it to `members`.
   **non-recursive** `read_dir`, so anything under `src/bin/` is invisible to it. That is why the
   `liss` driver lives in `cli.rs` and `src/bin/liss.rs` is a shim that says nothing. New
   user-facing sentences belong in module files.
+- **The source does not explain itself; `docs/internals/` does.** The comments were a design
+  document typed as `//!`, and they are now four reference documents. What stays in the source is
+  the `# Safety` clauses, the fixture and test pointers, and a bare `D-NN`. Write the reasoning for
+  a new decision in `docs/internals/`, not above the line it defends.
+- **Comments move the catalogue snapshot.** `catalogus__catalogus.snap` records `file:line` for
+  123 diagnostic sites, so deleting or adding a comment line above any of them fails
+  `tests/catalogus.rs`. Re-bless it, then check the header still reads
+  `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed` and that only the `:line`
+  field moved — a changed count means a site was gained, lost or reclassified.
+- **Never write a `/* … */` block comment under `crates/*/src`.** The scanner suppresses a marker
+  found in prose by looking for `//` earlier on the line, and assumes no block comment exists. One
+  would invent phantom diagnostic sites. `liss-abi/tests/abi.rs` makes the same assumption about
+  the `c"…"` literals it greps, and skips whole-line comments only.
 
 ## The conformance corpus
 
@@ -47,6 +60,9 @@ it; blessing a regression is the one way this suite fails silently.
 
 ## Conventions
 
+- Reference for the code as it stands: `docs/internals/` — `codegen.md`, `abi.md`, `rationale.md`,
+  `testing.md`. Undated on purpose; they track the code and are edited in place. `docs/README.md`
+  indexes everything and resolves the specs' amends/supersedes chain into reading order.
 - Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`. Plans:
   `docs/superpowers/plans/`. Defects: `docs/defectus/2026-08-03-index.md`.
 - Commit subjects are `type(scope): a sentence in the repo's voice` — read `git log` before writing
