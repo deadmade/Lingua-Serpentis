@@ -255,9 +255,11 @@ unexplained row is exactly the silent regression `CLAUDE.md` warns about.
 ## 9. Success criteria
 
 - `cargo test` and `cargo test --manifest-path crates/liss-abi/Cargo.toml` both
-  pass. Baseline counts, measured before any change: `conformance` 118,
-  `catalogus` 5, `cli` 23 (25 after §7's two new tests), `liss_cli` 24,
-  `robustness` 29, `generative` 4; `abi` 21, `custos` 6, `emissio` 1.
+  pass. Baseline counts, measured per target before any change: `conformance`
+  118, `programs` 31, `liss_cli` 29, `cli` 23 — 25 after §7's two new tests, the
+  only count this work moves — `ir` 23, `catalogus` 5, `robustness` 5,
+  `generative` 4, `instrumenta` 4; and in the second workspace `abi` 21,
+  `custos` 6, `emissio` 1.
 - The catalogue header still reads
   `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed`, or differs
   only as §8 enumerates.

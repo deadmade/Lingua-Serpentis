@@ -30,6 +30,30 @@ impl Outcome {
     }
 }
 
+/// This module's poll interval; `support`'s own `PAUSA` is a different, documented 2 ms.
+const PAUSA: Duration = Duration::from_millis(5);
+
+/// Wait for `child`, polling every `pausa`. At `timeout` the child is killed and reaped and
+/// `Ok(None)` is returned; each caller renders that in its own idiom.
+pub fn wait_or_kill(
+    child: &mut std::process::Child,
+    timeout: Duration,
+    pausa: Duration,
+) -> std::io::Result<Option<std::process::ExitStatus>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(s) => return Ok(Some(s)),
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(None);
+            }
+            None => std::thread::sleep(pausa),
+        }
+    }
+}
+
 /// Captures both streams to files rather than pipes; some of these inputs would deadlock a pipe.
 pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
     let dir = temp_dir("liss-proc");
@@ -46,17 +70,9 @@ pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
         .spawn()
         .expect("spawn liss");
 
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait().expect("try_wait") {
-            Some(s) => break s,
-            None if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Outcome::TimedOut;
-            }
-            None => std::thread::sleep(Duration::from_millis(5)),
-        }
+    let status = match wait_or_kill(&mut child, timeout, PAUSA).expect("try_wait") {
+        Some(s) => s,
+        None => return Outcome::TimedOut,
     };
 
     let stdout = String::from_utf8_lossy(&std::fs::read(&out_path).unwrap()).into_owned();
@@ -94,17 +110,9 @@ pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) ->
         // `out` drops here, closing the read end while the child writes on.
     }
 
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait().expect("try_wait") {
-            Some(s) => break s,
-            None if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Outcome::TimedOut;
-            }
-            None => std::thread::sleep(Duration::from_millis(5)),
-        }
+    let status = match wait_or_kill(&mut child, timeout, PAUSA).expect("try_wait") {
+        Some(s) => s,
+        None => return Outcome::TimedOut,
     };
 
     let stderr = String::from_utf8_lossy(&std::fs::read(&err_path).unwrap()).into_owned();

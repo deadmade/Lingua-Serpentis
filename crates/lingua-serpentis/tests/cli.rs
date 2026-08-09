@@ -327,3 +327,28 @@ fn deep_recursion_runs_because_there_is_no_limit() {
     // `°X.M` is X × M = 10,000, which prints as X with a vinculum.
     assert_eq!(out, "X\u{305}\n");
 }
+
+/// The deadline arm of `wait_or_kill` had no direct coverage while it was three copied loops.
+#[test]
+fn wait_or_kill_returns_the_status_of_a_child_that_finishes() {
+    let mut child = std::process::Command::new("true").spawn().expect("spawn true");
+    let status =
+        support::proc::wait_or_kill(&mut child, Duration::from_secs(10), Duration::from_millis(1))
+            .expect("try_wait");
+    assert!(status.expect("the child exited before the deadline").success());
+}
+
+#[test]
+fn wait_or_kill_reaps_a_child_that_outlives_its_deadline() {
+    let mut child =
+        std::process::Command::new("sleep").arg("30").spawn().expect("spawn sleep");
+    let status = support::proc::wait_or_kill(
+        &mut child,
+        Duration::from_millis(50),
+        Duration::from_millis(1),
+    )
+    .expect("try_wait");
+    assert!(status.is_none(), "the deadline must be reported as `None`");
+    // A `wait` on a child that was not reaped would block until it exited on its own.
+    assert!(child.try_wait().expect("try_wait").is_some(), "the child was not reaped");
+}

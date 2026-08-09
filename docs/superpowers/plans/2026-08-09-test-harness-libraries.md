@@ -49,7 +49,7 @@ The prediction was that `comment-strip`'s ~7,200 deletions had moved every diagn
 
 Measured baseline, both commands, before any change:
 
-- `cargo test` — every target passes. `conformance` 118, `catalogus` 5, `cli` 23, `liss_cli` 24, `robustness` 29, `generative` 4.
+- `cargo test` — every target passes. `conformance` 118, `programs` 31, `liss_cli` 29, `cli` 23, `ir` 23, `catalogus` 5, `robustness` 5, `generative` 4, `instrumenta` 4.
 - `cargo test --manifest-path crates/liss-abi/Cargo.toml` — passes: `abi` 21, `custos` 6, `emissio` 1.
 - Snapshot header: `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed`.
 

@@ -36,20 +36,15 @@ pub fn curre(target: &Path) -> Result<Rendered, String> {
         .spawn()
         .map_err(|e| format!("cannot spawn `{LISS} run {}`: {e}", target.display()))?;
 
-    let terminus = std::time::Instant::now() + MORA;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(s)) => break s,
-            Ok(None) if std::time::Instant::now() >= terminus => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!(
-                    "`liss run {}` was still running after {MORA:?}",
-                    target.display()
-                ));
-            }
-            Ok(None) => std::thread::sleep(PAUSA),
-            Err(e) => return Err(format!("wait on `liss run {}`: {e}", target.display())),
+    let status = match proc::wait_or_kill(&mut child, MORA, PAUSA)
+        .map_err(|e| format!("wait on `liss run {}`: {e}", target.display()))?
+    {
+        Some(s) => s,
+        None => {
+            return Err(format!(
+                "`liss run {}` was still running after {MORA:?}",
+                target.display()
+            ));
         }
     };
 
