@@ -57,9 +57,11 @@ different crates, and one `try_wait`/`sleep` poll loop written three times.
   impossible rather than heuristically handled (§4, §5).
 - **Lift the block-comment prohibition** from `crates/lingua-serpentis/src` and
   the five other crates the ratchet scans (§6).
-- **Preserve the catalogue exactly.** The snapshot header reads
-  `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed` and must
-  keep reading it, or every difference must be enumerated in §8 with its cause.
+- **Preserve the catalogue's coverage exactly.** The snapshot header reads
+  `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed`. Every
+  difference must be enumerated in §8 with its cause; measured, there are five,
+  all of them scanner artifacts being dropped, and **`70 fixtured · 0 ambiguous`
+  does not move.**
 - **One scratch directory and one wait loop** instead of two and three (§7).
 
 ### Non-Goals
@@ -140,13 +142,25 @@ which for a multi-line chain is an earlier line than the marker `.err(` sat on;
 | `Warning {` | `Expr::Struct`, path ends `Warning` | `path` |
 | `ProgramError::structural(` | `Expr::Call`, callee path ends `ProgramError::structural` | `func` |
 | `.err(` | `Expr::MethodCall`, method `err` | `method` |
-| `Err("` | `Expr::Call`, callee path `Err`, first argument a string literal | `func` |
-| `.ok_or("` | `Expr::MethodCall`, method `ok_or`, first argument a string literal | `method` |
+| `Err("` | `Expr::Call`, callee path `Err`, argument list **opening** with a string literal token | `func` |
+| `.ok_or("` | `Expr::MethodCall`, method `ok_or`, argument list opening with a string literal token | `method` |
 | `ok_or_else(\|\| format!(` | `Expr::MethodCall`, method `ok_or_else`, closure body an `Expr::Macro` with path `format` | `method` |
-| `eprintln!(` | `Expr::Macro`, macro path `eprintln` | `mac.path` |
+| `eprintln!(` | `Expr::Macro` **and `Stmt::Macro`**, macro path `eprintln` | `mac.path` |
 | `liss_panic(` | `Expr::Call`, callee path ends `liss_panic` | `func` |
 | `Defectus::novus(` | `Expr::Call`, callee path ends `Defectus::novus` | `func` |
 | `NUNTIUS_` | `Item::Const` / `Item::Static`, ident begins `NUNTIUS_` | `ident` |
+
+Two rows in that table are written the way they are because the first attempt
+was wrong, and the differential test of §8 said so:
+
+- **`eprintln!` needs both node kinds.** A macro invocation in statement
+  position — `eprintln!("…");`, which is how all twelve of `cli.rs`'s are
+  written — is a `Stmt::Macro`, not an `Expr::Macro`. Visiting only expressions
+  found none of them.
+- **`Err("` is about the first *token*, not the first *argument*.** The marker
+  means the quote follows the paren directly;
+  `Err("numerus Romanus vacuus".into())` satisfies it, and its argument is a
+  method call rather than a literal.
 
 **Why each marker exists is unchanged by how it is found**, and
 `docs/internals/testing.md` remains the place that explains it:
@@ -266,14 +280,52 @@ dependency: three copies of ten lines do not justify one.
 
 ## 8. Differences from the scanner
 
-Filled in during implementation. The AST search is narrower than a 300-byte
-forward window — the window can reach past a site's own arguments into a
-sibling's literal, and a subtree cannot — so a small number of rows may
-legitimately move. **Every row that differs is listed here with its file, its
-two patterns, and which one is right, before the snapshot is re-blessed.** An
-unexplained row is exactly the silent regression `CLAUDE.md` warns about.
+Measured. **Five rows, all in the same direction: the scanner reports them and
+the parser does not. Nothing the parser finds is new, and no `fixtured` site
+moves.** The catalogue goes from 123 sites to 118, `5 unparsed` to `2`, and
+`48 uncovered` to `46`; `70 fixtured · 0 ambiguous` is unchanged, which is the
+number that matters.
 
-*(No differences recorded yet.)*
+All five are scanner artifacts of the same kind — a marker that names a *type*
+matching a place the type is written rather than constructed:
+
+| Row | Status | What the scanner matched |
+|---|---|---|
+| `lingua-serpentis/src/error.rs:2` | `UNPARSED` | `pub struct LinguaError {` — the type's **definition** |
+| `lingua-serpentis/src/error.rs:11` | `UNPARSED` | `pub struct Warning {` — likewise |
+| `liss-runtime/src/exitus.rs:8` | `UNPARSED` | `pub struct Warning {` — likewise |
+| `lingua-serpentis/src/error.rs:17` | `UNCOVERED` | `impl std::fmt::Display for Warning {`, whose pattern was then lifted from the `write!` three lines down |
+| `lingua-serpentis/src/error.rs:83` | `UNCOVERED` | `impl std::fmt::Display for LinguaError {`, likewise from line 85 |
+
+Guard 1 excluded a marker preceded by `->` or `fn`; it never considered `struct`
+or `impl … for`. In an AST a definition is an `ItemStruct` and an impl header is
+an `ItemImpl`, and neither is an `Expr::Struct`, so all five stop being sites
+without anything being written to exclude them.
+
+**The two `UNCOVERED` rows are not a coverage loss, and could never have become
+one.** They carry the *envelope* — `Monitum in '{}', linea {}: {}` and
+`Error in linea {}: {}` — and `observed_messages` reduces every observed line to
+what follows its first `": "`, which strips exactly that envelope before the
+comparison runs. An envelope pattern therefore has nothing to match against and
+is `UNCOVERED` by construction, not for want of a fixture.
+
+**Why `write!` was not added as a twelfth marker.** It would have kept those two
+rows, and it is the honest way to find them — they are real sentences a user
+reads. It was rejected because it finds *ten* such sites (nine in `error.rs`,
+one in `liss-codegen/src/lib.rs`), and by the paragraph above every one of them
+would be permanently `UNCOVERED`. That trades two accidental rows for ten
+deliberate ones that the ratchet can never discharge, which is noise in the one
+report whose value is that its `UNCOVERED` count means something. If the
+envelope is ever to be ratcheted, the thing to change is `observed_messages`,
+not the marker list.
+
+**One extractor bug this comparison caught**, and the reason the differential
+test earned its place: `Err("numerus Romanus vacuus".into())` in
+`liss-runtime/src/roman.rs:191` is `fixtured`, and a first predicate that
+required the first *argument* to be a string literal missed it, because the
+argument is a method call. The marker `Err("` means the quote follows the paren
+directly, whatever is done to the literal afterwards, so the predicate asks
+whether the argument list **opens** with a string literal token.
 
 ## 9. Success criteria
 
@@ -283,9 +335,10 @@ unexplained row is exactly the silent regression `CLAUDE.md` warns about.
   only count this work moves — `ir` 23, `catalogus` 5, `robustness` 5,
   `generative` 4, `instrumenta` 4; and in the second workspace `abi` 21,
   `custos` 6, `emissio` 1.
-- The catalogue header still reads
-  `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed`, or differs
-  only as §8 enumerates.
+- The catalogue header reads
+  `118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed` — five
+  fewer rows than before, exactly the five §8 enumerates, with `fixtured` and
+  `ambiguous` unmoved.
 - `conformance/` has no modifications. This work blesses no expectation file.
 - `cargo tree -e normal` does not name `tempfile`, the one crate this work adds
   to the tree at all; `syn`, `quote` and `proc-macro2` are already there under

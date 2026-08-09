@@ -36,6 +36,13 @@ proptest = "1"
 # One scratch-directory implementation, shared with `liss-codegen`'s test support, which
 # cannot import this module: 2026-08-09-test-harness-libraries-design.md §7.
 tempfile = "3"
+# The diagnostic ratchet parses `crates/*/src` rather than scanning it, which is what lets the
+# source carry block comments: 2026-08-09-test-harness-libraries-design.md §5.
+# `libwild` already puts all three in the normal graph (§3); these add no new crate.
+# `span-locations` is off by default and is the only way to get a line outside a proc macro.
+syn = { version = "2", features = ["full", "visit"] }
+quote = "1"
+proc-macro2 = { version = "1", features = ["span-locations"] }
 
 [[test]]
 name = "conformance"

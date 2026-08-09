@@ -347,3 +347,232 @@ fn catalogus() {
     );
     insta::assert_snapshot!("catalogus", report);
 }
+
+// ---------------------------------------------------------------------------
+// The AST extractor. Replaces the byte scanner above; see
+// docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md §4-§5.
+// ---------------------------------------------------------------------------
+
+use proc_macro2::{TokenStream, TokenTree};
+use quote::ToTokens;
+use syn::spanned::Spanned;
+
+/// The first string, byte-string or C-string literal in `tokens`, descending into groups.
+/// A site with none of its own is `UNPARSED`: spec §10.3 requires the runtime to write its
+/// sentences inline at the call site.
+fn primum_literale(tokens: TokenStream) -> Option<String> {
+    for tt in tokens {
+        match tt {
+            TokenTree::Literal(l) => match syn::Lit::new(l) {
+                syn::Lit::Str(s) => return Some(s.value()),
+                syn::Lit::ByteStr(s) => {
+                    return Some(String::from_utf8_lossy(&s.value()).into_owned());
+                }
+                syn::Lit::CStr(s) => return Some(s.value().to_string_lossy().into_owned()),
+                _ => {}
+            },
+            TokenTree::Group(g) => {
+                if let Some(s) = primum_literale(g.stream()) {
+                    return Some(s);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Does `path` end in `nomen`, which may itself be `A::b`?
+fn semita_desinit(path: &syn::Path, nomen: &str) -> bool {
+    let wanted: Vec<&str> = nomen.split("::").collect();
+    let got: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
+    got.len() >= wanted.len()
+        && got[got.len() - wanted.len()..].iter().zip(&wanted).all(|(a, b)| a == b)
+}
+
+type Args = syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>;
+
+/// Do `args` *open* with a string literal? This models the markers `Err("` and `.ok_or("`
+/// exactly: the quote follows the paren directly. `Err("numerus Romanus vacuus".into())`
+/// qualifies — the literal is the first token, whatever is done to it after — and
+/// `Err(format!(…))` does not, because `format` is.
+fn incipit_literale(args: &Args) -> bool {
+    match args.to_token_stream().into_iter().next() {
+        Some(TokenTree::Literal(l)) => matches!(syn::Lit::new(l), syn::Lit::Str(_)),
+        _ => false,
+    }
+}
+
+struct Lector {
+    file: String,
+    sites: Vec<Site>,
+}
+
+impl Lector {
+    /// Record a site at `span`'s line, carrying the first literal in `tokens`.
+    fn nota(&mut self, span: proc_macro2::Span, tokens: TokenStream) {
+        let pattern = primum_literale(tokens).unwrap_or_else(|| "UNPARSED".to_string());
+        // The one guard that survives: a pattern that is nothing but holes identifies nothing.
+        if pattern != "UNPARSED" && pattern.replace("{}", "").trim().is_empty() {
+            return;
+        }
+        self.sites.push(Site { file: self.file.clone(), line: span.start().line, pattern });
+    }
+}
+
+/// A Latin sentence written inside a unit test is not a diagnostic.
+fn est_test(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path().is_ident("cfg") && a.to_token_stream().to_string().contains("test")
+    })
+}
+
+impl<'ast> syn::visit::Visit<'ast> for Lector {
+    fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
+        if est_test(&i.attrs) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, i);
+    }
+
+    fn visit_item_fn(&mut self, i: &'ast syn::ItemFn) {
+        if est_test(&i.attrs) {
+            return;
+        }
+        syn::visit::visit_item_fn(self, i);
+    }
+
+    fn visit_item_const(&mut self, i: &'ast syn::ItemConst) {
+        if i.ident.to_string().starts_with("NUNTIUS_") {
+            self.nota(i.ident.span(), i.expr.to_token_stream());
+        }
+        syn::visit::visit_item_const(self, i);
+    }
+
+    fn visit_item_static(&mut self, i: &'ast syn::ItemStatic) {
+        if i.ident.to_string().starts_with("NUNTIUS_") {
+            self.nota(i.ident.span(), i.expr.to_token_stream());
+        }
+        syn::visit::visit_item_static(self, i);
+    }
+
+    fn visit_expr(&mut self, e: &'ast syn::Expr) {
+        match e {
+            syn::Expr::Struct(s)
+                if semita_desinit(&s.path, "LinguaError") || semita_desinit(&s.path, "Warning") =>
+            {
+                self.nota(s.path.span(), s.fields.to_token_stream());
+            }
+            syn::Expr::Call(c) => {
+                if let syn::Expr::Path(p) = &*c.func {
+                    let s = &p.path;
+                    let hit = semita_desinit(s, "ProgramError::structural")
+                        || semita_desinit(s, "liss_panic")
+                        || semita_desinit(s, "Defectus::novus")
+                        || (semita_desinit(s, "Err") && incipit_literale(&c.args));
+                    if hit {
+                        self.nota(c.func.span(), c.args.to_token_stream());
+                    }
+                }
+            }
+            syn::Expr::MethodCall(m) => {
+                let nomen = m.method.to_string();
+                let hit = nomen == "err"
+                    || (nomen == "ok_or" && incipit_literale(&m.args))
+                    || (nomen == "ok_or_else"
+                        && matches!(m.args.first(), Some(syn::Expr::Closure(c))
+                            if matches!(&*c.body, syn::Expr::Macro(mac)
+                                if mac.mac.path.is_ident("format"))));
+                if hit {
+                    self.nota(m.method.span(), m.args.to_token_stream());
+                }
+            }
+            syn::Expr::Macro(m) if m.mac.path.is_ident("eprintln") => {
+                self.nota(m.mac.path.span(), m.mac.tokens.clone());
+            }
+            _ => {}
+        }
+        syn::visit::visit_expr(self, e);
+    }
+
+    /// `eprintln!(…);` in statement position is a `Stmt::Macro`, not an `Expr::Macro`, and
+    /// every one of `cli.rs`'s twelve is written that way.
+    fn visit_stmt_macro(&mut self, s: &'ast syn::StmtMacro) {
+        if s.mac.path.is_ident("eprintln") {
+            self.nota(s.mac.path.span(), s.mac.tokens.clone());
+        }
+        syn::visit::visit_stmt_macro(self, s);
+    }
+}
+
+/// The same six crates, the same non-recursive `read_dir`, the same sorted `.rs` files —
+/// parsed rather than scanned.
+fn extract_sites_ast() -> Vec<Site> {
+    let root = support::repo_root();
+    let mut files: Vec<_> =
+        ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
+            .iter()
+            .flat_map(|c| {
+                std::fs::read_dir(root.join("crates").join(c).join("src"))
+                    .unwrap()
+                    .map(|e| e.unwrap().path())
+            })
+            .filter(|p| p.extension().is_some_and(|x| x == "rs"))
+            .collect();
+    files.sort();
+
+    let mut sites = Vec::new();
+    for path in files {
+        let src = std::fs::read_to_string(&path).unwrap();
+        let rel = path.strip_prefix(&root).unwrap().display().to_string();
+        let ast = syn::parse_file(&src).unwrap_or_else(|e| panic!("{rel} does not parse: {e}"));
+        let mut lector = Lector { file: rel, sites: Vec::new() };
+        syn::visit::Visit::visit_file(&mut lector, &ast);
+        sites.extend(lector.sites);
+    }
+    sites.sort();
+    sites.dedup();
+    sites
+}
+
+/// The two extractors must agree, or every difference must be written into
+/// `docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md` §8 before the
+/// scanner goes.
+/// The five rows the scanner reports and the parser does not, each a scanner artifact:
+/// three type *definitions* matched by the struct-expression markers `LinguaError {` and
+/// `Warning {`, and two `impl Display for X {` headers matched the same way, whose patterns
+/// were then lifted out of the `write!` on the following line. None is `fixtured`: the three
+/// are `UNPARSED` and the two are `UNCOVERED` — and permanently so, because
+/// `observed_messages` strips the envelope before matching, so an envelope pattern has
+/// nothing to match against. Recorded in §8 of the design document.
+const ARTIFICIA_SCRUTATORIS: [(&str, usize); 5] = [
+    ("crates/lingua-serpentis/src/error.rs", 2),
+    ("crates/lingua-serpentis/src/error.rs", 11),
+    ("crates/lingua-serpentis/src/error.rs", 17),
+    ("crates/lingua-serpentis/src/error.rs", 83),
+    ("crates/liss-runtime/src/exitus.rs", 8),
+];
+
+#[test]
+fn the_ast_extractor_agrees_with_the_scanner() {
+    let scanned = extract_sites();
+    let parsed = extract_sites_ast();
+    let artificium =
+        |s: &Site| ARTIFICIA_SCRUTATORIS.iter().any(|&(f, l)| s.file == f && s.line == l);
+    let solum_scanned: Vec<_> =
+        scanned.iter().filter(|s| !parsed.contains(s) && !artificium(s)).collect();
+    let solum_parsed: Vec<_> = parsed.iter().filter(|s| !scanned.contains(s)).collect();
+    assert!(
+        solum_scanned.is_empty() && solum_parsed.is_empty(),
+        "scanner only ({}): {solum_scanned:#?}\nparser only ({}): {solum_parsed:#?}",
+        solum_scanned.len(),
+        solum_parsed.len(),
+    );
+    // The allowlist is exact: every row in it must really be one the parser drops.
+    for &(f, l) in &ARTIFICIA_SCRUTATORIS {
+        assert!(
+            !parsed.iter().any(|s| s.file == f && s.line == l),
+            "{f}:{l} is no longer dropped by the parser; take it out of the allowlist",
+        );
+    }
+}
