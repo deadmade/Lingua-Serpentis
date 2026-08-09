@@ -126,16 +126,17 @@ pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) ->
     Outcome::Exited { code: status.code().unwrap_or(-1), stdout: String::new(), stderr }
 }
 
-/// A directory removed on drop.
-pub struct TempDir(PathBuf);
+/// A directory removed on drop. A newtype over `tempfile`'s rather than a re-export, because
+/// `write` is this harness's own and forty call sites spell it.
+pub struct TempDir(tempfile::TempDir);
 
 impl TempDir {
     pub fn path(&self) -> &Path {
-        &self.0
+        self.0.path()
     }
     /// `rel` is `/`-separated and relative to the temp root; parents are created.
     pub fn write(&self, rel: &str, content: &str) -> PathBuf {
-        let p = self.0.join(rel);
+        let p = self.path().join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         let mut f = std::fs::File::create(&p).unwrap();
         f.write_all(content.as_bytes()).unwrap();
@@ -143,18 +144,6 @@ impl TempDir {
     }
 }
 
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
 pub fn temp_dir(prefix: &str) -> TempDir {
-    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let p = std::env::temp_dir().join(format!("{prefix}-{}-{n}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&p);
-    std::fs::create_dir_all(&p).unwrap();
-    TempDir(p)
+    TempDir(tempfile::Builder::new().prefix(prefix).tempdir().expect("a scratch directory"))
 }

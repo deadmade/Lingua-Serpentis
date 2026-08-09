@@ -87,14 +87,37 @@ program link. `lingua-serpentis` already dev-depends on `insta`,
 `lingua-serpentis`; `liss-runtime` on `proptest`; `liss-abi` on `libc`. These
 four join that list. No `[dependencies]` table in this repository is touched.
 
-The check is mechanical and belongs in review:
+**Three of the four are already in the compiler's normal dependency graph, and
+were before this document existed.** `libwild` — the in-process linker, tabled in
+spec §11 — depends on `derive_more`, `prost`, `strum` and `zerocopy`, each of
+which has a proc-macro half, and those pull `syn` v2.0.119, `quote` and
+`proc-macro2` into `liss-codegen` and therefore into `lingua-serpentis`:
 
 ```console
-$ cargo tree -e normal | grep -Ei "syn|quote|proc-macro2|tempfile"
+$ cargo tree -e normal -i syn@2.0.119
+syn v2.0.119
+├── derive_more-impl v2.1.1 (proc-macro)
+│   └── derive_more v2.1.1
+│       └── libwild v0.10.0
+│           └── liss-codegen v0.1.0
+│               └── lingua-serpentis v0.1.0
+├── prost-derive v0.14.4 (proc-macro)   …
+├── strum_macros v0.28.0 (proc-macro)   …
+└── zerocopy-derive v0.8.55 (proc-macro) …
 ```
 
-Empty output is the pass. `cargo tree -e dev` is where they must appear, and the
-only place.
+So naming them in `[dev-dependencies]` adds **no crate that was not already
+compiled on every build**; cargo unifies the dev-dep on the version the lockfile
+already pins. `tempfile` is the only genuinely new crate here, and it is
+dev-only in both crates that name it.
+
+The check is therefore not "these names are absent from the graph" — three of
+them are legitimately present. It is two claims, both mechanical:
+
+```console
+$ cargo tree -e normal | grep -i tempfile          # empty: the one new crate is dev-only
+$ git diff --stat -- '*/Cargo.toml'                # only [dev-dependencies] hunks
+```
 
 `proc-macro2`'s `span-locations` deserves its own line, because it is the one
 non-obvious entry. `Span::start()` returns `LineColumn { line: 0, column: 0 }`
@@ -264,7 +287,9 @@ unexplained row is exactly the silent regression `CLAUDE.md` warns about.
   `123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed`, or differs
   only as §8 enumerates.
 - `conformance/` has no modifications. This work blesses no expectation file.
-- `cargo tree -e normal` names none of the four new crates.
+- `cargo tree -e normal` does not name `tempfile`, the one crate this work adds
+  to the tree at all; `syn`, `quote` and `proc-macro2` are already there under
+  `libwild` and stay where they are (§3). No `[dependencies]` table is touched.
 - A `/* … */` block comment containing the text `NUNTIUS_`, written above a
   diagnostic site in `crates/lingua-serpentis/src/checker.rs`, changes no site.
   Under the scanner it invented one. This is the criterion the whole design is

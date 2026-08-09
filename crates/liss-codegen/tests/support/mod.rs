@@ -192,9 +192,12 @@ fn libc_etxtbsy() -> i32 {
 
 /// Write `imago` somewhere executable and run it; `(status, stdout, stderr)`.
 pub fn exsequere(imago: &[u8], nomen: &str) -> (Option<i32>, String, String) {
-    let dir = std::env::temp_dir().join(format!("liss-{}-{nomen}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    let via = dir.join("imago");
+    // A guard, not a bare path: the four `expect`s below leaked the directory on a panic.
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("liss-{nomen}-"))
+        .tempdir()
+        .expect("a scratch directory");
+    let via = dir.path().join("imago");
     std::fs::write(&via, imago).expect("the image is written");
     #[cfg(unix)]
     {
@@ -214,7 +217,6 @@ pub fn exsequere(imago: &[u8], nomen: &str) -> (Option<i32>, String, String) {
         }
     }
     let out = out.expect("the image executes");
-    let _ = std::fs::remove_dir_all(&dir);
     (
         out.status.code(),
         String::from_utf8_lossy(&out.stdout).into_owned(),

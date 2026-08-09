@@ -41,6 +41,10 @@ object = { version = "0.40", default-features = false, features = ["read", "std"
 # bytes, not about the source they were built from.
 object = { version = "0.40", default-features = false, features = ["read", "std", "elf"] }
 
+# The same scratch-directory implementation `lingua-serpentis`'s test support uses, which this
+# crate cannot import: 2026-08-09-test-harness-libraries-design.md §7.
+tempfile = "3"
+
 # `tests/salve.rs` compiles a real fixture, so it needs the front end that
 # produces the IR. A dev-dependency, not a dependency: `lingua-serpentis` does
 # not depend on this crate today, and when the CLI task makes it do so, only a
