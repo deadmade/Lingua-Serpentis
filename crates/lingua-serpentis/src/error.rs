@@ -1,3 +1,4 @@
+use crate::spatium::Spatium;
 use crate::fragmentum::Fragmentum;
 use crate::pictura::{depinge, Genus};
 
@@ -15,6 +16,9 @@ pub struct Warning {
     pub message: String,
     pub file: Option<String>,
     pub line: Option<usize>,
+    /// Where in the file the name sits. Kept until `lint_program` reaches the source
+    /// text and can turn it into a `fragmentum`; never rendered itself.
+    pub spatium: Option<Spatium>,
     pub fragmentum: Option<Fragmentum>,
 }
 
@@ -146,6 +150,7 @@ mod tests {
             message: message.into(),
             file: file.map(str::to_string),
             line,
+            spatium: None,
             fragmentum: None,
         }
     }

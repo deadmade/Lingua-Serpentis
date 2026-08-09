@@ -27,7 +27,7 @@ pub fn ir(via: &Path, fons: &str) -> liss_ir::Programma {
     let tokens = tokenize(fons).expect("the fixture lexes");
     let ast = parse_file(&tokens).expect("the fixture parses");
     let mut prog = ParsedProgram {
-        root: vec![ParsedFile { path: via.display().to_string(), ast }],
+        root: vec![ParsedFile { path: via.display().to_string(), src: fons.into(), ast }],
         packages: BTreeMap::new(),
     };
     check_program_typed(&mut prog).expect("the fixture type-checks")
@@ -72,7 +72,7 @@ fn parsata(prog: lingua_serpentis::program::Program) -> ParsedProgram {
     let uno = |f: lingua_serpentis::program::SourceFile| {
         let tokens = tokenize(&f.src).expect("the fixture lexes");
         let ast = parse_file(&tokens).expect("the fixture parses");
-        ParsedFile { path: f.path, ast }
+        ParsedFile { path: f.path, src: f.src, ast }
     };
     ParsedProgram {
         root: prog.root.into_iter().map(uno).collect(),

@@ -1,5 +1,6 @@
 use crate::ast::{ParsedProgram, Stmt, StmtKind};
 use crate::error::Warning;
+use crate::spatium::Spatium;
 
 /// One warning per declaration site whose name is not a Latin word, sorted by line.
 pub fn lint(program: &[Stmt]) -> Vec<Warning> {
@@ -20,6 +21,7 @@ pub fn lint_program(prog: &ParsedProgram) -> Vec<Warning> {
                 message: format!("nomen fasciculi '{name}' fortasse non Latinum est"),
                 file: None,
                 line: None,
+                spatium: None,
                 fragmentum: None,
             });
         }
@@ -36,12 +38,13 @@ pub fn lint_program(prog: &ParsedProgram) -> Vec<Warning> {
 }
 
 /// Single-character names are conventional counters and are exempt.
-fn check_name(name: &str, line: usize, out: &mut Vec<Warning>) {
+fn check_name(name: &str, name_span: Spatium, out: &mut Vec<Warning>) {
     if name.chars().count() > 1 && !latinitas::is_latin(name) {
         out.push(Warning {
             message: format!("nomen '{name}' fortasse non Latinum est"),
             file: None,
-            line: Some(line),
+            line: Some(name_span.linea()),
+            spatium: Some(name_span),
             fragmentum: None,
         });
     }
@@ -55,12 +58,13 @@ fn lint_block(body: &[Stmt], out: &mut Vec<Warning>) {
 
 fn lint_stmt(s: &Stmt, out: &mut Vec<Warning>) {
     match &s.kind {
-        StmtKind::Let { name, .. } => check_name(name, s.line, out),
+        StmtKind::Let { name, name_span, .. } => check_name(name, *name_span, out),
         StmtKind::Func(f) => {
-            check_name(&f.name, s.line, out);
-            for (_, param) in &f.params {
-                // `def_line`, not `Stmt.line`: a split header writes parameters lower down.
-                check_name(param, f.def_line, out);
+            check_name(&f.name, f.name_span, out);
+            for (_, param, span) in &f.params {
+                // The parameter's own span, not the statement's: a split header
+                // writes its parameters lower down than its `munus`.
+                check_name(param, *span, out);
             }
             lint_block(&f.body, out);
         }
@@ -211,6 +215,7 @@ mod tests {
     fn pfile(path: &str, src: &str) -> ParsedFile {
         ParsedFile {
             path: path.into(),
+            src: src.into(),
             ast: crate::parser::parse_file(&tokenize(src).unwrap()).unwrap(),
         }
     }

@@ -23,7 +23,7 @@ pub use error::{ProgramError, Warning};
 fn parse_one(f: SourceFile) -> Result<ParsedFile, ProgramError> {
     let tokens = lexer::tokenize(&f.src).map_err(|e| ProgramError::in_file(&f.path, e))?;
     let ast = parser::parse_file(&tokens).map_err(|e| ProgramError::in_file(&f.path, e))?;
-    Ok(ParsedFile { path: f.path, ast })
+    Ok(ParsedFile { path: f.path, src: f.src, ast })
 }
 
 /// Lex and parse every file of a loaded program, root and packages alike.
@@ -80,7 +80,7 @@ mod tests {
     use error::ProgramError;
 
     fn monitum(message: &str, line: Option<usize>) -> Warning {
-        Warning { message: message.into(), file: None, line, fragmentum: None }
+        Warning { message: message.into(), file: None, line, spatium: None, fragmentum: None }
     }
 
     #[test]

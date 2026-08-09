@@ -1,3 +1,4 @@
+use crate::spatium::Spatium;
 use crate::roman::Roman;
 
 pub use liss_runtime::{BinOp, UnOp};
@@ -25,11 +26,13 @@ pub enum Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncDecl {
     pub name: String,
-    pub params: Vec<(Type, String)>,
+    pub name_span: Spatium,
+    /// Each parameter's type, name, and where the name is written. The span replaces
+    /// the old `def_line`, which existed only so a parameter's warning could land on
+    /// the line it was written rather than on `munus`.
+    pub params: Vec<(Type, String, Spatium)>,
     pub ret: Type,
     pub body: Vec<Stmt>,
-    /// Line of the header's parameter clause; a split header puts it below `Stmt.line`.
-    pub def_line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +43,7 @@ pub struct Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind {
-    Let { ty: Type, name: String, value: Expr },
+    Let { ty: Type, name: String, name_span: Spatium, value: Expr },
     Assign { name: String, value: Expr },
     IndexAssign { name: String, index: Expr, value: Expr },
     Print(Expr),
@@ -72,6 +75,9 @@ pub struct FileAst {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFile {
     pub path: String,
+    /// The file as read, kept beside its path so a diagnostic can take the line it
+    /// points at while the text is still in hand.
+    pub src: String,
     pub ast: FileAst,
 }
 

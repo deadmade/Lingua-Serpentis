@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 // ---------------------------------------------------------------- fixtures
 
 fn pfile(path: &str, src: &str) -> ParsedFile {
-    ParsedFile { path: path.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
+    ParsedFile { path: path.into(), src: src.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
 }
 
 fn lower(root: &[(&str, &str)], pkgs: &[(&str, &[(&str, &str)])]) -> ir::Programma {

@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::error::{LinguaError, LResult};
+use crate::spatium::Spatium;
 use crate::token::{Token, TokenKind};
 
 /// Half the measured ceiling on a spawned 2 MiB thread, which is 128 (D-05).
@@ -169,7 +170,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 if self.peek() == Some(&TokenKind::Dot) {
                     self.advance();
-                    let fname = self.ident()?;
+                    let (fname, _) = self.ident()?;
                     if self.peek() != Some(&TokenKind::LParen) {
                         return Err(self.err("vocatio functionis post nomen fasciculi expectata"));
                     }
@@ -218,9 +219,9 @@ impl<'a> Parser<'a> {
         Some(ty)
     }
 
-    fn ident(&mut self) -> LResult<String> {
+    fn ident(&mut self) -> LResult<(String, Spatium)> {
         match self.peek().cloned() {
-            Some(TokenKind::Ident(n)) => { self.advance(); Ok(n) }
+            Some(TokenKind::Ident(n)) => { let s = self.advance().spatium; Ok((n, s)) }
             _ => Err(self.err("nomen expectatum")),
         }
     }
@@ -285,7 +286,7 @@ impl<'a> Parser<'a> {
 
     fn assign_no_semi(&mut self) -> LResult<Stmt> {
         let line = self.line();
-        let name = self.ident()?;
+        let (name, _) = self.ident()?;
         self.eat(&TokenKind::Assign)?;
         let value = self.expr()?;
         Ok(Stmt { kind: StmtKind::Assign { name, value }, line })
@@ -304,11 +305,9 @@ impl<'a> Parser<'a> {
             return Err(self.err("typus reditus post 'reddit' ponendus, non ante nomen"));
         }
 
-        let name = self.ident()?;
+        let (name, name_span) = self.ident()?;
 
-        // `def_line` marks where the parameters are written, not the `munus` line.
-        let def_line = self.line();
-        let mut params: Vec<(Type, String)> = Vec::new();
+        let mut params: Vec<(Type, String, Spatium)> = Vec::new();
         if self.peek() == Some(&TokenKind::Takes) {
             self.advance();
             self.eat(&TokenKind::LParen)?;
@@ -318,12 +317,12 @@ impl<'a> Parser<'a> {
             loop {
                 let ty = self.type_keyword()
                     .ok_or_else(|| self.err("typus parametri expectatus"))?;
-                let pname = self.ident()?;
+                let (pname, pspan) = self.ident()?;
                 // D-16, and rejected here and nowhere else.
-                if params.iter().any(|(_, existing)| *existing == pname) {
+                if params.iter().any(|(_, existing, _)| *existing == pname) {
                     return Err(self.err(&format!("parametrum '{}' bis nominatum", pname)));
                 }
-                params.push((ty, pname));
+                params.push((ty, pname, pspan));
                 if self.peek() == Some(&TokenKind::Comma) { self.advance(); } else { break; }
             }
             self.eat(&TokenKind::RParen)?;
@@ -340,7 +339,7 @@ impl<'a> Parser<'a> {
 
         let body = self.block()?;
         Ok(Stmt {
-            kind: StmtKind::Func(FuncDecl { name, params, ret, body, def_line }),
+            kind: StmtKind::Func(FuncDecl { name, name_span, params, ret, body }),
             line,
         })
     }
@@ -371,11 +370,11 @@ impl<'a> Parser<'a> {
             _ => {}
         }
         if let Some(ty) = self.type_keyword() {
-            let name = self.ident()?;
+            let (name, name_span) = self.ident()?;
             self.eat(&TokenKind::Assign)?;
             let value = self.expr()?;
             self.eat(&TokenKind::Semicolon)?;
-            return Ok(Stmt { kind: StmtKind::Let { ty, name, value }, line });
+            return Ok(Stmt { kind: StmtKind::Let { ty, name, name_span, value }, line });
         }
         match self.peek() {
             Some(TokenKind::Print) => {
@@ -390,7 +389,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Ident(_))
                 if self.toks.get(self.pos + 1).map(|t| &t.kind) == Some(&TokenKind::Assign) =>
             {
-                let name = self.ident()?;
+                let (name, _) = self.ident()?;
                 self.eat(&TokenKind::Assign)?;
                 let value = self.expr()?;
                 self.eat(&TokenKind::Semicolon)?;
@@ -429,7 +428,7 @@ pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
     while p.peek() == Some(&TokenKind::Import) {
         let line = p.line();
         p.advance();
-        let package = p.ident()?;
+        let (package, _) = p.ident()?;
         p.eat(&TokenKind::Semicolon)?;
         if imports.iter().any(|i| i.package == package) {
             return Err(LinguaError {
@@ -455,6 +454,11 @@ pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parameter types and names, dropping the spans these tests are not about.
+    fn nomina(params: &[(Type, String, Spatium)]) -> Vec<(Type, &str)> {
+        params.iter().map(|(t, n, _)| (t.clone(), n.as_str())).collect()
+    }
     use crate::lexer::tokenize;
 
     fn ri(n: i64) -> crate::roman::Roman { crate::roman::Roman::from_i64(n) }
@@ -506,9 +510,11 @@ mod tests {
     fn declaration_statement() {
         let s = parse_all("ni x = °V;");
         assert_eq!(s.len(), 1);
-        assert_eq!(s[0].kind, StmtKind::Let {
-            ty: Type::Int, name: "x".into(), value: Expr::Int(ri(5)),
-        });
+        assert!(matches!(
+            &s[0].kind,
+            StmtKind::Let { ty: Type::Int, name, value: Expr::Int(v), .. }
+                if name == "x" && *v == ri(5)
+        ));
     }
 
     #[test]
@@ -622,7 +628,7 @@ mod tests {
             StmtKind::Func(f) => {
                 assert_eq!(f.name, "adde");
                 assert_eq!(f.ret, Type::Int);
-                assert_eq!(f.params, vec![(Type::Int, "a".into()), (Type::Int, "b".into())]);
+                assert_eq!(nomina(&f.params), vec![(Type::Int, "a"), (Type::Int, "b")]);
                 assert!(matches!(f.body[0].kind, StmtKind::Return(_)));
             }
             other => panic!("expected func, got {:?}", other),
@@ -648,7 +654,7 @@ mod tests {
         match &s[0].kind {
             StmtKind::Func(f) => {
                 assert_eq!(f.ret, Type::Bool);
-                assert_eq!(f.params, vec![(Type::Text, "v".into()), (Type::Int, "n".into())]);
+                assert_eq!(nomina(&f.params), vec![(Type::Text, "v"), (Type::Int, "n")]);
             }
             other => panic!("expected func, got {:?}", other),
         }
@@ -707,11 +713,13 @@ mod tests {
     #[test]
     fn list_type_declaration_parses() {
         let s = parse_all("ni lista xs = [°I];");
-        assert_eq!(s[0].kind, StmtKind::Let {
-            ty: Type::List(Box::new(Type::Int)),
-            name: "xs".into(),
-            value: Expr::ListLit(vec![Expr::Int(ri(1))]),
-        });
+        assert!(matches!(
+            &s[0].kind,
+            StmtKind::Let { ty, name, value: Expr::ListLit(xs), .. }
+                if *ty == Type::List(Box::new(Type::Int))
+                    && name == "xs"
+                    && *xs == vec![Expr::Int(ri(1))]
+        ));
     }
 
     #[test]

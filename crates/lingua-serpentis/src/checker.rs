@@ -566,7 +566,7 @@ impl Checker {
     fn check_stmt(&mut self, s: &mut Stmt) -> LResult<Option<ir::Stmt>> {
         let line = s.line;
         match &mut s.kind {
-            StmtKind::Let { ty, name, value } => {
+            StmtKind::Let { ty, name, value, .. } => {
                 let (vt, value_ir) = self.resolve_expr(value, Some(ty.clone()), line)?;
                 if vt != *ty {
                     return Err(LinguaError {
@@ -701,7 +701,7 @@ impl Checker {
         self.push_scope();
         // Slots are numbered per function, so a fresh table; restored below.
         let outer_slots = std::mem::take(&mut self.slot_types);
-        for (t, n) in &f.params { self.declare(n.clone(), t.clone()); }
+        for (t, n, _) in &f.params { self.declare(n.clone(), t.clone()); }
         let saved = std::mem::replace(&mut self.current_ret, f.ret.clone());
         // A function body is not inside any loop, whatever encloses the declaration.
         let saved_depth = std::mem::take(&mut self.loop_depth);
@@ -856,7 +856,7 @@ fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramErr
                     line: s.line,
                 }));
             }
-            let ptypes = f.params.iter().map(|(t, _)| t.clone()).collect();
+            let ptypes = f.params.iter().map(|(t, _, _)| t.clone()).collect();
             sigs.insert(f.name.clone(), (ptypes, f.ret.clone()));
         }
     }
@@ -1288,7 +1288,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     fn pfile(path: &str, src: &str) -> ParsedFile {
-        ParsedFile { path: path.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
+        ParsedFile { path: path.into(), src: src.into(), ast: parse_file(&tokenize(src).unwrap()).unwrap() }
     }
 
     fn pprog(root: &[(&str, &str)], pkgs: &[(&str, &[(&str, &str)])]) -> ParsedProgram {
