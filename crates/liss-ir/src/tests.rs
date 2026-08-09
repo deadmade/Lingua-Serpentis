@@ -5,26 +5,18 @@ use liss_runtime::{BinOp, Roman};
 fn symbols_are_injective_over_unicode_identifiers() {
     assert_eq!(symbol(None, "initium"), "liss_0__7_initium");
     assert_eq!(symbol(Some("mathematica"), "duplum"), "liss_11_mathematica_6_duplum");
-    // the escape must keep distinct names distinct
     assert_ne!(symbol(None, "aê"), symbol(None, "a_u00ea_"));
-    // every mangled name has a digit after `liss_`; every runtime entry has a letter
+    // a digit after `liss_`, where every runtime entry point has a letter
     assert!(symbol(None, "x")[5..6].chars().all(|c| c.is_ascii_digit()));
 }
 
 #[test]
 fn a_package_function_and_a_root_function_mangle_differently() {
-    // same bare name, different namespace -- must not collide
     assert_ne!(symbol(None, "duplum"), symbol(Some("mathematica"), "duplum"));
-    // `None` (root) and `Some("")` (an empty, unrealizable package name) are
-    // the same zero-length namespace and correctly mangle identically --
-    // there is no real package this could ever collide with.
+    // `None` and `Some("")` are the same zero-length namespace, and no real package is `""`
     assert_eq!(symbol(None, "x"), symbol(Some(""), "x"));
 }
 
-/// `symbol(None, "aê")` and `symbol(None, "a_u00ea_")` are exactly the
-/// collision a naive (non-length-prefixed) escape would allow: the escaped
-/// form of the first is a byte-for-byte prefix match of the second's
-/// literal text. Length-prefixing is what keeps them apart.
 #[test]
 fn escape_collision_is_prevented_by_length_prefixing() {
     let a = symbol(None, "aê");
@@ -34,10 +26,6 @@ fn escape_collision_is_prevented_by_length_prefixing() {
     assert_ne!(a, b);
 }
 
-/// A hand-built two-function `Programma`: `initium` (the entry point) calls
-/// a one-parameter function `duplica` that returns `n * °II`. Asserts the
-/// structure round-trips exactly as constructed -- this is the shape
-/// contract Task 7 (the checker) has to produce.
 #[test]
 fn hand_built_two_function_programma_round_trips() {
     // munus duplica(ni n) redde { redde n * °II; }
@@ -97,7 +85,6 @@ fn hand_built_two_function_programma_round_trips() {
 
     let programma = Programma { funcs: vec![initium.clone(), duplica.clone()] };
 
-    // the structure round-trips exactly as constructed
     assert_eq!(programma.funcs.len(), 2);
     assert_eq!(programma.funcs[0], initium);
     assert_eq!(programma.funcs[1], duplica);
@@ -106,7 +93,6 @@ fn hand_built_two_function_programma_round_trips() {
     assert_eq!(programma.funcs[0].symbol, "liss_0__7_initium");
     assert_eq!(programma.funcs[1].symbol, duplica_symbol);
 
-    // the call site's FuncId(1) really does refer to `duplica`
     match &programma.funcs[0].body.stmts[0].kind {
         StmtKind::Return(Expr { kind: ExprKind::Call { func, args }, .. }) => {
             assert_eq!(programma.funcs[func.0 as usize].symbol, duplica_symbol);
@@ -115,7 +101,6 @@ fn hand_built_two_function_programma_round_trips() {
         other => panic!("expected a Return of a Call, got {other:?}"),
     }
 
-    // duplica's body really is `n * °II`, typed at every node
     match &programma.funcs[1].body.stmts[0].kind {
         StmtKind::Return(Expr {
             ty,

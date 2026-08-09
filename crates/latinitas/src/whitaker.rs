@@ -10,19 +10,11 @@ const STEMS_END: usize = STEM_WIDTH * 4;
 const NO_STEM: &str = "zzz";
 /// Whitaker's declension code for an indeclinable entry.
 const INDECLINABLE_DECL: u8 = 9;
-/// In INFLECTS.LAT, declension/conjugation `0` is a wildcard meaning "applies
-/// regardless of declension/conjugation" — see `merge_wildcard_endings`.
+/// "Applies regardless of declension/conjugation"; see `merge_wildcard_endings`.
 const WILDCARD_DECL: u8 = 0;
 
-/// Map a Whitaker part-of-speech code onto the three inflecting classes we
-/// model. Everything else is indeclinable as far as this checker is concerned.
-///
-/// Known, accepted limitation: `PRON` and `NUM` are not mapped here, so only
-/// their truncated dictionary stems (e.g. `qu`, `h`, `ill`, `du`, `tr`) land in
-/// `whole` as bare words — inflected forms like `quae`, `quem`, `duo`, `tres`,
-/// `ille` are therefore reported as non-Latin. Routing these truncated 1-3
-/// character stems permissively would accept enormous amounts of junk and gut
-/// the checker's precision, so this is left as-is.
+/// The three inflecting classes modelled here; everything else is indeclinable.
+/// `PRON` and `NUM` are unmapped by decision — see `docs/internals/rationale.md`.
 fn inflecting_pos(code: &str) -> Option<Pos> {
     match code {
         "N" => Some(Pos::Noun),
@@ -48,17 +40,8 @@ pub fn build_tables(dictline: &str, inflects: &str, uniques: &str) -> Tables {
     t
 }
 
-/// Merge our own small supplement into the whole-word table.
-///
-/// Deliberately separate from `build_tables`, which stays a pure function of
-/// the three Whitaker files: the supplement is ours, they are Whitaker's, and
-/// keeping the arity unchanged leaves every existing `build_tables` caller
-/// alone. One word per line; `#` starts a comment; blank lines are ignored.
-///
-/// Entries land in `whole`, so they are accepted as written and inflect no
-/// further. That is the conservative choice — a supplemented infinitive should
-/// not silently license every ending of a conjugation it was never checked
-/// against.
+/// One word per line, `#` starts a comment; entries land in `whole` and so
+/// inflect no further. D-18
 pub fn add_supplement(t: &mut Tables, text: &str) {
     for line in text.lines() {
         let word = line.split('#').next().unwrap_or("").trim();
@@ -69,19 +52,7 @@ pub fn add_supplement(t: &mut Tables, text: &str) {
     }
 }
 
-/// Distribute the wildcard (declension/conjugation `0`) endings onto every
-/// concrete group of the same part of speech.
-///
-/// INFLECTS.LAT uses `0` in the declension column to mean "applies regardless
-/// of declension/conjugation": the 31 `V 0 0` lines are the perfect-system
-/// personal endings (`-i`, `-isti`, `-it`, `-imus`, ...), which really are
-/// conjugation-independent, and the 52 `ADJ 0 0` lines are the comparative and
-/// superlative endings (`-ior`, `-issimus`, ...). Taken literally, our
-/// `Group { pos, decl }` join key files them under a group that essentially no
-/// dictionary stem ever references, so those two entire inflectional systems
-/// become unreachable and forms like `amavit`, `vidi`, `melior` and `minimum`
-/// are wrongly reported as non-Latin. Merging them in once, here at table-build
-/// time, restores both systems.
+/// Wildcard (declension `0`) endings go to every concrete group of the same `pos`.
 fn merge_wildcard_endings(t: &mut Tables) {
     let wildcards: Vec<(Pos, HashSet<String>)> = t
         .endings
@@ -93,9 +64,7 @@ fn merge_wildcard_endings(t: &mut Tables) {
         return;
     }
 
-    // Every concrete group a lookup could ever join against: those that own
-    // endings, plus those merely referenced by a dictionary stem (which would
-    // otherwise have no endings entry to extend).
+    // groups that own endings, plus those only referenced by a dictionary stem
     let mut concrete: HashSet<Group> =
         t.endings.keys().copied().filter(|g| g.decl != WILDCARD_DECL).collect();
     for groups in t.stems.values() {
@@ -111,9 +80,7 @@ fn merge_wildcard_endings(t: &mut Tables) {
     }
 }
 
-/// One line of UNIQUES.LAT. Entries are two lines: the irregular word form
-/// flush at column 1, then an indented line of grammatical codes and meaning.
-/// Only the flush-left lines are word forms.
+/// UNIQUES.LAT: the word form is flush left, its codes on the next, indented line.
 fn parse_unique_line(line: &str, t: &mut Tables) {
     if line.starts_with(char::is_whitespace) {
         return;
@@ -148,7 +115,7 @@ fn parse_dict_line(line: &str, t: &mut Tables) {
         return;
     };
 
-    // Indeclinable part of speech: the stem is the entire word.
+    // indeclinable part of speech: the stem is the entire word
     let Some(pos) = inflecting_pos(pos_code) else {
         t.whole.extend(stems);
         return;
@@ -171,16 +138,15 @@ fn parse_dict_line(line: &str, t: &mut Tables) {
     }
 }
 
-/// One INFLECTS rule. Layout is
-/// `POS decl variant <features...> stem-key ending-length ending flag flag`,
-/// with a variable number of feature columns — so we read from the right.
+/// One INFLECTS rule: `POS decl variant <features...> stem-key ending-length
+/// ending flag flag`, with a variable feature count — so it reads from the right.
 fn parse_inflect_line(line: &str, t: &mut Tables) {
     let line = line.trim();
     if line.is_empty() || line.starts_with("--") {
         return;
     }
     let toks: Vec<&str> = line.split_whitespace().collect();
-    // Shortest real rule is: POS decl variant stem-key length flag flag.
+    // shortest real rule: POS decl variant stem-key length flag flag
     if toks.len() < 7 {
         return;
     }
@@ -191,29 +157,21 @@ fn parse_inflect_line(line: &str, t: &mut Tables) {
         return;
     };
 
-    // Some lines carry a trailing scholarly citation comment introduced by a
-    // `--` token (e.g. "-- G+L 130 1"), which sits AFTER the two flag columns.
-    // Some comment markers are glued directly onto the following word instead
-    // of standing alone (e.g. "--JFW,", "--PRON", "--quis,"), so match on a
-    // `--` prefix rather than exact equality. Strip everything from the first
-    // such token onward before dropping the flags, otherwise the
-    // right-anchored extraction below misparses the ending.
+    // A trailing scholarly citation sits after the flag columns, either standing
+    // alone ("-- G+L 130 1") or glued onto the next word ("--JFW,").
     let core_toks: &[&str] = match toks.iter().position(|tok| tok.starts_with("--")) {
         Some(i) => &toks[..i],
         None => &toks[..],
     };
-    // Defensive re-check: in the current INFLECTS.LAT this never fires (every
-    // line long enough to reach here stays long enough after truncation), but
-    // a citation-comment truncation could in principle shrink `core_toks`
-    // below the minimum shape, so guard it explicitly rather than panic below.
+    // never fires against today's INFLECTS.LAT, but truncation could in
+    // principle shrink a line below the minimum shape
     if core_toks.len() < 7 {
         return;
     }
 
-    // Drop the two trailing flag columns (age, frequency).
+    // drop the two trailing flag columns (age, frequency)
     let core = &core_toks[..core_toks.len() - 2];
-    // The ending is the last token when it is alphabetic; when the ending-length
-    // column is 0 there is no ending token at all, so the last token is numeric.
+    // an ending-length column of 0 means no ending token, so the last token is numeric
     let ending = match core.last() {
         Some(last) if last.chars().all(|c| c.is_ascii_alphabetic()) => normalize(last),
         Some(_) => String::new(),
@@ -229,8 +187,7 @@ mod tests {
     use crate::analyze::analyze;
     use crate::model::{Group, Pos};
 
-    /// Build a DICTLINE line with correct 19-character stem columns, so the
-    /// tests never depend on hand-counted spacing.
+    /// Correct 19-character stem columns, so no test depends on hand-counted spacing.
     fn dict_line(stems: &[&str], tail: &str) -> String {
         let mut s = String::new();
         for i in 0..4 {
@@ -271,7 +228,7 @@ mod tests {
 
         assert!(analyze(&t, "amo"));
         assert!(analyze(&t, "amare"));
-        assert!(analyze(&t, "amavi")); // perfect stem + perfect ending
+        assert!(analyze(&t, "amavi"));
     }
 
     #[test]
@@ -289,8 +246,6 @@ mod tests {
 
     #[test]
     fn handles_zero_length_endings() {
-        // 3rd-declension nominatives attach a zero-length ending, so the bare
-        // stem is itself a valid word.
         let dict = dict_line(&["rex", "reg"], "N      3 1 M T          X X X A O king;");
         let infl = "N     3 1 NOM S M  1 0           X A\n\
                     N     3 1 GEN S M  2 2 is        X A";
@@ -305,7 +260,6 @@ mod tests {
         let dict = dict_line(&["a"], "N      9 8 M N          X X X C G year, abb. a.;");
         let t = build_tables(&dict, "", "");
         assert!(t.whole.contains("a"));
-        // Declension 9 is indeclinable, so nothing should land in `stems`.
         assert!(!t.stems.contains_key("a"));
     }
 
@@ -325,8 +279,6 @@ mod tests {
 
     #[test]
     fn parses_uniques_as_whole_words() {
-        // UNIQUES entries are two lines: the word form flush left, then an
-        // indented line of grammatical codes and the English meaning.
         let uniques = "est\n\
                        \x20     V      5 1 PRES ACTIVE IND 3 S     X X X A O he/she/it is;\n\
                        agantur\n\
@@ -335,26 +287,19 @@ mod tests {
 
         assert!(t.whole.contains("est"));
         assert!(t.whole.contains("agantur"));
-        // The indented codes lines must never be mistaken for word forms:
-        // exactly the two flush-left forms should be present, nothing else.
+        // exactly the two flush-left forms, nothing else
         assert_eq!(t.whole.len(), 2);
         assert!(analyze(&t, "est"));
     }
 
     #[test]
     fn ignores_trailing_citation_comments_in_inflects() {
-        // Real INFLECTS.LAT line 972: a trailing "-- G+L 130 1" citation sits
-        // AFTER the two flag columns. Without stripping it, the ending is
-        // misparsed as "" instead of "are", which then lets any V-1 stem match
-        // as a bare word.
+        // real INFLECTS.LAT line 972
         let infl = "V     1 1 PRES  PASSIVE IND  2 S  2 3 are           B B    --  G+L 130 1";
         let t = build_tables("", infl, "");
 
         let g = Group { pos: Pos::Verb, decl: 1 };
         let endings = t.endings.get(&g).expect("group should have endings");
-        // Single-line fixture: pin the exact set, not just membership, so
-        // nothing extra (a bogus empty ending or a leaked comment word) has
-        // snuck in alongside the real one.
         assert_eq!(endings.len(), 1);
         assert!(endings.contains("are"));
         assert!(!endings.contains(""), "bogus empty ending leaked in");
@@ -362,9 +307,6 @@ mod tests {
 
     #[test]
     fn ignores_leaked_comment_words_in_inflects() {
-        // The trailing citation comment can be several words long; none of
-        // them (e.g. "exception") may leak into the endings table and be
-        // mistaken for a real Latin suffix.
         let infl = "N     1 1 GEN S F  2 2 ae        X A    --  exception to rule";
         let t = build_tables("", infl, "");
 
@@ -377,12 +319,7 @@ mod tests {
 
     #[test]
     fn strips_attached_comment_markers_not_just_bare_dashes() {
-        // Real INFLECTS.LAT line 409: the citation marker "--JFW," is glued
-        // directly onto the following word rather than standing alone as a
-        // bare "--" token. Matching only exact "--" misses this line
-        // entirely: the last token is then "--JFW," itself (non-alphabetic),
-        // which injects a bogus empty ending and discards the real ending
-        // "is".
+        // real INFLECTS.LAT line 409, where the marker is glued on as "--JFW,"
         let infl = "N     3 9 NOM S X  1 2 is        X A  --JFW, 1st stem";
         let t = build_tables("", infl, "");
 
@@ -395,9 +332,6 @@ mod tests {
 
     #[test]
     fn wildcard_conjugation_endings_reach_every_verb_group() {
-        // The perfect-system personal endings are filed under "V 0 0" because
-        // they are conjugation-independent. A 2nd-conjugation stem must still
-        // be able to use them.
         let dict = dict_line(
             &["mon", "mon", "monu", "monit"],
             "V      2 1 TRANS        X X X A O warn, advise;",
@@ -414,7 +348,6 @@ mod tests {
 
     #[test]
     fn wildcard_declension_endings_reach_every_adjective_group() {
-        // Comparative/superlative endings are filed under "ADJ 0 0".
         let dict = dict_line(
             &["bon", "bon", "melior", "optim"],
             "ADJ    1 1 POS          X X X A O good;",
@@ -430,8 +363,6 @@ mod tests {
 
     #[test]
     fn wildcard_endings_do_not_cross_parts_of_speech() {
-        // "V 0 0" endings are conjugation-independent, not part-of-speech
-        // independent: they must not leak onto noun or adjective groups.
         let dict = dict_line(&["numer", "numer"], "N      2 1 M T          X X X A O number;");
         let infl = "N     2 1 NOM S M  1 2 us        X A\n\
                     V     0 0 PERF  ACTIVE  IND  2 S  3 4 isti      X A";
@@ -446,7 +377,6 @@ mod tests {
     fn normalizes_stems_to_dictionary_orthography() {
         let dict = dict_line(&["uerb", "verb"], "N      2 2 N T          X X X A O word;");
         let t = build_tables(&dict, "N     2 2 NOM S N  1 2 um        X A", "");
-        // Both spellings fold to the same normalized stem.
         assert!(analyze(&t, "verbum"));
         assert!(analyze(&t, "uerbum"));
     }

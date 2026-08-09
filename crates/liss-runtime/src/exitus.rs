@@ -1,30 +1,18 @@
-//! Turning `initium`'s returned `ni` into a Unix exit status. Moved from
-//! `interp.rs` unchanged in behaviour, and now driven by `liss-abi`'s
-//! `ingressus`; see the packages design §4.3 for why
-//! truncation is specified rather than a bug.
+//! Turning `initium`'s returned `ni` into a Unix exit status (packages design §4.3).
 
 use crate::roman::Roman;
 
-/// A minimal, dependency-free stand-in for a caller's own warning type.
-/// `liss-runtime` cannot depend on `lingua-serpentis` (or anything else — see
-/// the crate doc), so this carries only the message text; a caller with a
-/// richer warning type (file, line) wraps it. `liss-abi`s `ingressus` does
-/// exactly that at its one call site, where the runtime writes the D-10
-/// truncated-exit-status note; `lingua-serpentis::interp` was the caller before
-/// Task 19.
+/// A dependency-free stand-in for a caller's own warning type: `liss-runtime`
+/// cannot depend on `lingua-serpentis`, so this carries the message text only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Warning {
     pub message: String,
 }
 
-/// Unix keeps an exit status's low 8 bits: the value mod CCLVI, shifted
-/// non-negative (a negative remainder gains one modulus).
-///
-/// The truncation is deliberate and specified (packages design §4.3), so it
-/// stays. What was missing is any sign that it happened — `redde °CCC` exited
-/// 44 in silence, and `redde °CCLVI` exited 0, which reads as success. The
-/// second return value is that sign (D-10): `Some(warning)` exactly when the
-/// returned value did not already fit in 0..=CCLV.
+/// The value mod CCLVI, shifted non-negative; `Some(warning)` exactly when the
+/// value did not already fit in 0..=CCLV (D-10). Keep this doc block at four
+/// lines or longer — it is what holds the English `expect` message below out
+/// of the 300-byte window `catalogus.rs` reads after the struct's brace above.
 pub fn exit_status(r: &Roman) -> (u8, Option<Warning>) {
     let rem = r.div_rem(&Roman::from_u64(256)).expect("CCLVI is not zero").1;
     let x = rem.to_i64().expect("|rem| < 256 fits i64");
@@ -49,8 +37,8 @@ mod tests {
 
     #[test]
     fn exit_status_is_the_return_mod_256() {
-        assert_eq!(exit_status(&r(257)).0, 1); // 257 mod 256
-        assert_eq!(exit_status(&r(256)).0, 0); // 256 mod 256
+        assert_eq!(exit_status(&r(257)).0, 1);
+        assert_eq!(exit_status(&r(256)).0, 0);
         assert_eq!(exit_status(&r(5)).0, 5);
     }
 

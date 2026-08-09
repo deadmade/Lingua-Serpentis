@@ -1,176 +1,55 @@
-//! `custos` (spec §8): stack exhaustion, kept inside the error model.
-//!
-//! Removing the recursion cap means deep recursion faults on the guard page,
-//! and the robustness invariant does not permit signal death — `judge` maps a
-//! signalled process straight to a `no abort` violation, and **D-04 recorded
-//! exactly this** (`SIGABRT`, exit 134) as "outside the error model entirely".
-//! So the fault is caught here and reported as an ordinary exit-1 Latin
-//! diagnostic.
-//!
-//! # The one thing this module cannot do for itself
-//!
-//! **The runtime's `main` must call [`liss_custos_institue`] before
-//! `liss_initium`, and nothing in this crate can make it.** There is no entry
-//! point here yet — spec §6 gives `main` to the runtime and Task 10 writes it —
-//! so the installer currently has no caller outside the tests, and a `main`
-//! that calls `liss_initium` and forgets it would leave every test in
-//! `tests/custos.rs` passing, because each installs explicitly. D-04 would stay
-//! open with no symptom until somebody ran a recursive program.
-//!
-//! An `.init_array` constructor would have removed the need to remember, and is
-//! rejected: on a host build `std::rt::init` runs *after* the constructors and
-//! installs std's own `SIGSEGV` handler over ours, so the mechanism is not
-//! merely untested here — it is inert here, which is the worst way to ship
-//! something. `tests/custos.rs` carries the enforcement instead:
-//! `a_main_in_this_crate_must_install_the_guard` fails the moment an entry
-//! point appears in `src/` without the call.
-//!
-//! **`std::rt::init` never runs** (spec §8.1). The entry point is
-//! `#[unsafe(no_mangle)] extern "C" fn main`, so `lang_start` is bypassed, std
-//! installs no `SIGSEGV` handler, and there is no English `has overflowed its
-//! stack` to suppress and nothing to coexist with. The disposition is ours
-//! outright. **Invariant:** should the entry point ever become a Rust
-//! `fn main`, [`liss_custos_institue`] must run *after* `std::rt::init` so that
-//! it overrides std's handler rather than being overridden by it. The test
-//! target is precisely that situation and installs from `main`.
-//!
-//! # Getting the bounds right
-//!
-//! The main thread's stack **grows on demand**, so every interface that reports
-//! the stack as it currently *exists* reports a small fraction of what it may
-//! become, while the guard page sits at the bottom of the *potential* stack,
-//! megabytes below. Measured on musl, x86_64, `RLIMIT_STACK` 16 MiB:
-//!
-//! | method | reports | |
-//! |---|---|---|
-//! | `pthread_getattr_np` + `pthread_attr_getstack` | 124 KiB | wrong |
-//! | `getrlimit` against a local in `main` | 16 MiB, top ~32 KiB low | wrong |
-//! | `/proc/self/maps` `[stack]` | 152 KiB | wrong |
-//! | **`[stack]` high address − `RLIMIT_STACK`** | **16 MiB** | **right** |
-//!
-//! The first and third describe only the pages already *touched*. The second
-//! gets the size right and the top wrong, because `argv`, the environment and
-//! the auxv sit above `main`'s frame. So: [`fines`] takes the high address of
-//! the `[stack]` mapping and subtracts `RLIMIT_STACK`, falling back to the
-//! known-approximate second method only where `/proc` is not mounted, and
-//! treating `RLIM_INFINITY` as bounds-unknown.
-//!
-//! # The handler
-//!
-//! It may use only `write(2)`, `_exit(2)`, atomic loads on already-initialised
-//! statics, and integer comparison. No allocation, no formatting, no
-//! `std::io` — it locks. **It never reads `ucontext_t`:** recovering the
-//! faulting stack pointer from `uc_mcontext` would mean hand-rolled musl struct
-//! offsets with no header to check them against, and `si_addr` against
-//! precomputed bounds is architecture-independent — which is why this module
-//! needs no per-target code beyond the two signal numbers.
-//!
-//! The discriminator can afford to be generous, and its failure mode is the
-//! point: **both branches are well-formed exit-1 Latin diagnostics**, so a
-//! misclassification yields a wrong-but-well-formed message, never an invariant
-//! violation. A Lingua Serpentis program has no pointers, no FFI and no
-//! `unsafe`, so the only ways compiled code can fault are stack exhaustion and
-//! a compiler bug.
-//!
-//! # `SIGPIPE`
-//!
-//! Also set here, and for the same reason: `std::rt::init` never ran, so the
-//! runtime does not inherit std's `SIG_IGN` and the default disposition would
-//! kill the child on `prog | head`. `scriptio::scribe_ad` already treats the
-//! `EPIPE` that then surfaces as an ordinary end of output and exits 0
-//! (spec §6); without the disposition change that code is unreachable. This is
-//! D-06 relocating from the CLI into the runtime, unchanged in behaviour.
+//! Stack exhaustion (spec §8), caught and reported as an exit-1 Latin diagnostic.
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// The alternate stack, in bytes. A fixed **64 KiB**, deliberately not
-/// `SIGSTKSZ`: musl's is a small compile-time constant, and on aarch64 with SVE
-/// the true minimum can exceed it. 64 KiB is unconditionally enough for a
-/// handler that allocates nothing.
+/// The alternate stack, in bytes. Deliberately not `SIGSTKSZ`: musl's is a small
+/// compile-time constant, and on aarch64 with SVE the true minimum can exceed it.
 const MENSURA_ALTERNA: usize = 64 * 1024;
 
-/// The guard band below the low bound: **1 MiB**, not one page. Linux's
-/// `stack_guard_gap` defaults to 256 pages, so a fault caused by stack growth
-/// can land that far below the mapping.
+/// The guard band below the low bound, not one page: Linux's `stack_guard_gap`
+/// defaults to 256 pages.
 const LIMES: usize = 1 << 20;
 
-/// The page size to assume if `sysconf` cannot say — never the answer, only a
-/// floor. aarch64 kernels commonly ship 16 KiB and 64 KiB pages, which is why
-/// [`pagina`] asks rather than assuming; but `_SC_PAGESIZE` cannot fail on
-/// Linux, and the 1 MiB band swallows the difference either way.
+/// The page size to assume if `sysconf` cannot say — never the answer, only a floor.
 const PAGINA_MINIMA: usize = 4096;
 
-/// Not a `c"…"` literal, and that is deliberate: `tests/abi.rs` reads every one
-/// of those out of this crate's source as a user-visible Latin sentence, and a
-/// path is neither.
 const VIA_MAPPARUM: &[u8] = b"/proc/self/maps\0";
 
-/// `Error: ` — the prefix `parse_diagnostic` looks for.
-///
-/// **Not `NUNTIUS_*`, deliberately, and it was.** Spec §10.3's rule is that
-/// every async-signal-safe *message* constant is named `NUNTIUS_*` and that
-/// `NUNTIUS_` is a catalogue marker. This is a prefix, not a message: under the
-/// old name the ratchet made it a site and read `Error: ` as its diagnostic,
-/// adding a row that is not a sentence anyone can be shown. Renaming it keeps
-/// the rule exact in both directions — every `NUNTIUS_*` is a message, and
-/// every message is a `NUNTIUS_*` — instead of carving an exception into the
-/// scanner for the one constant that breaks it.
+/// `Error: ` — the prefix `parse_diagnostic` looks for. Deliberately **not**
+/// named `NUNTIUS_*`: that name is a catalogue marker for a *message*, and this
+/// is a prefix.
 const PRAEFIXUM_ERRORIS: &[u8] = b"Error: ";
 
-/// The stack of calls has been exhausted. Keeping the `vocatio` root means a
-/// reader who knew the interpreter's `vocatio nimis alte implicata` recognises
-/// its successor. Structural — no file, no line — because a signal handler has
-/// a return address and no line table (spec §8.4).
 const NUNTIUS_ACERVUS: &CStr = c"acervus vocationum exhaustus est";
 
 /// A fault nowhere near the stack, which in a language with no pointers, no FFI
-/// and no `unsafe` can only be a compiler bug.
-///
-/// The sentence is `defectus::memoria_violata`'s with its own tail, and the
-/// tail is the correction the whole-branch review forced.
-///
-/// The two cannot share a literal: that helper reaches it through `liss_panic`,
-/// which this handler must not call, and §10.3 wants the literal inline at the
-/// site the catalogue attributes it to. Both **are** catalogue sites — this one
-/// through the `NUNTIUS_` marker, that one through `liss_panic(` — and an
-/// earlier note here claiming otherwise was simply wrong. Written identically
-/// they were a pair that could only ever degrade: `catalogus.rs` grants
-/// `fixtured` only to a pattern unique in the workspace, so the first
-/// provocation of either would mark both `ambiguous`, permanently.
-///
-/// `signum` and `verificatio` are how the fault was *found* — a hardware fault
-/// the kernel reported here, against a malformed value a `verifica` rejected —
-/// which is the one thing a reader of the sentence could not otherwise recover.
+/// and no `unsafe` can only be a compiler bug. The tail (`signum`) must stay
+/// distinct from `defectus::memoria_violata`'s `verificatio`: `catalogus.rs`
+/// grants `fixtured` only to a workspace-unique pattern.
 const NUNTIUS_MEMORIA: &CStr = c"defectus internus: memoria violata est: signum";
 
-/// 16-byte aligned, because the kernel hands the handler this buffer as a stack
-/// and the ABI wants the frame aligned.
+/// 16-byte aligned, because the kernel hands the handler this buffer as a stack.
 #[repr(C, align(16))]
 struct AcervusAlternus([u8; MENSURA_ALTERNA]);
 
-/// The alternate stack. **`static`, not allocated:** by the time the handler
-/// runs there is no stack left to allocate one on. All-zero, so it costs `.bss`
-/// and not image size.
+/// **`static`, not allocated:** by the time the handler runs there is no stack
+/// left to allocate one on.
 static mut ALTERNUS: AcervusAlternus = AcervusAlternus([0; MENSURA_ALTERNA]);
 
 /// The low bound of the stack, computed once at initialisation and **never in
 /// the handler**. Zero means bounds-unknown, which the handler reports as
-/// exhaustion — in a program whose only unbounded recursion is user-written
-/// that is overwhelmingly the right guess, and a wrong guess still satisfies
-/// the invariant.
+/// exhaustion.
 static FUNDUS: AtomicUsize = AtomicUsize::new(0);
 
-/// The page size, likewise computed once.
 static PAGINA: AtomicUsize = AtomicUsize::new(0);
 
 /// Install the guard: bounds, alternate stack, `SIGSEGV`/`SIGBUS`, `SIGPIPE`.
 ///
-/// Everything expensive happens here, before `liss_initium` — and **`main` must
-/// call this**, which nothing in this crate can enforce; see the module doc.
-/// Failure is silent and leaves the default dispositions, the pre-Task-9
-/// behaviour, for the reasons on [`pone_manum`].
+/// **`main` must call this**, which nothing in this crate can enforce;
+/// `tests/custos.rs`'s `a_main_in_this_crate_must_install_the_guard` does.
+/// Failure is silent and leaves the default dispositions.
 ///
 /// # Safety
 /// Call **once**, from the main thread, before any other entry point. The
@@ -183,7 +62,7 @@ pub unsafe extern "C" fn liss_custos_institue() {
         FUNDUS.store(fundus, Ordering::Relaxed);
     }
 
-    // D-06, relocated: see the module doc.
+    // D-06: `std::rt::init` never ran, so std's `SIG_IGN` is not inherited.
     unsafe { libc::signal(libc::SIGPIPE, libc::SIG_IGN) };
 
     let _institutum = unsafe { pone_manum() };
@@ -191,13 +70,6 @@ pub unsafe extern "C" fn liss_custos_institue() {
 
 /// The alternate stack and the two dispositions. `false` if the kernel refused
 /// any of the three.
-///
-/// All three are checked, and all three fail the same way — an unchecked call
-/// beside a checked one reads as an oversight rather than a decision, and the
-/// decision here is that there is nothing to do: a handler with no stack of its
-/// own would fault on entry, and a kernel that refuses a `static` buffer of a
-/// size it already accepts, or a signal number that has existed since v7, is not
-/// a kernel a Latin sentence will help.
 ///
 /// # Safety
 /// Call once, from the main thread: `sigaltstack` is per-thread.
@@ -213,15 +85,10 @@ unsafe fn pone_manum() -> bool {
 
         let mut actio: libc::sigaction = core::mem::zeroed();
         actio.sa_sigaction = manus as *const () as usize;
-        // `SA_ONSTACK` because there is no stack left, `SA_SIGINFO` because
-        // `si_addr` is the whole discriminator. **Both signals**: on aarch64 a
-        // stack fault may arrive as either.
+        // Both signals: on aarch64 a stack fault may arrive as either.
         actio.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
-        // Both signals in the mask, not an empty one. Without `SA_NODEFER` the
-        // kernel blocks the signal being delivered, but only that one — so a
-        // `SIGBUS` could re-enter this handler on the alternate stack it is
-        // already using. One line closes it, and `_exit(1)` means neither is
-        // ever unblocked again.
+        // Both in the mask, or a `SIGBUS` could re-enter the handler on the
+        // alternate stack it is already using.
         libc::sigemptyset(&mut actio.sa_mask);
         libc::sigaddset(&mut actio.sa_mask, libc::SIGSEGV);
         libc::sigaddset(&mut actio.sa_mask, libc::SIGBUS);
@@ -231,15 +98,12 @@ unsafe fn pone_manum() -> bool {
 }
 
 /// The stack bounds as `(low, high)`, derived fresh. Pure: it installs nothing
-/// and stores nothing, so tests can compare it against `/proc/self/maps`
-/// without arming a handler.
+/// and stores nothing, so tests can compare it against `/proc/self/maps`.
 pub fn fines() -> Option<(usize, usize)> {
     let pagina = pagina();
     match fines_ex_mappa(pagina) {
         Some(fines) => Some(fines),
-        // Known-approximate, and reached only where `/proc` is not mounted:
-        // `argv`, the environment and the auxv sit above `main`'s frame —
-        // roughly 32 KiB — so the top comes out low and the floor with it.
+        // Known-approximate, and reached only where `/proc` is not mounted.
         None => fines_ex_limite(&raw const pagina as usize, pagina),
     }
 }
@@ -253,8 +117,8 @@ fn pagina() -> usize {
     }
 }
 
-/// The method that won: the `[stack]` mapping's high address, minus
-/// `RLIMIT_STACK`.
+/// The `[stack]` mapping's high address, minus `RLIMIT_STACK` — the only method
+/// that reports the *potential* stack rather than the pages already touched.
 fn fines_ex_mappa(pagina: usize) -> Option<(usize, usize)> {
     let culmen = culmen_mappae()?;
     let modus = modus_acervi()?;
@@ -288,12 +152,8 @@ fn modus_acervi() -> Option<usize> {
     usize::try_from(modus.rlim_cur).ok()
 }
 
-/// The high address of the `[stack]` mapping.
-///
-/// Read with `open`/`read` over a fixed buffer rather than through `std::fs`:
-/// this crate is `core` and `libc` throughout, and a `/proc` read that allocates
-/// would be one more thing to reason about on a path that runs before the
-/// program does.
+/// The high address of the `[stack]` mapping, read with `open`/`read` over a
+/// fixed buffer: nothing on this path may allocate.
 fn culmen_mappae() -> Option<usize> {
     let fd = unsafe {
         libc::open(
@@ -304,10 +164,7 @@ fn culmen_mappae() -> Option<usize> {
     if fd < 0 {
         return None;
     }
-    // The scan is its own function so that no `?` inside it can return past the
-    // `close`. Every such path is provably unreachable — the slices are bounded
-    // by the read's own return value — but a descriptor whose release depends on
-    // that argument is the wrong shape to leave in a runtime.
+    // Its own function so that no `?` inside it can return past the `close`.
     let culmen = unsafe { culmen_ex_fd(fd) };
     unsafe { libc::close(fd) };
     culmen
@@ -335,9 +192,8 @@ unsafe fn culmen_ex_fd(fd: c_int) -> Option<usize> {
         };
         for &octetus in lectio.get(..acceptum)? {
             if octetus != b'\n' {
-                // A line longer than the buffer is truncated, and then simply
-                // fails to end with `[stack]` — which is correct, because the
-                // long lines are file mappings and the anonymous ones are short.
+                // A truncated line simply fails to end with `[stack]`, which is
+                // correct: the long lines are file mappings.
                 if longitudo < linea.len() {
                     linea[longitudo] = octetus;
                     longitudo += 1;
@@ -358,8 +214,8 @@ fn culmen_lineae(linea: &[u8]) -> Option<usize> {
     if !linea.ends_with(b"[stack]") {
         return None;
     }
-    // The **first** `-` separates the two addresses: hex digits contain none,
-    // and the `rw-p` that does comes after a space.
+    // The **first** `-` separates the two addresses: the `rw-p` that also has
+    // one comes after a space.
     let vinculum = linea.iter().position(|&o| o == b'-')?;
     let reliquum = linea.get(vinculum + 1..)?;
     let spatium = reliquum.iter().position(|&o| o == b' ')?;
@@ -386,16 +242,8 @@ fn hexadecimalis(cifrae: &[u8]) -> Option<usize> {
 
 /// The handler. Everything it touches was computed before it could run.
 unsafe extern "C" fn manus(_signum: c_int, notitia: *mut libc::siginfo_t, _contextus: *mut c_void) {
-    // D-08, for the one case the flush-at-exit design could not have covered:
-    // everything `scribe` produced before the fault still reaches stdout.
-    // `effunde` is `write(2)` and integer arithmetic, and `scriptio` stores the
-    // buffer's length with `Release` *after* the bytes, so the length read here
-    // names bytes that are fully written.
-    //
-    // Its result is deliberately dropped. A closed descriptor 1 must not decide
-    // this program's status: the sentence below and `_exit(1)` are owed whether
-    // or not the pending output got out, and `liss_flush`'s exit-0 belongs to
-    // the success path alone.
+    // D-08. The result is dropped: a closed descriptor 1 must not decide this
+    // program's status.
     let _ = unsafe { crate::scriptio::effunde() };
 
     let nuntius = unsafe { discerne(notitia) };

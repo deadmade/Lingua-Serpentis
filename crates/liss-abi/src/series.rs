@@ -1,33 +1,9 @@
-//! `T lista` — the only recursive type, and the only place a kind code is read
-//! at run time.
-//!
-//! Lists are **1-based**, and every element operation goes through `ekind`:
-//! freeing, copying, comparing and printing a list are one walk each, dispatched
-//! on the container's descriptor rather than on a tag per element. Nesting is
-//! unbounded and needs no interning table, because the element kind of `k` is
-//! `k - GRADUS` in closed form.
-//!
-//! Construction is `liss_list_new` plus **direct stores**: codegen allocates a
-//! header of the final length and writes each element word at
-//! `ONUS + VERBUM*i` itself. There is no per-element setter, because there is
-//! nothing for one to do that a store does not.
-//!
-//! The header comes back **zeroed** rather than raw — [`liss_list_new`] uses
-//! `allocare_nulla`, which is `calloc` — but that is a net for the failing
-//! path and not part of the construction protocol. Codegen emits the
-//! constructor and then one store per element with no call in between, and
-//! both [`liss_list_copy`] and [`liss_list_append`] write every word of what
-//! they allocate, so no correct path ever reads a zero it did not put there.
-//! The one path that does is an element expression raising between two stores;
-//! see [`crate::memoria::allocare_nulla`] for why "deterministic" was preferred
-//! to "whatever `malloc` returned" there.
+//! `T lista` — **1-based**, and the only place a kind code is read at run time.
 
 use core::ffi::c_char;
 use core::ptr;
 
 use liss_runtime::Roman;
-/// One element word, the same constant codegen scales its stores by — see
-/// [`crate::ONUS`] for why the pair lives in `liss-runtime`.
 use liss_runtime::dispositio::VERBUM;
 
 use crate::defectus::{index_extra_fines, memoria_exhausta, memoria_violata};
@@ -42,11 +18,8 @@ use crate::{GRADUS, LISS_MAGIC, LissHdr, LissInt, LissList, LissText, ONUS, basi
 pub(crate) unsafe fn verifica_seriem(p: *const LissList) {
     unsafe { verifica(p.cast()) };
     let kind = unsafe { (*p).h.kind };
-    // `checked_add`, because `ekind` is a field of an object the magic vouches
-    // for but whose contents it does not: an `ekind` within eight of
-    // `u64::MAX` overflows, which is a debug panic across an `extern "C"`
-    // boundary and therefore an abort — the same class as the two defects
-    // this crate already fixed.
+    // `checked_add`: the magic does not vouch for `ekind`, and an overflow here
+    // is a debug panic across `extern "C"`, which aborts.
     if profunditas(kind) == 0
         || unsafe { (*p).ekind }.checked_add(u64::from(GRADUS)) != Some(u64::from(kind))
     {
@@ -54,8 +27,7 @@ pub(crate) unsafe fn verifica_seriem(p: *const LissList) {
     }
 }
 
-/// The item array. `ONUS` for a list as for the other two layouts — one
-/// constant for codegen, not three.
+/// The item array, at `ONUS` as in the other two layouts.
 ///
 /// # Safety
 /// `p` must be a live `LissList`.
@@ -79,10 +51,9 @@ fn quantum(len: u64) -> usize {
     total
 }
 
-/// A list header of `len` zeroed element words, element kind `ekind`.
-///
-/// The header's own `kind` is `ekind + GRADUS`, computed here so codegen passes
-/// one immediate rather than two that could disagree.
+/// A list header of `len` zeroed element words, element kind `ekind`. The
+/// header's own `kind` is `ekind + GRADUS`, computed here so codegen passes one
+/// immediate rather than two that could disagree.
 ///
 /// # Safety
 /// Returns a fresh owned pointer. Every element word must be stored before
@@ -107,12 +78,7 @@ pub unsafe extern "C" fn liss_list_new(ekind: u64, len: u64) -> *mut LissList {
     p
 }
 
-/// Free one element word according to its kind.
-///
-/// A zero word is skipped, which is the same rule the three `liss_*_free`
-/// entry points now state outright: null is a no-op. Here it costs one branch
-/// instead of a call, and it covers the two immediate kinds, for which a zero
-/// word is a *value* (`falsus`, `U+0000`) rather than an absent one.
+/// Free one element word according to its kind. A zero word is skipped.
 ///
 /// # Safety
 /// `word` must be a live value of kind `ekind` the caller owns.
@@ -156,8 +122,7 @@ unsafe fn copiare_verbum(word: u64, ekind: u32) -> u64 {
     }
 }
 
-/// Structural equality of one element word — the deep comparison `par_est`
-/// has always had, since `Value`'s derived `PartialEq` recursed too.
+/// Structural equality of one element word — a deep comparison.
 ///
 /// # Safety
 /// Both must be live values of kind `ekind`.
@@ -200,7 +165,7 @@ unsafe fn aequae_series(a: *const LissList, b: *const LissList) -> bool {
     true
 }
 
-/// A private deep copy. **Borrows** `p` — see [`crate::numeri::liss_int_copy`].
+/// A private deep copy. **Borrows** `p`.
 ///
 /// # Safety
 /// `p` must be a live `LissList`.
@@ -217,8 +182,7 @@ pub unsafe extern "C" fn liss_list_copy(p: *const LissList) -> *mut LissList {
 }
 
 /// Free, recursively. Checks the magic of every header it reaches. **Null is a
-/// no-op**; see [`crate::memoria::abolere`] for why that is a contract rather
-/// than padding.
+/// no-op**.
 ///
 /// # Safety
 /// `p` must be null, or a live `LissList` the caller owns that has not been
@@ -249,20 +213,10 @@ pub unsafe extern "C" fn liss_list_len(p: *mut LissList) -> *mut LissInt {
 }
 
 /// `xs[i]` — **1-based**, bounds-checked, returning a **deep copy**. Consumes
-/// both `p` and `index`.
-///
-/// The copy keeps the no-aliasing invariant: after this call the element is in
-/// the list and the result is a separate value the caller owns.
-///
-/// Held by `conformance/currunt/lista-index-lectio` and, more sharply, by
+/// both `p` and `index`. The copy is held by
+/// `conformance/currunt/lista-index-lectio` and by
 /// `liss-codegen/tests/series.rs`'s `series_indicem_per_exemplar_legit`, which
-/// reads the emitted call sequence â a missing copy is visible there and
-/// invisible in a program that prints the right answer. `interp.rs:182` did the
-/// same thing with `items[i - 1].clone()`.
-///
-/// Out of range raises `index extra fines: {} (longitudo {})` with **both
-/// numbers as Roman numerals** — the length interpolated as a bare `usize` was
-/// D-12, the one place a user could see an Arabic number.
+/// reads the emitted call sequence.
 ///
 /// # Safety
 /// Both must be live values the caller owns; `scida` must be null or
@@ -286,10 +240,8 @@ pub unsafe extern "C" fn liss_list_get(
 }
 
 /// `xs[i] = v` — 1-based and bounds-checked, freeing the element it displaces.
-///
-/// The **sole borrowing operation** in the ABI (spec §5.4): the list stays in
-/// its slot, which is what makes `IndexAssign` a mutation rather than a
-/// rebuild. `index` and `value` are consumed.
+/// The **sole borrowing operation** in the ABI: the list stays in its slot.
+/// `index` and `value` are consumed.
 ///
 /// # Safety
 /// As [`liss_list_get`]; `value` must be a live value of the list's element
@@ -313,13 +265,7 @@ pub unsafe extern "C" fn liss_list_put(
 }
 
 /// `adde(xs, v)` — a new list one longer. Consumes `p` and takes ownership of
-/// `value`.
-///
-/// **It steals the element words.** A header one longer, one `memcpy` of the
-/// existing words, the new word stored, and only the *old header* freed — zero
-/// element copies, because the caller already handed over a private copy of
-/// every one of them. That is what keeps `adde` in a loop linear in words
-/// rather than in deep copies.
+/// `value`. **It steals the element words**: only the old header is freed.
 ///
 /// # Safety
 /// `p` must be a live `LissList` the caller owns; `value` must be a live value
@@ -334,17 +280,13 @@ pub unsafe extern "C" fn liss_list_append(p: *mut LissList, value: u64) -> *mut 
     let q = unsafe { liss_list_new(ekind, auctus) };
     unsafe { ptr::copy_nonoverlapping(elementa(p), elementa(q), len as usize) };
     unsafe { *elementa(q).add(len as usize) = value };
-    // Only the old header. Its elements now belong to `q`, and freeing them
-    // here is the one mistake this entry point exists to make impossible.
+    // Only the old header: its elements now belong to `q`.
     unsafe { abolere(p.cast()) };
     q
 }
 
-/// Deep equality, consuming both: `1` or `0`.
-///
-/// Lists have `par_est` and `non_par_est` and no ordering, so there is no
-/// three-way form to return — `Value`'s `PartialEq` recursed but its `Ord`
-/// never covered `List`.
+/// Deep equality, consuming both: `1` or `0`. Lists have no ordering, so there
+/// is no three-way form.
 ///
 /// # Safety
 /// Both must be live `LissList`s the caller owns.
@@ -357,17 +299,8 @@ pub unsafe extern "C" fn liss_list_eq(a: *mut LissList, b: *mut LissList) -> i8 
 }
 
 /// The zero-based offset a 1-based subscript names, or `None` if it names none.
-///
-/// A subscript that does not fit `usize` at all — a hundred-digit `ni`, which
-/// this language can spell — is out of range for every list, so `to_usize`
-/// returning `None` and a subscript of zero take the same branch.
-///
-/// `then`, not `then_some`: `then_some` evaluates its argument eagerly, so the
-/// zero subscript of `errores/index-infra-fines` computed `0usize - 1` before
-/// the guard could reject it. That is an overflow panic in debug and a wrap to
-/// `usize::MAX` in release — and a panic crossing an `extern "C"` boundary
-/// aborts, which is `SIGABRT` and exit 134, exactly the shape D-04 recorded as
-/// outside the error model entirely.
+/// `then`, not `then_some`, which is eager: the zero subscript of
+/// `conformance/errores/index-infra-fines` would compute `0usize - 1` first.
 ///
 /// # Safety
 /// `index` must be a live `LissInt`.

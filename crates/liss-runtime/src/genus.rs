@@ -1,31 +1,4 @@
 //! The kind codes (spec §5.3) — the one type descriptor that crosses the ABI.
-//!
-//! # Why these live here and not in `liss-abi`
-//!
-//! They are written by **codegen** and read by the **runtime**, and those two
-//! never share a compilation: `liss-abi` is cross-compiled for musl and is
-//! never linked into the compiler (spec §11), so `liss-codegen` cannot import
-//! from it. Until now the numbers existed twice — `KIND_INT` in `liss-abi` and
-//! a copied `GENUS_NI = 2` in `liss-codegen` — held together by a comment.
-//!
-//! `liss-runtime` is already a dependency of *both*, and is dependency-free in
-//! both the host and the musl build, so it is the one place the two ends of the
-//! contract can genuinely share a definition. `liss-abi` re-exports these at its
-//! crate root, so `liss_abi::KIND_INT` still names this constant.
-//!
-//! # The encoding
-//!
-//! ```text
-//! base: 0 Bool  1 Char  2 Int  3 Frac(Uncia)  4 Frac(Scripulum)  5 Text
-//! kind = base | (depth << 3)
-//! ```
-//!
-//! `ni lista` is 10; `ni lista lista` is 18; the element kind of kind `k` is
-//! `k - GRADUS`. Closed form, unbounded nesting, no interning table.
-//!
-//! This is a descriptor **on the container**, written at every construction site
-//! as a compile-time immediate. Codegen only ever writes it and never dispatches
-//! on it, so it is categorically not the tagged value the ABI forbids.
 
 pub const KIND_BOOL: u32 = 0;
 pub const KIND_CHAR: u32 = 1;
@@ -66,7 +39,6 @@ pub const fn granum(kind: u32) -> Option<u64> {
 mod tests {
     use super::*;
 
-    /// The two worked examples from spec §5.3, and the inverse.
     #[test]
     fn nesting_is_closed_form() {
         let ni_lista = KIND_INT | (1 << 3);
@@ -79,7 +51,6 @@ mod tests {
         assert_eq!(profunditas(KIND_TEXT), 0);
     }
 
-    /// Every base fits below `GRADUS`, or the `|` would carry into the depth.
     #[test]
     fn every_base_fits_under_one_level() {
         for k in [

@@ -2,23 +2,7 @@ use crate::ast::*;
 use crate::error::{LinguaError, LResult};
 use crate::token::{Token, TokenKind};
 
-/// How deeply the parser may nest before it refuses.
-///
-/// The number that matters is not how much stack the *binary* has. On this
-/// build's main thread (8 MiB) each of the three recursions below aborts
-/// somewhere past a thousand levels; on a spawned thread with Rust's default
-/// 2 MiB — which is what the in-process fixture runner uses, and what any
-/// embedder calling this library off the main thread gets — a limit of 128
-/// still parses and 192 overflows. The library has to be safe on the smaller
-/// one, so the measured ceiling is 128 and this is half of it.
-///
-/// That is far more nesting than written code uses: the counter covers block
-/// nesting and expression nesting together, and a deeply indented function
-/// with a complicated condition reaches perhaps fifteen.
-///
-/// Not configurable. There is no config surface in the language, and the
-/// robustness suite spawns this binary with whatever environment it inherits —
-/// a tunable limit would make the invariant depend on the shell that ran it.
+/// Half the measured ceiling on a spawned 2 MiB thread, which is 128 (D-05).
 const ALTITUDO_MAXIMA: usize = 64;
 
 struct Parser<'a> {
@@ -45,9 +29,7 @@ impl<'a> Parser<'a> {
             self.pos += 1;
             Ok(())
         } else {
-            // Quoted, and the quotes are load-bearing: the robustness suite
-            // strips quoted spans before its lexical checks, so a glyph like
-            // '{' cannot be mistaken for stray punctuation in the message.
+            // Quoted: the robustness suite strips quoted spans before its lexical checks.
             Err(self.err(&format!("expectatum: '{}'", kind.name())))
         }
     }
@@ -55,20 +37,8 @@ impl<'a> Parser<'a> {
         LinguaError { message: msg.to_string(), line: self.line() }
     }
 
-    /// Run `f` one level deeper, refusing rather than overflowing the stack.
-    ///
-    /// Defectus D-05. Recursive descent re-enters itself once per nesting
-    /// level with nothing counting, so a deeply nested source aborted the
-    /// process — SIGABRT, exit 134, entirely outside the error model, and not
-    /// something an embedder can survive.
-    ///
-    /// The register cites only `primary`'s LParen arm. There are three
-    /// independent routes, and guarding one leaves the other two live:
-    /// `expr` (re-entered from parentheses, subscripts, call arguments, list
-    /// literals and every statement condition), `unary` (which self-recurses
-    /// on `non` and `-`), and `block` (via statement → if_stmt → block). One
-    /// shared counter is right for all three: they consume the same Rust
-    /// stack, and in a real program their costs add up rather than competing.
+    /// One level deeper, refusing rather than overflowing. `expr`, `unary` and
+    /// `block` are three independent routes and share this one counter (D-05).
     fn descend<T>(&mut self, f: impl FnOnce(&mut Self) -> LResult<T>) -> LResult<T> {
         if self.depth >= ALTITUDO_MAXIMA {
             return Err(self.err("expressio nimis alte implicata"));
@@ -79,7 +49,6 @@ impl<'a> Parser<'a> {
         r
     }
 
-    // --- expressions, lowest precedence first ---
     fn expr(&mut self) -> LResult<Expr> { self.descend(|p| p.or_expr()) }
 
     fn or_expr(&mut self) -> LResult<Expr> {
@@ -146,8 +115,6 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
     fn unary(&mut self) -> LResult<Expr> {
-        // Self-recursive on both operators, and reached without going through
-        // `expr` — so a run of `non` or `-` is its own way to overflow.
         match self.peek() {
             Some(TokenKind::Not) => {
                 self.advance();
@@ -163,14 +130,13 @@ impl<'a> Parser<'a> {
     fn postfix(&mut self) -> LResult<Expr> {
         let mut e = self.primary()?;
         while self.peek() == Some(&TokenKind::LBracket) {
-            self.advance(); // [
+            self.advance();
             let index = self.expr()?;
             self.eat(&TokenKind::RBracket)?;
             e = Expr::Index { base: Box::new(e), index: Box::new(index) };
         }
         Ok(e)
     }
-    // argument list: consumes '(' … ')'
     fn call_args(&mut self) -> LResult<Vec<Expr>> {
         self.eat(&TokenKind::LParen)?;
         let mut args = Vec::new();
@@ -202,8 +168,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Ident(name)) => {
                 self.advance();
                 if self.peek() == Some(&TokenKind::Dot) {
-                    // qualified call: the only thing a package name can do
-                    self.advance(); // .
+                    self.advance();
                     let fname = self.ident()?;
                     if self.peek() != Some(&TokenKind::LParen) {
                         return Err(self.err("vocatio functionis post nomen fasciculi expectata"));
@@ -219,7 +184,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(TokenKind::LBracket) => {
-                self.advance(); // [
+                self.advance();
                 let mut elems = Vec::new();
                 if self.peek() != Some(&TokenKind::RBracket) {
                     elems.push(self.expr()?);
@@ -261,9 +226,6 @@ impl<'a> Parser<'a> {
     }
 
     fn block(&mut self) -> LResult<Vec<Stmt>> {
-        // statement → if_stmt → block → statement is the third route to a
-        // stack overflow, independent of the expression ladder: nested `si`
-        // blocks alone abort at the same depth nested parentheses do.
         self.descend(|p| {
             p.eat(&TokenKind::LBrace)?;
             let mut stmts = Vec::new();
@@ -280,15 +242,15 @@ impl<'a> Parser<'a> {
 
     fn if_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
-        self.advance(); // si
+        self.advance();
         self.eat(&TokenKind::LParen)?;
         let cond = self.expr()?;
         self.eat(&TokenKind::RParen)?;
         let then = self.block()?;
         let else_ = if self.peek() == Some(&TokenKind::Else) {
-            self.advance(); // aut
+            self.advance();
             if self.peek() == Some(&TokenKind::If) {
-                Some(vec![self.if_stmt()?]) // "aut si" → nested if
+                Some(vec![self.if_stmt()?])
             } else {
                 Some(self.block()?)
             }
@@ -300,7 +262,7 @@ impl<'a> Parser<'a> {
 
     fn while_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
-        self.advance(); // indem
+        self.advance();
         self.eat(&TokenKind::LParen)?;
         let cond = self.expr()?;
         self.eat(&TokenKind::RParen)?;
@@ -310,18 +272,17 @@ impl<'a> Parser<'a> {
 
     fn for_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
-        self.advance(); // dum
+        self.advance();
         self.eat(&TokenKind::LParen)?;
-        let init = Box::new(self.statement()?);      // consumes its own ';'
+        let init = Box::new(self.statement()?); // consumes its own ';'
         let cond = self.expr()?;
         self.eat(&TokenKind::Semicolon)?;
-        let step = Box::new(self.assign_no_semi()?); // step has no trailing ';'
+        let step = Box::new(self.assign_no_semi()?);
         self.eat(&TokenKind::RParen)?;
         let body = self.block()?;
         Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, line })
     }
 
-    // for-loop step: <ident> = <expr>  (no trailing semicolon)
     fn assign_no_semi(&mut self) -> LResult<Stmt> {
         let line = self.line();
         let name = self.ident()?;
@@ -332,10 +293,9 @@ impl<'a> Parser<'a> {
 
     fn func_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
-        self.advance(); // munus
+        self.advance();
 
-        // Old inline form `munus ni nomen(...)`: a type keyword sits where the
-        // name belongs. Caught here so it gets real advice, not `nomen expectatum`.
+        // Old inline form `munus ni nomen(...)`, caught here for real advice.
         if matches!(
             self.peek(),
             Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyDouble
@@ -346,14 +306,11 @@ impl<'a> Parser<'a> {
 
         let name = self.ident()?;
 
-        // `capit (...)` introduces a non-empty parameter clause; its absence
-        // means the function takes nothing. `def_line` marks where the
-        // parameters are written, which for a header split across lines differs
-        // from the `munus` line.
+        // `def_line` marks where the parameters are written, not the `munus` line.
         let def_line = self.line();
         let mut params: Vec<(Type, String)> = Vec::new();
         if self.peek() == Some(&TokenKind::Takes) {
-            self.advance(); // capit
+            self.advance();
             self.eat(&TokenKind::LParen)?;
             if self.peek() == Some(&TokenKind::RParen) {
                 return Err(self.err("munus sine parametris 'capit' omittat"));
@@ -362,14 +319,7 @@ impl<'a> Parser<'a> {
                 let ty = self.type_keyword()
                     .ok_or_else(|| self.err("typus parametri expectatus"))?;
                 let pname = self.ident()?;
-                // Defectus D-16. Duplicates used to be accepted and the last
-                // binding won at every layer — the parser pushed both, the
-                // checker and the interpreter each `insert`ed into a map — so
-                // the body saw only the last one and the earlier argument
-                // could not be named at all. Rejecting here is enough: neither
-                // of the other two layers can then see a duplicate, and
-                // guarding them as well would manufacture two more
-                // unreachable diagnostics.
+                // D-16, and rejected here and nowhere else.
                 if params.iter().any(|(_, existing)| *existing == pname) {
                     return Err(self.err(&format!("parametrum '{}' bis nominatum", pname)));
                 }
@@ -381,11 +331,10 @@ impl<'a> Parser<'a> {
             return Err(self.err("'capit' ante parametra expectatum"));
         }
 
-        // `reddit <type>` — always present, even for an `ni` return.
         if self.peek() != Some(&TokenKind::Yields) {
             return Err(self.err("'reddit' et typus reditus expectati"));
         }
-        self.advance(); // reddit
+        self.advance();
         let ret = self.type_keyword()
             .ok_or_else(|| self.err("typus post 'reddit' expectatus"))?;
 
@@ -421,7 +370,6 @@ impl<'a> Parser<'a> {
             }
             _ => {}
         }
-        // declaration: <type> <ident> = <expr> ;
         if let Some(ty) = self.type_keyword() {
             let name = self.ident()?;
             self.eat(&TokenKind::Assign)?;
@@ -438,7 +386,7 @@ impl<'a> Parser<'a> {
                 self.eat(&TokenKind::Semicolon)?;
                 Ok(Stmt { kind: StmtKind::Print(e), line })
             }
-            // assignment: <ident> = <expr> ;   (lookahead distinguishes from a call)
+            // The lookahead is what distinguishes an assignment from a call.
             Some(TokenKind::Ident(_))
                 if self.toks.get(self.pos + 1).map(|t| &t.kind) == Some(&TokenKind::Assign) =>
             {
@@ -450,7 +398,6 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let e = self.expr()?;
-                // index assignment: <ident>[<expr>] = <expr> ;
                 if matches!(e, Expr::Index { .. }) && self.peek() == Some(&TokenKind::Assign) {
                     let (base, index) = match e {
                         Expr::Index { base, index } => (base, index),
@@ -460,13 +407,11 @@ impl<'a> Parser<'a> {
                         Expr::Ident(n) => n,
                         _ => return Err(self.err("sinistra subscriptionis variabilis esse debet")),
                     };
-                    self.advance(); // =
+                    self.advance();
                     let value = self.expr()?;
                     self.eat(&TokenKind::Semicolon)?;
                     return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line });
                 }
-                // A call followed by `{` is a function definition missing its
-                // `munus … reddit` header — the only way that shape arises.
                 if matches!(e, Expr::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
                     return Err(self.err("munus ante definitionem expectatum"));
                 }
@@ -477,14 +422,13 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Parse one file under the package model (§4.4–4.5 of the design):
 /// `affer` lines first, then `munus` declarations, nothing else.
 pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
     let mut p = Parser { toks: tokens, pos: 0, depth: 0 };
     let mut imports: Vec<FileImport> = Vec::new();
     while p.peek() == Some(&TokenKind::Import) {
         let line = p.line();
-        p.advance(); // affer
+        p.advance();
         let package = p.ident()?;
         p.eat(&TokenKind::Semicolon)?;
         if imports.iter().any(|i| i.package == package) {
@@ -515,26 +459,11 @@ mod tests {
 
     fn ri(n: i64) -> crate::roman::Roman { crate::roman::Roman::from_i64(n) }
 
-    /// **The `munus initium` wrapper**, and why every helper below goes through
-    /// it (spec §10.4).
-    ///
-    /// These tests used to call `parser::parse`, which looped `statement()`
-    /// over every token and so accepted a bare statement list — a top-level
-    /// `scribe(°I);` with no function around it. That is not the language:
-    /// `parse_file` allows `affer` lines followed by `munus` declarations and
-    /// nothing else. Seventeen of this file's tests certified the laxer
-    /// grammar, which is D-19, and `parse` is deleted with the interpreter that
-    /// was the only thing able to run it.
-    ///
-    /// The tests themselves are about **statements and expressions**, which the
-    /// language still has, so they are wrapped rather than rewritten. The
-    /// wrapper is on one line, so a source that starts at line 1 still reports
-    /// its errors at line 1 and every asserted line number is unchanged.
+    /// A one-line `munus initium` wrapper (D-19), so asserted line numbers do not move.
     fn wrap(src: &str) -> String {
         format!("munus initium reddit ni {{ {src} }}")
     }
 
-    /// The wrapped source's statements — what `parse` used to return.
     fn parse_stmts(src: &str) -> LResult<Vec<Stmt>> {
         let ast = parse_file(&tokenize(&wrap(src)).unwrap())?;
         match ast.funcs.first().map(|s| &s.kind) {
@@ -561,10 +490,7 @@ mod tests {
 
     #[test]
     fn a_parameter_name_cannot_repeat() {
-        // Defectus D-16. `munus f capit (ni a, voc a)` was accepted, and the
-        // last binding won at every layer — so the body saw the `voc` and the
-        // `ni` argument could not be named at all. Silently wrong, and an
-        // argument became unreachable.
+        // D-16
         assert_eq!(
             parse_err("munus f capit (ni a, voc a) reddit voc { redde a; }"),
             "parametrum 'a' bis nominatum"
@@ -594,7 +520,6 @@ mod tests {
 
     #[test]
     fn arithmetic_precedence() {
-        // °II + °III * °IV  ==  Add(2, Mul(3, 4))
         let e = parse_first_expr("°II + °III * °IV;");
         assert_eq!(e, Expr::Binary {
             op: BinOp::Add,
@@ -624,7 +549,6 @@ mod tests {
 
     #[test]
     fn boolean_and_binds_tighter_than_or() {
-        // a et b vel c  ==  Or(And(a,b), c)
         let e = parse_first_expr("a et b vel c;");
         assert_eq!(e, Expr::Binary {
             op: BinOp::Or,
@@ -639,7 +563,6 @@ mod tests {
 
     #[test]
     fn not_binds_tighter_than_and() {
-        // non a et b  ==  And(Not(a), b)
         let e = parse_first_expr("non a et b;");
         assert_eq!(e, Expr::Binary {
             op: BinOp::And,
@@ -650,7 +573,6 @@ mod tests {
 
     #[test]
     fn subtraction_is_left_associative() {
-        // °X - °III - °I  ==  Sub(Sub(10,3),1)
         let e = parse_first_expr("°X - °III - °I;");
         assert_eq!(e, Expr::Binary {
             op: BinOp::Sub,
@@ -676,7 +598,6 @@ mod tests {
             StmtKind::If { then, else_, .. } => {
                 assert_eq!(then.len(), 1);
                 assert!(else_.is_some());
-                // else branch is a single nested If (the "aut si")
                 match &else_.as_ref().unwrap()[0].kind {
                     StmtKind::If { else_: inner, .. } => assert!(inner.is_some()),
                     other => panic!("expected nested if, got {:?}", other),
@@ -735,7 +656,6 @@ mod tests {
 
     #[test]
     fn empty_capit_is_rejected() {
-        // With no parameters, `capit ()` must be omitted entirely.
         let m = parse_err("munus f capit () reddit ni { redde °I; }");
         assert!(m.contains("sine parametris"), "got: {m}");
     }
@@ -764,8 +684,7 @@ mod tests {
         assert!(m.contains("typus parametri"), "got: {m}");
     }
 
-    // Load-bearing: the old syntaxes were removed deliberately. Without this,
-    // a future change could quietly restore a dual-syntax parser.
+    // Load-bearing: without it a dual-syntax parser could quietly come back.
     #[test]
     fn old_inline_form_is_rejected() {
         let m = parse_err("munus ni adde(ni a, ni b) { redde a + b; }");
@@ -802,7 +721,6 @@ mod tests {
             base: Box::new(Expr::Ident("xs".into())),
             index: Box::new(Expr::Int(ri(1))),
         });
-        // chained indexing (nested lists): xs[°I][°II]
         let e2 = parse_first_expr("xs[°I][°II];");
         assert!(matches!(e2, Expr::Index { base, .. } if matches!(*base, Expr::Index { .. })));
     }
@@ -819,7 +737,6 @@ mod tests {
 
     #[test]
     fn bare_index_is_still_an_expr_statement() {
-        // `xs[°I];` with no `=` must remain an ExprStmt, not become an assign.
         let s = parse_all("xs[°I];");
         assert!(matches!(s[0].kind, StmtKind::ExprStmt(Expr::Index { .. })));
     }

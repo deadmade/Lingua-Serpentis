@@ -1,10 +1,3 @@
-//! `voc` — text as a length-prefixed UTF-8 blob.
-//!
-//! No interning, no reference counting, no small-string optimisation: a `voc`
-//! is one allocation, copied on `Load` and freed on scope exit like every other
-//! owned value. The language has pure value semantics — the interpreter cloned
-//! on every variable read — so there is no user-observable sharing to preserve.
-
 use core::ptr;
 
 use crate::defectus::memoria_violata;
@@ -57,11 +50,8 @@ unsafe fn text_novus(bytes: &[u8]) -> *mut LissText {
     p
 }
 
-/// A text constant, built from a byte blob codegen emits as static data.
-///
-/// The bytes are validated as UTF-8 once, here, so every later reader —
-/// [`textum_of`], `scribe_text`, the comparison below — is looking at something
-/// the type system of the source language already promised.
+/// A text constant, built from a byte blob codegen emits as static data. The
+/// bytes are validated as UTF-8 once, here.
 ///
 /// # Safety
 /// `bytes` must be readable for `len` bytes.
@@ -78,15 +68,14 @@ pub unsafe extern "C" fn liss_text_new(bytes: *const u8, len: u64) -> *mut LissT
     unsafe { text_novus(b) }
 }
 
-/// A private copy. **Borrows** `p` — see [`crate::numeri::liss_int_copy`].
+/// A private copy. **Borrows** `p`.
 ///
 /// # Safety
 /// `p` must be a live `LissText`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_text_copy(p: *const LissText) -> *mut LissText {
     unsafe { verifica_textum(p) };
-    // Checked for the same reason as `liss_int_copy`: the magic vouches for
-    // the object, not for its length field.
+    // The magic vouches for the object, not for its length field.
     let Ok(len) = usize::try_from(unsafe { (*p).len }) else {
         memoria_violata()
     };
@@ -98,8 +87,7 @@ pub unsafe extern "C" fn liss_text_copy(p: *const LissText) -> *mut LissText {
     q.cast()
 }
 
-/// Free. Checks the magic first — every free does. **Null is a no-op**; see
-/// [`crate::memoria::abolere`] for why that is a contract rather than padding.
+/// Free. Checks the magic first. **Null is a no-op**.
 ///
 /// # Safety
 /// `p` must be null, or a live `LissText` the caller owns that has not been
@@ -113,7 +101,7 @@ pub unsafe extern "C" fn liss_text_free(p: *mut LissText) {
     unsafe { abolere(p.cast()) };
 }
 
-/// `a + b` — concatenation, the only arithmetic `voc` has. Consumes both.
+/// `a + b` — concatenation. Consumes both.
 ///
 /// # Safety
 /// Both must be live `LissText`s the caller owns.
@@ -145,10 +133,8 @@ pub unsafe extern "C" fn liss_text_concat(a: *mut LissText, b: *mut LissText) ->
     p
 }
 
-/// Three-way compare, consuming both: `-1`, `0` or `1`.
-///
-/// Byte order over the UTF-8 payload, which is exactly `str`'s `Ord` and so
-/// exactly what `"apple" minor_est "banana"` has always meant.
+/// Three-way compare, consuming both: `-1`, `0` or `1`. Byte order over the
+/// UTF-8 payload.
 ///
 /// # Safety
 /// As [`liss_text_concat`].

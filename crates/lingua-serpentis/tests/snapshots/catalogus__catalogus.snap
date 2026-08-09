@@ -1,132 +1,133 @@
 ---
 source: crates/lingua-serpentis/tests/catalogus.rs
+assertion_line: 348
 expression: report
 ---
 123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed
 
-crates/lingua-serpentis/src/checker.rs:244  variabilis ignota: '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:278  functio '{}' numerum argumentorum falsum accepit  → fixtured
-crates/lingua-serpentis/src/checker.rs:287  argumentum typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:359  negatio numerum requirit  → fixtured
-crates/lingua-serpentis/src/checker.rs:364  'non' veritatem requirit  → fixtured
-crates/lingua-serpentis/src/checker.rs:376  fasciculus '{}' non allatus est  → fixtured
-crates/lingua-serpentis/src/checker.rs:389  fasciculus '{}' inter allatos non inventus  → UNCOVERED
-crates/lingua-serpentis/src/checker.rs:393  functio '{}' in fasciculo '{}' non inventa  → fixtured
-crates/lingua-serpentis/src/checker.rs:406  'longitudo' unum argumentum accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:414  'longitudo' seriem expectat, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:422  'adde' duo argumenta accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:439  'adde' seriem expectat, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:446  'adde': series '{}' elementum '{}' non accipit  → fixtured
-crates/lingua-serpentis/src/checker.rs:458  functio ignota: '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:477  res typi '{}' subscribi non potest (non est series)  → fixtured
-crates/lingua-serpentis/src/checker.rs:485  index seriei 'ni' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:507  typus elementorum seriei vacuae ignotus  → fixtured
-crates/lingua-serpentis/src/checker.rs:518  elementa seriei discrepant: '{}' et '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:564  numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'  → fixtured
-crates/lingua-serpentis/src/checker.rs:588  operatio typis '{}' et '{}' non convenit  → fixtured
-crates/lingua-serpentis/src/checker.rs:644  series ordine comparari non potest (par_est/par_non_est tantum)  → fixtured
-crates/lingua-serpentis/src/checker.rs:687  '{}' typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:707  '{}' iam typum '{}' habet, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:779  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:791  '{}' non est series (typus '{}')  → fixtured
-crates/lingua-serpentis/src/checker.rs:801  index assignationis 'ni' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:808  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:822  'abrumpe' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:825  'continua' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:874  munus '{}' non in omni via reddit  → fixtured
-crates/lingua-serpentis/src/checker.rs:915  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
-crates/lingua-serpentis/src/checker.rs:930  condicio 'veritas' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:1016  nomen '{}' reservatum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:1034  functio '{}' bis definita  → fixtured
-crates/lingua-serpentis/src/checker.rs:1084  fasciculus '{}' non inventus  → fixtured
-crates/lingua-serpentis/src/checker.rs:1143  munus 'initium' in programmate non inventum  → fixtured
-crates/lingua-serpentis/src/checker.rs:1152  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
-crates/lingua-serpentis/src/cli.rs:99  Usus: liss run <via.liss | directorium>
+crates/lingua-serpentis/src/checker.rs:176  variabilis ignota: '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:206  functio '{}' numerum argumentorum falsum accepit  → fixtured
+crates/lingua-serpentis/src/checker.rs:215  argumentum typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:281  negatio numerum requirit  → fixtured
+crates/lingua-serpentis/src/checker.rs:283  'non' veritatem requirit  → fixtured
+crates/lingua-serpentis/src/checker.rs:295  fasciculus '{}' non allatus est  → fixtured
+crates/lingua-serpentis/src/checker.rs:302  fasciculus '{}' inter allatos non inventus  → UNCOVERED
+crates/lingua-serpentis/src/checker.rs:306  functio '{}' in fasciculo '{}' non inventa  → fixtured
+crates/lingua-serpentis/src/checker.rs:319  'longitudo' unum argumentum accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:325  'longitudo' seriem expectat, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:333  'adde' duo argumenta accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:348  'adde' seriem expectat, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:355  'adde': series '{}' elementum '{}' non accipit  → fixtured
+crates/lingua-serpentis/src/checker.rs:367  functio ignota: '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:386  res typi '{}' subscribi non potest (non est series)  → fixtured
+crates/lingua-serpentis/src/checker.rs:394  index seriei 'ni' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:412  typus elementorum seriei vacuae ignotus  → fixtured
+crates/lingua-serpentis/src/checker.rs:423  elementa seriei discrepant: '{}' et '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:465  numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'  → fixtured
+crates/lingua-serpentis/src/checker.rs:486  operatio typis '{}' et '{}' non convenit  → fixtured
+crates/lingua-serpentis/src/checker.rs:542  series ordine comparari non potest (par_est/par_non_est tantum)  → fixtured
+crates/lingua-serpentis/src/checker.rs:572  '{}' typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:587  '{}' iam typum '{}' habet, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:650  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:662  '{}' non est series (typus '{}')  → fixtured
+crates/lingua-serpentis/src/checker.rs:670  index assignationis 'ni' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:677  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:688  'abrumpe' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:691  'continua' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:720  munus '{}' non in omni via reddit  → fixtured
+crates/lingua-serpentis/src/checker.rs:756  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
+crates/lingua-serpentis/src/checker.rs:771  condicio 'veritas' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:837  nomen '{}' reservatum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:854  functio '{}' bis definita  → fixtured
+crates/lingua-serpentis/src/checker.rs:898  fasciculus '{}' non inventus  → fixtured
+crates/lingua-serpentis/src/checker.rs:941  munus 'initium' in programmate non inventum  → fixtured
+crates/lingua-serpentis/src/checker.rs:949  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
+crates/lingua-serpentis/src/cli.rs:52  Usus: liss run <via.liss | directorium>
       liss build <via.liss | directorium> [--exi <via>] [--ad <machina>]
       liss <via.liss | directorium>  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:104  Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
+crates/lingua-serpentis/src/cli.rs:57  Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
 directorium ita nominatum per './run' dandum est.  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:172  Error: via '{}' non inventa est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:176  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:267  Error: machina '{}' ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:274  Error: machina huius computatri ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:333  Error: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:342  Error: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:421  Error: scida '{}' scribi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:602  Error: scida temporaria creari non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:617  Error: programma incipi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:623  Error: programma abrupte cessavit  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:113  Error: via '{}' non inventa est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:117  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:191  Error: machina '{}' ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:198  Error: machina huius computatri ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:252  Error: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:258  Error: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:303  Error: scida '{}' scribi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:404  Error: scida temporaria creari non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:419  Error: programma incipi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:425  Error: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/error.rs:2  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/error.rs:14  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/error.rs:20  Monitum in '{}', linea {}: {}  → UNCOVERED
-crates/lingua-serpentis/src/error.rs:100  Error in linea {}: {}  → UNCOVERED
-crates/lingua-serpentis/src/latinity.rs:24  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
-crates/lingua-serpentis/src/latinity.rs:46  nomen '{name}' fortasse non Latinum est  → fixtured
-crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/lexer.rs:81  chorda non clausa  → fixtured
-crates/lingua-serpentis/src/lexer.rs:90  littera invalida  → fixtured
-crates/lingua-serpentis/src/lexer.rs:112  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
-crates/lingua-serpentis/src/lexer.rs:118  signum ignotum: '{}'  → fixtured
-crates/lingua-serpentis/src/parser.rs:51  expectatum: '{}'  → fixtured
-crates/lingua-serpentis/src/parser.rs:55  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/parser.rs:74  expressio nimis alte implicata  → fixtured
-crates/lingua-serpentis/src/parser.rs:209  vocatio functionis post nomen fasciculi expectata  → fixtured
-crates/lingua-serpentis/src/parser.rs:234  expressio expectata  → fixtured
-crates/lingua-serpentis/src/parser.rs:259  nomen expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:272  '}' expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:344  typus reditus post 'reddit' ponendus, non ante nomen  → fixtured
-crates/lingua-serpentis/src/parser.rs:359  munus sine parametris 'capit' omittat  → fixtured
-crates/lingua-serpentis/src/parser.rs:363  typus parametri expectatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:374  parametrum '{}' bis nominatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:381  'capit' ante parametra expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:386  'reddit' et typus reditus expectati  → fixtured
-crates/lingua-serpentis/src/parser.rs:390  typus post 'reddit' expectatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:461  sinistra subscriptionis variabilis esse debet  → fixtured
-crates/lingua-serpentis/src/parser.rs:471  munus ante definitionem expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:491  fasciculus '{}' bis allatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:503  'affer' ante omnia munera ponendum  → fixtured
-crates/lingua-serpentis/src/parser.rs:505  extra munera nihil nisi declarationes licet  → fixtured
-crates/lingua-serpentis/src/program.rs:43  nomen fasciculi '{}' non validum est  → fixtured
-crates/lingua-serpentis/src/program.rs:49  fasciculus in fasciculo non licet: '{}/{}'  → fixtured
-crates/lingua-serpentis/src/program.rs:98  scida '{}' non inventa est  → UNCOVERED
-crates/lingua-serpentis/src/program.rs:99  scida '{}' legi non potest  → UNCOVERED
-crates/lingua-serpentis/src/program.rs:101  scida '{}' signis incognitis scripta est  → UNCOVERED
-crates/lingua-serpentis/src/program.rs:103  scida '{}' aperiri non potest  → UNCOVERED
-crates/lingua-serpentis/src/program.rs:111  directorium programmatis legi non potest  → UNCOVERED
-crates/lingua-serpentis/src/program.rs:119  directorium percurri non potest  → UNCOVERED
-crates/liss-abi/src/custos.rs:126  acervus vocationum exhaustus est  → fixtured
-crates/liss-abi/src/custos.rs:146  defectus internus: memoria violata est: signum  → UNCOVERED
-crates/liss-abi/src/defectus.rs:198  memoria non liberata est  → UNCOVERED
-crates/liss-abi/src/defectus.rs:215  divisio per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:230  modulus per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:256  index extra fines: {} (longitudo {})  → fixtured
-crates/liss-abi/src/defectus.rs:284  defectus internus: memoria violata est: verificatio  → UNCOVERED
-crates/liss-abi/src/defectus.rs:302  memoria exhausta est  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:254  defectus internus: sedes ignota  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:268  defectus internus: saltus extra ansam  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:325  defectus internus: machina institui non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:430  defectus internus: munus declarari non potuit: externum  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:457  defectus internus: objectum institui non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:489  defectus internus: munus declarari non potuit: proprium  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:506  defectus internus: munus vocatum non inventum: definitio  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:594  defectus internus: datum definiri non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:599  defectus internus: munus componi non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:622  defectus internus: munus 'initium' in programmate non inventum  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:652  defectus internus: objectum scribi non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:866  defectus internus: datum declarari non potuit: constans  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:895  defectus internus: datum declarari non potuit: scida  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:1501  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:255  imago non coniuncta est: argumenta  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:260  imago non coniuncta est: perscrutatio  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:267  imago non coniuncta est: nexus  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:273  imago non coniuncta est: imago abest  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:291  defectus internus: artefactum non est ELF  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:298  defectus internus: artefacta machinis diversis composita sunt  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:309  defectus internus: machina ignota est  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:310  defectus internus: nihil coniungendum est  → UNCOVERED
-crates/liss-runtime/src/exitus.rs:16  UNPARSED  → UNPARSED
-crates/liss-runtime/src/exitus.rs:33  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
-crates/liss-runtime/src/roman.rs:219  numerus Romanus vacuus  → fixtured
-crates/liss-runtime/src/roman.rs:231  numerus Romanus invalidus: '{}'  → fixtured
-crates/liss-runtime/src/roman.rs:270  numerus sine '°': '{}'  → UNCOVERED
-crates/liss-runtime/src/roman.rs:286  fractio sine denominatore  → fixtured
+crates/lingua-serpentis/src/error.rs:11  UNPARSED  → UNPARSED
+crates/lingua-serpentis/src/error.rs:17  Monitum in '{}', linea {}: {}  → UNCOVERED
+crates/lingua-serpentis/src/error.rs:83  Error in linea {}: {}  → UNCOVERED
+crates/lingua-serpentis/src/latinity.rs:19  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
+crates/lingua-serpentis/src/latinity.rs:40  nomen '{name}' fortasse non Latinum est  → fixtured
+crates/lingua-serpentis/src/lexer.rs:45  UNPARSED  → UNPARSED
+crates/lingua-serpentis/src/lexer.rs:59  chorda non clausa  → fixtured
+crates/lingua-serpentis/src/lexer.rs:68  littera invalida  → fixtured
+crates/lingua-serpentis/src/lexer.rs:86  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
+crates/lingua-serpentis/src/lexer.rs:92  signum ignotum: '{}'  → fixtured
+crates/lingua-serpentis/src/parser.rs:33  expectatum: '{}'  → fixtured
+crates/lingua-serpentis/src/parser.rs:37  UNPARSED  → UNPARSED
+crates/lingua-serpentis/src/parser.rs:44  expressio nimis alte implicata  → fixtured
+crates/lingua-serpentis/src/parser.rs:174  vocatio functionis post nomen fasciculi expectata  → fixtured
+crates/lingua-serpentis/src/parser.rs:199  expressio expectata  → fixtured
+crates/lingua-serpentis/src/parser.rs:224  nomen expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:234  '}' expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:304  typus reditus post 'reddit' ponendus, non ante nomen  → fixtured
+crates/lingua-serpentis/src/parser.rs:316  munus sine parametris 'capit' omittat  → fixtured
+crates/lingua-serpentis/src/parser.rs:320  typus parametri expectatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:324  parametrum '{}' bis nominatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:331  'capit' ante parametra expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:335  'reddit' et typus reditus expectati  → fixtured
+crates/lingua-serpentis/src/parser.rs:339  typus post 'reddit' expectatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:408  sinistra subscriptionis variabilis esse debet  → fixtured
+crates/lingua-serpentis/src/parser.rs:416  munus ante definitionem expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:435  fasciculus '{}' bis allatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:447  'affer' ante omnia munera ponendum  → fixtured
+crates/lingua-serpentis/src/parser.rs:449  extra munera nihil nisi declarationes licet  → fixtured
+crates/lingua-serpentis/src/program.rs:38  nomen fasciculi '{}' non validum est  → fixtured
+crates/lingua-serpentis/src/program.rs:44  fasciculus in fasciculo non licet: '{}/{}'  → fixtured
+crates/lingua-serpentis/src/program.rs:69  scida '{}' non inventa est  → UNCOVERED
+crates/lingua-serpentis/src/program.rs:70  scida '{}' legi non potest  → UNCOVERED
+crates/lingua-serpentis/src/program.rs:72  scida '{}' signis incognitis scripta est  → UNCOVERED
+crates/lingua-serpentis/src/program.rs:74  scida '{}' aperiri non potest  → UNCOVERED
+crates/lingua-serpentis/src/program.rs:80  directorium programmatis legi non potest  → UNCOVERED
+crates/lingua-serpentis/src/program.rs:87  directorium percurri non potest  → UNCOVERED
+crates/liss-abi/src/custos.rs:25  acervus vocationum exhaustus est  → fixtured
+crates/liss-abi/src/custos.rs:31  defectus internus: memoria violata est: signum  → UNCOVERED
+crates/liss-abi/src/defectus.rs:134  memoria non liberata est  → UNCOVERED
+crates/liss-abi/src/defectus.rs:150  divisio per nullum  → fixtured
+crates/liss-abi/src/defectus.rs:165  modulus per nullum  → fixtured
+crates/liss-abi/src/defectus.rs:186  index extra fines: {} (longitudo {})  → fixtured
+crates/liss-abi/src/defectus.rs:202  defectus internus: memoria violata est: verificatio  → UNCOVERED
+crates/liss-abi/src/defectus.rs:216  memoria exhausta est  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:150  defectus internus: munus declarari non potuit: externum  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:173  defectus internus: objectum institui non potuit  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:199  defectus internus: munus declarari non potuit: proprium  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:210  defectus internus: munus vocatum non inventum: definitio  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:279  defectus internus: datum definiri non potuit  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:284  defectus internus: munus componi non potuit  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:292  defectus internus: munus 'initium' in programmate non inventum  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:322  defectus internus: objectum scribi non potuit  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:442  defectus internus: datum declarari non potuit: constans  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:462  defectus internus: datum declarari non potuit: scida  → UNCOVERED
+crates/liss-codegen/src/emissio.rs:813  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:149  imago non coniuncta est: argumenta  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:153  imago non coniuncta est: perscrutatio  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:159  imago non coniuncta est: nexus  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:165  imago non coniuncta est: imago abest  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:175  defectus internus: artefactum non est ELF  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:182  defectus internus: artefacta machinis diversis composita sunt  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:193  defectus internus: machina ignota est  → UNCOVERED
+crates/liss-codegen/src/nexus.rs:194  defectus internus: nihil coniungendum est  → UNCOVERED
+crates/liss-runtime/src/exitus.rs:8  UNPARSED  → UNPARSED
+crates/liss-runtime/src/exitus.rs:21  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
+crates/liss-runtime/src/roman.rs:191  numerus Romanus vacuus  → fixtured
+crates/liss-runtime/src/roman.rs:203  numerus Romanus invalidus: '{}'  → fixtured
+crates/liss-runtime/src/roman.rs:237  numerus sine '°': '{}'  → UNCOVERED
+crates/liss-runtime/src/roman.rs:249  fractio sine denominatore  → fixtured

@@ -1,15 +1,4 @@
-//! A second, independent implementation of the `scribe` formatter, kept only
-//! as the randomised oracle for `scriptio`'s tests.
-//!
-//! This is `lingua-serpentis::value`'s `Value` moved here unchanged but
-//! renamed, so nobody mistakes it for production: `#[cfg(test)]`, never
-//! compiled into any artefact.
-//!
-//! **This is a pre-approved, deliberate duplication, not a defect** — spec
-//! §10.4 ruled on it explicitly. It exists because it is the *only*
-//! randomised oracle for the formatters: golden vectors cover only cases
-//! someone thought to write down. It earns its place because it is small,
-//! test-only, and the alternative is having no randomised oracle at all.
+//! A second implementation of the `scribe` formatter: the randomised oracle for `scriptio`'s tests.
 
 use crate::roman::Roman;
 

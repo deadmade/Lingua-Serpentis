@@ -1,10 +1,5 @@
 use crate::roman::Roman;
 
-/// `BinOp`/`UnOp` moved down to `liss-runtime` (spec §5.5, §10.4): they carry
-/// no AST data of their own, just the operator's identity, so they belong
-/// with the arithmetic they drive rather than the syntax tree that names
-/// them. Re-exported so every `crate::ast::{BinOp, UnOp}` call site —
-/// reached today only through `use crate::ast::*;` — keeps working.
 pub use liss_runtime::{BinOp, UnOp};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,9 +8,9 @@ pub enum Type { Int, Float, Double, Text, Char, Bool, List(Box<Type>) }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Int(Roman),
-    FloatLit { numer: Roman, den: Roman }, // abstract fractional literal (exact rational), pre-elaboration
-    Float(Roman),  // resolved mnr: count of unciae (1/12)
-    Double(Roman), // resolved nr:  count of scripula (1/288)
+    FloatLit { numer: Roman, den: Roman }, // abstract, unresolved
+    Float(Roman),  // mnr: unciae (1/12)
+    Double(Roman), // nr: scripula (1/288)
     Text(String),
     Char(char),
     Bool(bool),
@@ -33,11 +28,7 @@ pub struct FuncDecl {
     pub params: Vec<(Type, String)>,
     pub ret: Type,
     pub body: Vec<Stmt>,
-    /// Line of the header's parameter clause — or, when the function has no
-    /// parameters, the token right after the name. Usually the same as the
-    /// enclosing `Stmt.line`, but a header split across lines (`munus` on one
-    /// line, the `capit (...)` clause on the next) puts it lower, and anything
-    /// pointing at a parameter must use this instead of `Stmt.line`.
+    /// Line of the header's parameter clause; a split header puts it below `Stmt.line`.
     pub def_line: usize,
 }
 
@@ -70,25 +61,20 @@ pub struct FileImport {
     pub line: usize,
 }
 
-/// A parsed `.liss` file under the package model: imports first, then
-/// functions — nothing else may appear at top level. Every element of
-/// `funcs` is a `StmtKind::Func`.
+/// Every element of `funcs` is a `StmtKind::Func`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileAst {
     pub imports: Vec<FileImport>,
     pub funcs: Vec<Stmt>,
 }
 
-/// A parsed file plus its path relative to the program root, kept for error
-/// attribution.
+/// `path` is relative to the program root.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFile {
     pub path: String,
     pub ast: FileAst,
 }
 
-/// The whole parsed program: the root folder's files plus one entry per
-/// package. `BTreeMap` keeps package order deterministic.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedProgram {
     pub root: Vec<ParsedFile>,

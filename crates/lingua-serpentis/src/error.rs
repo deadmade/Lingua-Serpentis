@@ -6,10 +6,7 @@ pub struct LinguaError {
 
 pub type LResult<T> = Result<T, LinguaError>;
 
-/// A non-fatal style note. Unlike errors, a `Warning` never stops a program
-/// from running. `file` is the path relative to the program root (`None` in
-/// single-source mode); `line` is `None` for warnings about things that have
-/// no line, such as package folder names.
+/// A non-fatal style note; never stops a program. `file` is relative to the program root.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Warning {
     pub message: String,
@@ -28,22 +25,8 @@ impl std::fmt::Display for Warning {
     }
 }
 
-/// An error at program (multi-file) level: optionally attributed to a source
-/// file (path relative to the program root) and a line. Structural errors —
-/// about the program's shape rather than any source text — carry neither.
-///
-/// A failed run is not only its message. Two things the program had already
-/// produced by the time it failed used to be thrown away with it, and they
-/// travel here instead:
-///
-/// - `stdout`, everything `scribe` printed before the error (D-08). Output the
-///   program provably produced is not the error's to discard.
-/// - `warnings`, the Latinity notes computed before it (D-09). A program with
-///   two problems should report both, not whichever one halts it first.
-///
-/// Both are empty for an error raised before there was anything to collect —
-/// a lex, parse or structural failure, where no source has run and there is no
-/// `ParsedProgram` to lint.
+/// Structural errors carry no file and no line. `stdout` and `warnings` carry what the
+/// program produced before it failed (D-08, D-09).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProgramError {
     pub file: Option<String>,

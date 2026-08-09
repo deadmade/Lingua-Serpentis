@@ -1,7 +1,6 @@
 use crate::model::Tables;
 
-/// Fold a word into the orthographic form the dictionary is stored in:
-/// lowercase, with `v` written as `u` and `j` as `i`.
+/// Fold to the dictionary's orthography: lowercase, `v`→`u`, `j`→`i`.
 pub fn normalize(word: &str) -> String {
     word.chars()
         .map(|c| match c.to_ascii_lowercase() {
@@ -12,32 +11,20 @@ pub fn normalize(word: &str) -> String {
         .collect()
 }
 
-/// True when `word` is a recognizable Latin word form: either an indeclinable
-/// listed whole, or some split into `stem + ending` where the stem is in the
-/// dictionary and the ending is valid for one of that stem's groups.
+/// An indeclinable listed whole, or a `stem + ending` split the tables allow.
 pub fn analyze(tables: &Tables, word: &str) -> bool {
     let w = normalize(word);
     if w.is_empty() {
         return false;
     }
-    // Byte-slicing below assumes one byte per character. Latin words are ASCII,
-    // so anything else is not Latin (and would otherwise risk a panic).
+    // the byte-slicing below assumes one byte per character
     if !w.is_ascii() {
         return false;
     }
     if tables.whole.contains(&w) {
         return true;
     }
-    // Only splits that could match are worth hashing. Below `lo` the ending is
-    // longer than any ending in the dictionary; above `hi` the stem is longer
-    // than any stem. Both lookups already failed for those splits, so skipping
-    // them cannot change the answer — it only stops `analyze` from hashing a
-    // longer and longer prefix on every iteration, which made it quadratic in
-    // the identifier's length (defectus D-23). Against Whitaker's data the two
-    // bounds are 18 and 7, so this is constant work however long `w` is; for
-    // any word short enough to be Latin the range is the whole of `0..=w.len()`
-    // exactly as before. `lo > hi` yields an empty range, which is the
-    // pathological case.
+    // Splits outside these bounds cannot match; hashing all of them was D-23.
     let lo = w.len().saturating_sub(tables.max_ending);
     let hi = w.len().min(tables.max_stem);
     for i in lo..=hi {
@@ -66,21 +53,17 @@ mod tests {
 
     #[test]
     fn maps_v_to_u_and_j_to_i() {
-        // Classical Latin has no distinct v/j; the dictionary is stored in i/u
-        // form, so both sides are folded the same way.
         assert_eq!(normalize("Verbum"), "uerbum");
         assert_eq!(normalize("Julius"), "iulius");
     }
 
     #[test]
     fn leaves_other_characters_alone() {
-        // Underscores/digits survive normalization so they can fail lookup and
-        // correctly produce a warning.
         assert_eq!(normalize("my_var2"), "my_uar2");
     }
 
-    /// A tiny controlled dictionary: the 2nd-declension noun stem `numer-`,
-    /// the 1st-conjugation verb stem `am-`, and the indeclinable `et`.
+    /// The 2nd-declension stem `numer-`, the 1st-conjugation stem `am-`, and the
+    /// indeclinable `et`.
     fn fixture() -> Tables {
         let mut t = Tables::new();
         let noun2 = Group { pos: Pos::Noun, decl: 2 };
@@ -125,9 +108,6 @@ mod tests {
 
     #[test]
     fn matches_a_bare_stem_via_the_empty_ending() {
-        // Pins the inclusive `0..=w.len()` split. `lux` is a stem whose group
-        // allows a zero-length ending, so the ONLY match is at i == w.len(),
-        // where the ending is "". A non-inclusive `0..w.len()` would miss it.
         let mut t = fixture();
         let noun3 = Group { pos: Pos::Noun, decl: 3 };
         t.stems.insert("lux".to_string(), vec![noun3]);
@@ -154,7 +134,6 @@ mod tests {
 
     #[test]
     fn rejects_a_bare_stem_with_an_invalid_ending() {
-        // `numer` is a real stem but `zzz` is not a 2nd-declension ending.
         assert!(!analyze(&fixture(), "numerzzz"));
     }
 
@@ -165,8 +144,7 @@ mod tests {
         assert!(!analyze(&t, "café"));
     }
 
-    /// The same fixture plus a stem whose group allows a zero-length ending,
-    /// so the differential test below covers the `i == w.len()` split too.
+    /// `fixture()` plus a stem whose group allows a zero-length ending.
     fn wide_fixture() -> Tables {
         let mut t = fixture();
         let noun3 = Group { pos: Pos::Noun, decl: 3 };
@@ -177,13 +155,7 @@ mod tests {
 
     #[test]
     fn narrowing_the_bounds_never_changes_a_verdict() {
-        // Defectus D-23: `analyze` used to hash every one of the `w.len() + 1`
-        // stem/ending splits, which is O(n^2) in the identifier's length.
-        // `narrow_bounds` lets it skip the splits whose stem is longer than any
-        // stem in the dictionary, or whose ending is longer than any ending.
-        // That is a pure speedup, so the two tables must agree on every word —
-        // including one far longer than any Latin word, which is the case the
-        // bound exists to make cheap.
+        // D-23
         let loose = wide_fixture();
         let mut tight = wide_fixture();
         tight.narrow_bounds();
@@ -196,8 +168,6 @@ mod tests {
         .iter()
         .map(|s| s.to_string())
         .collect();
-        // Longer than any dictionary stem, and longer than stem + ending can
-        // ever be: under the bound this word costs zero iterations.
         words.push("a".repeat(10_000));
 
         for w in &words {
@@ -211,10 +181,7 @@ mod tests {
 
     #[test]
     fn an_un_narrowed_table_is_permissive_not_empty() {
-        // The bounds default to `usize::MAX`, not `0`, so a hand-built `Tables`
-        // that never calls `narrow_bounds` behaves exactly as it did before
-        // D-23 — merely slow, never wrong. A `0` default would silently reject
-        // every word in every such table, including `fixture()` above.
+        // D-23: a `0` default would silently reject every word.
         let t = Tables::new();
         assert_eq!(t.max_stem, usize::MAX);
         assert_eq!(t.max_ending, usize::MAX);

@@ -1,15 +1,4 @@
-//! `ni`, `mnr` and `nr` — the boxed integer and the two grain counts.
-//!
-//! All three are a `*mut LissInt`. `mnr` counts unciae (1/12 of the `as`) and
-//! `nr` counts scripula (1/288); the grain is a property of the *type*, so it
-//! never travels in the value. That is why the three share `add`, `sub`, `neg`
-//! and `cmp` outright and differ only in `mul`, `div` and formatting.
-//!
-//! `ni` is boxed unconditionally. A small-integer optimisation would be a
-//! tagged value, which the ABI rules out, and unconditional boxing makes the
-//! ownership rules uniform — every `ni` is exactly one allocation to free, with
-//! no branch. The consequence, that `ni i = i + °I` allocates twice per
-//! iteration, is stated in the Non-Goals rather than hidden.
+//! `ni`, `mnr` and `nr` — all three a `*mut LissInt`; the grain is fixed by the type.
 
 use core::ffi::c_char;
 use core::ptr;
@@ -20,9 +9,7 @@ use crate::defectus::{divisio_per_nullum, memoria_exhausta, memoria_violata, mod
 use crate::memoria::{abolere, allocare, verifica};
 use crate::{LISS_MAGIC, LissHdr, LissInt, ONUS, basis, profunditas};
 
-/// Check the magic *and* that this header names a scalar number, which the
-/// magic alone cannot: a `LissText` handed to an integer entry point has a
-/// perfectly good magic and a payload that is not digits.
+/// Check the magic *and* that this header names a scalar number.
 ///
 /// # Safety
 /// `p` must be null or readable for a header.
@@ -39,13 +26,8 @@ pub(crate) unsafe fn verifica_numerum(p: *const LissInt) {
     }
 }
 
-/// Read a `LissInt` back into a `Roman` — one `memcpy`, plus the digit check.
-///
-/// **`Roman::from_digits` returns `Option`, and that is the whole point of this
-/// boundary.** A `LissInt` arriving with a digit above 9 is corrupt; left
-/// unchecked it panics inside `render_digit`'s `unreachable!` or silently wraps
-/// the `u8` addition in `mag_add` in a release build. Corrupt input must
-/// produce a Latin diagnostic, never a panic and never silent wrapping.
+/// Read a `LissInt` back into a `Roman` — one `memcpy`, plus the digit check
+/// that turns a corrupt payload into a Latin diagnostic rather than a panic.
 ///
 /// # Safety
 /// `p` must be a live `LissInt`.
@@ -61,10 +43,6 @@ pub(crate) unsafe fn roman_of(p: *const LissInt) -> Roman {
 
 /// Box a `Roman` as a `LissInt` of the given kind — the other `memcpy`.
 ///
-/// The zero-copy alternative, a header pointing at the `Vec`'s own buffer,
-/// costs a second allocation per integer. For numbers almost always under
-/// twenty digits, a twenty-byte copy beats a `malloc`.
-///
 /// # Safety
 /// Returns a fresh owned pointer the caller must free.
 pub(crate) unsafe fn int_novus(kind: u32, r: &Roman) -> *mut LissInt {
@@ -79,9 +57,8 @@ pub(crate) unsafe fn int_novus(kind: u32, r: &Roman) -> *mut LissInt {
             kind,
         };
         (*p).len = digiti.len() as u64;
-        // `Roman` exposes no sign accessor, and does not need one: its `Ord`
-        // orders every negative below zero and forces zero non-negative, so
-        // this is the canonical sign by construction.
+        // `Roman`'s `Ord` orders every negative below zero and forces zero
+        // non-negative, so this is the canonical sign by construction.
         (*p).neg = u64::from(*r < Roman::zero());
         ptr::copy_nonoverlapping(digiti.as_ptr(), p.cast::<u8>().add(ONUS), digiti.len());
     }
@@ -90,10 +67,6 @@ pub(crate) unsafe fn int_novus(kind: u32, r: &Roman) -> *mut LissInt {
 
 /// The kind stamped on a `LissInt`, so arithmetic can carry it to its result.
 ///
-/// Nothing in the runtime dispatches on a scalar's own kind — a list reads its
-/// `ekind`, never its elements' headers — but propagating it keeps every header
-/// honest rather than leaving `mnr` values labelled `ni`, and costs one load.
-///
 /// # Safety
 /// `p` must be a live `LissInt`.
 unsafe fn genus(p: *const LissInt) -> u32 {
@@ -101,10 +74,7 @@ unsafe fn genus(p: *const LissInt) -> u32 {
 }
 
 /// An integer constant, built from a digit blob codegen emits as static data.
-///
-/// `digiti` are little-endian and each must be `0..=9`; `len` may be 0, which
-/// is `nullus`. Trailing zeros are stripped on the way in, so the canonical
-/// form is what lands on the heap regardless of how the blob was written.
+/// `digiti` are little-endian and each must be `0..=9`; `len` 0 is `nullus`.
 ///
 /// # Safety
 /// `digiti` must be readable for `len` bytes.
@@ -127,22 +97,15 @@ pub unsafe extern "C" fn liss_int_new(
 }
 
 /// A private copy. **Borrows** `p`: this is what `Load` calls to read a slot
-/// without emptying it (spec §7.2 — `Load` is the only unconditional copy
-/// site).
-///
-/// A raw copy of header plus payload rather than a `Roman` round-trip: it
-/// preserves the kind, allocates once, and does not need the digits to be
-/// valid — a corrupt integer is caught wherever it is *used*, by [`roman_of`].
+/// without emptying it. A raw copy of header plus payload, not a `Roman`
+/// round-trip, so the digits need not be valid here.
 ///
 /// # Safety
 /// `p` must be a live `LissInt`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn liss_int_copy(p: *const LissInt) -> *mut LissInt {
     unsafe { verifica_numerum(p) };
-    // `len` has passed the magic check but is not thereby trustworthy — the
-    // magic says "a Lingua Serpentis object was here", not "its length field
-    // is sane". Unchecked, a corrupt `len` near `usize::MAX` wraps to a small
-    // allocation carrying a huge length, and the next read walks off it.
+    // The magic vouches for the object, not for its length field.
     let Ok(len) = usize::try_from(unsafe { (*p).len }) else {
         memoria_violata()
     };
@@ -154,8 +117,7 @@ pub unsafe extern "C" fn liss_int_copy(p: *const LissInt) -> *mut LissInt {
     q.cast()
 }
 
-/// Free. Checks the magic first — every free does. **Null is a no-op**; see
-/// [`crate::memoria::abolere`] for why that is a contract rather than padding.
+/// Free. Checks the magic first. **Null is a no-op**.
 ///
 /// # Safety
 /// `p` must be null, or a live `LissInt` the caller owns that has not been
@@ -169,8 +131,7 @@ pub unsafe extern "C" fn liss_int_free(p: *mut LissInt) {
     unsafe { abolere(p.cast()) };
 }
 
-/// `a + b`. Consumes both. Shared by `ni`, `mnr` and `nr`: adding two counts of
-/// the same grain is adding two integers.
+/// `a + b`. Consumes both. Shared by `ni`, `mnr` and `nr`.
 ///
 /// # Safety
 /// Both must be live `LissInt`s the caller owns.
@@ -226,11 +187,8 @@ pub unsafe extern "C" fn liss_int_neg(a: *mut LissInt) -> *mut LissInt {
     out
 }
 
-/// `a / b`, truncating toward zero, for `ni` only. Consumes both.
-///
-/// Raises `divisio per nullum` when `b` is zero, and then neither operand is
-/// freed: a raise never unwinds, so everything live leaks by design and the
-/// leak assertion runs only on the success path.
+/// `a / b`, truncating toward zero, for `ni` only. Consumes both. Raises
+/// `divisio per nullum` when `b` is zero, and then frees neither operand.
 ///
 /// # Safety
 /// As [`liss_int_add`]; `scida` must be null or NUL-terminated.
@@ -276,10 +234,6 @@ pub unsafe extern "C" fn liss_int_mod(
 }
 
 /// Three-way compare, consuming both: `-1`, `0` or `1`.
-///
-/// One entry point rather than four (`par_est`, `non_par_est`, `maior_est`,
-/// `minor_est`): codegen compares the result against an immediate, which is one
-/// instruction, and the runtime carries one implementation of the ordering.
 ///
 /// # Safety
 /// As [`liss_int_add`].
@@ -340,12 +294,8 @@ pub unsafe extern "C" fn liss_frac_div(
     out
 }
 
-/// The two grains the language has, and nothing else.
-///
-/// `fraction::mul` divides by the grain and `expect`s it nonzero; a zero
-/// arriving from a miscompiled call site would be a Rust panic crossing an
-/// `extern "C"` boundary. Checking here turns it into a Latin exit, which is
-/// the rule everywhere else in this crate.
+/// The two grains the language has, and nothing else: `fraction::mul` `expect`s
+/// a nonzero grain, and a panic across `extern "C"` would abort.
 fn exige_granum(granum: u64) -> Roman {
     if granum != 12 && granum != 288 {
         memoria_violata();

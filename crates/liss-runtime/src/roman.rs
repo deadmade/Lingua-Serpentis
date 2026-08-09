@@ -1,14 +1,11 @@
-/// A Roman-native integer: a sign plus a little-endian bag of decimal digits.
-/// Canonical invariant: every digit is `0..=9`, there are no trailing
-/// all-zero digits, and the empty `tiers` vector is the unique zero (never
-/// negative). Structural equality is therefore numeric equality.
+/// A sign plus a little-endian bag of decimal digits. Canonical: every digit is
+/// `0..=9`, no trailing zeros, and the empty bag is the unique, non-negative zero.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Roman {
     negative: bool,
     tiers: Vec<u8>,
 }
 
-/// Drop trailing zero digits so the canonical form is unique.
 fn trim(mut tiers: Vec<u8>) -> Vec<u8> {
     while matches!(tiers.last(), Some(0)) {
         tiers.pop();
@@ -16,15 +13,12 @@ fn trim(mut tiers: Vec<u8>) -> Vec<u8> {
     tiers
 }
 
-/// Build a canonical `Roman` from a sign and carry-normalized digits; forces
-/// zero to be non-negative.
 fn make(negative: bool, tiers: Vec<u8>) -> Roman {
     let tiers = trim(tiers);
     Roman { negative: negative && !tiers.is_empty(), tiers }
 }
 
-/// Compare two magnitudes (digits only, sign ignored). Canonical form has no
-/// trailing zero digits, so the longer vector is strictly larger.
+/// Digits only, sign ignored; canonical form lets length decide first.
 fn mag_cmp(a: &[u8], b: &[u8]) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     if a.len() != b.len() { return a.len().cmp(&b.len()); }
@@ -35,7 +29,6 @@ fn mag_cmp(a: &[u8], b: &[u8]) -> std::cmp::Ordering {
     Ordering::Equal
 }
 
-/// Magnitude add in base-10 digit space (per-digit carrying).
 fn mag_add(a: &[u8], b: &[u8]) -> Vec<u8> {
     let n = a.len().max(b.len());
     let mut out = Vec::with_capacity(n + 1);
@@ -51,7 +44,7 @@ fn mag_add(a: &[u8], b: &[u8]) -> Vec<u8> {
     trim(out)
 }
 
-/// Magnitude subtract in base-10 digit space; requires magnitude a >= b.
+/// Requires magnitude a >= b.
 fn mag_sub(a: &[u8], b: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(a.len());
     let mut borrow = 0i16;
@@ -65,8 +58,7 @@ fn mag_sub(a: &[u8], b: &[u8]) -> Vec<u8> {
     trim(out) // borrow ends at 0 because a >= b
 }
 
-/// Halve a magnitude, returning (quotient, remainder ∈ {0,1}) — long division
-/// by two from the most-significant digit down.
+/// Long division by two from the most-significant digit down; remainder 0 or 1.
 fn mag_halve(a: &[u8]) -> (Vec<u8>, u8) {
     let mut out = vec![0u8; a.len()];
     let mut rem = 0u8;
@@ -78,8 +70,7 @@ fn mag_halve(a: &[u8]) -> (Vec<u8>, u8) {
     (trim(out), rem)
 }
 
-/// Magnitude multiply via the doubling ladder (Russian-peasant): only `mag_add`
-/// (doubling) and `mag_halve`. Never a host multiply of the value.
+/// The doubling ladder (Russian-peasant): never a host multiply of the value.
 fn mag_mul(a: &[u8], b: &[u8]) -> Vec<u8> {
     let mut result: Vec<u8> = Vec::new();
     let mut x = a.to_vec();
@@ -93,19 +84,14 @@ fn mag_mul(a: &[u8], b: &[u8]) -> Vec<u8> {
     result
 }
 
-/// Magnitude divide, returning (quotient, remainder). Requires d != 0.
-/// Doubling long division, built on `mag_add`/`mag_sub`/`mag_cmp`.
+/// Doubling long division. Requires d != 0.
 fn mag_divmod(n: &[u8], d: &[u8]) -> (Vec<u8>, Vec<u8>) {
-    // The `d != 0` precondition is now enforced by `Roman::div_rem`, this
-    // function's only caller, which returns None rather than calling in. It
-    // was a `debug_assert!` here, compiled out of release, where an empty `d`
-    // meant `mag_cmp` never reported Greater and the doubling loop below ran
-    // until memory ran out. See D-21.
+    // D-21: the precondition is enforced by `Roman::div_rem`, the only caller.
     use std::cmp::Ordering;
     if mag_cmp(n, d) == Ordering::Less {
         return (Vec::new(), n.to_vec());
     }
-    // Largest dd = d * 2^k with dd <= n, tracking pow = 2^k.
+    // largest dd = d * 2^k with dd <= n, tracking pow = 2^k
     let mut dd = d.to_vec();
     let mut pow = Roman::from_u64(1).tiers;
     loop {
@@ -135,32 +121,18 @@ impl Roman {
         Roman { negative: false, tiers } // no trailing zeros by construction
     }
 
-    /// This `Roman`'s digits, little-endian, with no trailing zeros (empty
-    /// for zero).
+    /// Little-endian, no trailing zeros; empty for zero.
     pub fn digits(&self) -> &[u8] {
         &self.tiers
     }
 
-    /// Whether this `Roman` is negative. Never true for zero — [`make`]
-    /// clears the sign when the magnitude is empty, which is what makes
-    /// structural equality numeric equality.
-    ///
-    /// The exact inverse of [`Roman::from_digits`]'s first argument, so that a
-    /// `Roman` can be read back **whole**: `digits()` alone left the round trip
-    /// lossy, and `liss_int_new(kind, neg, digiti, len)` wants both halves.
-    /// This closed a gap, not a live bug — no negative `Const` can be produced
-    /// today, the lexer building every literal through `from_u64` or `zero` and
-    /// `-°V` lowering to `ExprKind::Unary` with no constant folding.
+    /// Never true for zero, and the exact inverse of `from_digits`'s first argument.
     pub fn negative(&self) -> bool {
         self.negative
     }
 
-    /// Build a canonical `Roman` from a sign and little-endian digits,
-    /// stripping trailing zeros and clearing the sign if the magnitude is
-    /// zero. `None` if any digit is out of range (each must be `0..=9`) —
-    /// this is the checked boundary for digit vectors arriving from outside
-    /// the type's own invariant, such as a `LissInt` payload crossing the
-    /// ABI by `memcpy`.
+    /// The checked boundary for digits arriving from outside the type's own
+    /// invariant, such as a `LissInt` payload crossing the ABI by `memcpy`.
     pub fn from_digits(negative: bool, digits: &[u8]) -> Option<Roman> {
         if digits.iter().any(|&d| d > 9) {
             return None;
@@ -259,12 +231,7 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
     if literal == "nullus" {
         return Ok(RomanNumber::Int(Roman::zero()));
     }
-    // An API-only guard. The lexer, this function's only caller in the
-    // workspace, builds `literal` from a slice that starts at the '°' it just
-    // matched, so the prefix is there by construction and this arm cannot fire
-    // through the language. It is kept because `parse_roman` is `pub` and a
-    // direct caller has no such guarantee; the catalogue records it UNCOVERED,
-    // which is the honest label. See D-25.
+    // D-25: an API-only guard, unreachable through the language but `pub`.
     let body = literal
         .strip_prefix('°')
         .ok_or_else(|| format!("numerus sine '°': '{}'", literal))?;
@@ -278,21 +245,11 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
         Some(frac) => {
             let mut fp = frac.splitn(2, '/');
             // `splitn` always yields at least one item, for every input
-            // including "" — so the numerator is always present, exactly as
-            // for `int_str` above. The arm that used to raise "fractio sine
-            // numeratore" here was not merely unreached but impossible, and is
-            // gone (D-25).
             let num_str = fp.next().unwrap();
             let den_str = fp.next().ok_or("fractio sine denominatore")?;
             let num = convert_int_roman(num_str)?;
             let den = convert_int_roman(den_str)?;
-            // No zero check: `convert_int_roman` cannot return zero. Every
-            // numeral it accepts is a sum of products of `convert_single`
-            // values, and `convert_single` is at least 1 for every string it
-            // accepts — pinned exhaustively by `convert_single_is_never_zero`
-            // below. An empty or malformed denominator dies earlier, in
-            // `convert_single`. The "denominator est nullus" guard that stood
-            // here was unreachable (D-25).
+            // D-25: no zero check — `convert_int_roman` cannot return zero
             let numer = int_val.mul(&den).add(&num);
             Ok(RomanNumber::Frac { numer, den })
         }
@@ -308,19 +265,18 @@ fn with_bars(base: &str, bars: usize) -> String {
     s
 }
 
-/// The "one" glyph for a tier: I, X, C, M, X̄, C̄, M̄, X̿, … (bar = ×1000).
+/// I, X, C, M, X̄, C̄, M̄, X̿, … (a bar is ×1000).
 fn glyph_one(tier: usize) -> String {
     if tier == 0 { return "I".to_string(); }
     with_bars(ONES3[(tier - 1) % 3], (tier - 1) / 3)
 }
 
-/// The "five" glyph for a tier: V, L, D, V̄, L̄, D̄, V̿, …
+/// V, L, D, V̄, L̄, D̄, V̿, …
 fn glyph_five(tier: usize) -> String {
     with_bars(FIVES3[tier % 3], tier / 3)
 }
 
-/// Render one tier's digit (0..=9) with the classic subtractive rules, using
-/// this tier's one/five glyphs plus the next tier's one glyph for the 9 case.
+/// The classic subtractive rules, using the next tier's one glyph for the 9 case.
 fn render_digit(d: u8, tier: usize) -> String {
     let one = glyph_one(tier);
     let five = glyph_five(tier);
@@ -371,20 +327,8 @@ impl Roman {
         make(self.negative != other.negative, mag_mul(&self.tiers, &other.tiers))
     }
 
-    /// Truncating division toward zero; the remainder's sign follows the
-    /// dividend — matching Rust's `i64` `/` and `%`. `None` when `other` is
-    /// zero.
-    ///
-    /// Defectus D-21. The zero guard used to be a `debug_assert!` inside
-    /// `mag_divmod`, which is compiled out of a release build — and with an
-    /// empty divisor `mag_cmp` never reports Greater, so the doubling loop
-    /// runs forever, doubling `pow` until memory runs out. Every caller
-    /// happened to guard, so it was unreachable; but `div_rem` is `pub`, and
-    /// a latent release-only hang behind a caller's diligence is not a
-    /// guarantee. Returning `Option` moves the obligation into the type.
-    ///
-    /// Deliberately not an `assert!`: an unreachable panic is still a panic,
-    /// and `no panic` is a live rule the fuzzer enforces.
+    /// Truncating toward zero; the remainder's sign follows the dividend, as
+    /// Rust's `i64` `/` and `%` do. `None` when `other` is zero. D-21
     pub fn div_rem(&self, other: &Roman) -> Option<(Roman, Roman)> {
         if other.is_zero() {
             return None;
@@ -465,11 +409,9 @@ mod tests {
 
     #[test]
     fn int_multiplicative_pairs() {
-        // XXX.M.V.C.VII = 30*1000 + 5*100 + 7 = 30507
+        // XXX.M.V.C.VII = 30*1000 + 5*100 + 7
         assert_eq!(convert_int_roman("XXX.M.V.C.VII").unwrap(), Roman::from_u64(30507));
-        // VII.M = 7*1000 = 7000  (even number of chunks: pure product)
         assert_eq!(convert_int_roman("VII.M").unwrap(), Roman::from_u64(7000));
-        // single chunk, no dots
         assert_eq!(convert_int_roman("XXV").unwrap(), Roman::from_u64(25));
     }
 
@@ -499,8 +441,8 @@ mod tests {
 
     #[test]
     fn parse_rejects_malformed_or_zero_fraction() {
-        assert!(parse_roman("°V:I").is_err());        // missing '/denominator'
-        assert!(parse_roman("°V:I/nullus").is_err()); // zero/invalid denominator rejected
+        assert!(parse_roman("°V:I").is_err()); // missing '/denominator'
+        assert!(parse_roman("°V:I/nullus").is_err());
     }
 
     #[test]
@@ -525,9 +467,9 @@ mod tests {
 
     #[test]
     fn display_vinculum_thousands() {
-        assert_eq!(r(4000).display(), "MV\u{0305}");  // M V̄  (5000 - 1000)
-        assert_eq!(r(5000).display(), "V\u{0305}");   // V̄
-        assert_eq!(r(10000).display(), "X\u{0305}");  // X̄
+        assert_eq!(r(4000).display(), "MV\u{0305}"); // M V̄ (5000 - 1000)
+        assert_eq!(r(5000).display(), "V\u{0305}");
+        assert_eq!(r(10000).display(), "X\u{0305}");
     }
 
     #[test]
@@ -586,17 +528,7 @@ mod tests {
 
     #[test]
     fn convert_single_is_never_zero_or_negative() {
-        // The evidence for deleting `parse_roman`'s "denominator est nullus"
-        // guard (D-25). That guard could only fire if `convert_int_roman`
-        // returned zero, and `convert_int_roman` is a sum of products of
-        // `convert_single` values — so it is enough that `convert_single` is
-        // always at least 1.
-        //
-        // The reason it holds: the final symbol is always added (there is no
-        // following symbol to be bigger than it), and a symbol is only ever
-        // subtracted when a strictly larger one follows. Rather than rest on
-        // that argument, enumerate every string the function accepts up to
-        // length 6 — 137_256 of them — and check.
+        // D-25
         const SYMS: [char; 7] = ['I', 'V', 'X', 'L', 'C', 'D', 'M'];
         let zero = Roman::zero();
         let mut words: Vec<String> = SYMS.iter().map(|c| c.to_string()).collect();
@@ -623,9 +555,7 @@ mod tests {
 
     #[test]
     fn parse_roman_rejects_a_literal_without_its_degree_sign() {
-        // `parse_roman` is `pub`, so this guard is reachable from outside the
-        // crate even though the lexer can never trip it. Covering it here is
-        // what makes keeping it honest rather than dead (D-25).
+        // D-25
         assert_eq!(
             parse_roman("V"),
             Err("numerus sine '°': 'V'".to_string())
@@ -656,10 +586,6 @@ mod tests {
 
     #[test]
     fn from_digits_rejects_a_digit_out_of_range() {
-        // The checked boundary: a digit beyond 9 must not become a `Roman`.
-        // Left unchecked, it panics inside `display` (`render_digit`'s
-        // `unreachable!`) or overflows the `u8` addition in `mag_add`,
-        // silently wrapping in release — see the review that added this.
         assert_eq!(Roman::from_digits(false, &[12]), None);
         assert_eq!(Roman::from_digits(false, &[200]), None);
         assert_eq!(Roman::from_digits(false, &[9]), Some(Roman::from_u64(9)));
@@ -667,7 +593,7 @@ mod tests {
 
     #[test]
     fn multiply_is_unbounded() {
-        // 3999^6 ≈ 4.1e21, far beyond i64::MAX; the tier engine must not overflow.
+        // 3999^6 ≈ 4.1e21, far beyond i64::MAX
         let base = r(3999);
         let mut acc = r(1);
         for _ in 0..6 { acc = acc.mul(&base); }

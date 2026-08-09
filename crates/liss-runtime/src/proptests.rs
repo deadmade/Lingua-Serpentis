@@ -1,7 +1,4 @@
-//! Randomised differential test: `scriptio`'s free functions must agree with
-//! `speculum::Value::display` — the interpreter's original, independent
-//! formatter — on every value proptest can generate. Golden vectors only
-//! cover cases someone thought to write down; this is what catches the rest.
+//! Randomised differential test: `scriptio` against `speculum::Value::display`.
 
 use crate::roman::Roman;
 use crate::scriptio;
@@ -30,9 +27,6 @@ fn value_strategy() -> impl Strategy<Value = Value> {
     ]
 }
 
-/// `scriptio`'s rendering of `v`, or `None` for `List` — `scriptio` has no
-/// list formatter (it is `ekind`-driven and lands in `liss-abi`, Task 8), so
-/// there is nothing to compare for that variant.
 fn scribed(v: &Value) -> Option<String> {
     let mut s = String::new();
     match v {
