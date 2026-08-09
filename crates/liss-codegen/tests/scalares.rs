@@ -1,39 +1,10 @@
-//! Every scalar type and every operator, compiled and **run** (Task 12).
-//!
-//! # The oracle was the interpreter, and the answers were recorded before it died
-//!
-//! Almost every test here is [`support::par_est`]: one source, compiled, linked,
-//! run, and its three streams required to match a recorded expectation. Those
-//! expectations are **not** hand-transcribed — thirty-odd operator results
-//! written out by hand would be thirty-odd chances to bless a miscompile — and
-//! they are not the compiler's own output either. Every one was captured from
-//! the **interpreter** on 2026-08-08, while both backends still stood, and only
-//! then written down (spec §10.4; see `support`'s header).
-//!
-//! Until that capture this file was a live differential: `par_est` ran each
-//! source both ways and required the two `Rendered` values equal. The oracle is
-//! unchanged; it is a recorded fact now rather than a re-derived one, which is
-//! the only form it can take once spec §3.1 leaves one backend.
-//!
-//! A compiled image writes **no Latinity warnings** — the CLI writes those and
-//! then spawns the child (spec §9.5) — so `nuntii` is empty here unless the
-//! program itself raises. That was true of the differential too, which cleared
-//! the interpreter's warnings before comparing, and it is why none appear below.
-//!
-//! # The one thing here that was never a differential
-//!
-//! `et` and `vel` **evaluate both operands** (spec §3.5). The interpreter did,
-//! the corpus is blessed against it, and so the recorded answers above would
-//! already catch a short-circuiting compiler. It is nonetheless asserted
-//! separately and explicitly, with the reason spelled out, because it is the
-//! single easiest silent divergence in the project and a test that only fails as
-//! a by-product is a test whose failure message says the wrong thing.
+//! Every scalar type and every operator, compiled and run. The recorded answers
+//! came from the interpreter (spec §10.4); see `support`'s header.
 
 mod support;
 
 use support::{curre, par_est, par_est_plene, radix};
 
-/// Every one of the six scalar types, printed.
 #[test]
 fn omnes_typi_scribuntur() {
     par_est(
@@ -78,10 +49,8 @@ fn numeri_omnem_operatorem_ferunt() {
     );
 }
 
-/// `mnr` and `nr`: `add`, `sub`, `neg` and `cmp` are shared with `ni` — a grain
-/// count adds like an integer — while `mul` and `div` rescale by XII or
-/// CCLXXXVIII. Both grains are exercised, because taking the wrong one is a
-/// wrong *answer* rather than a crash.
+/// `mul` and `div` rescale by XII or CCLXXXVIII; both grains are exercised, because
+/// taking the wrong one is a wrong answer rather than a crash.
 #[test]
 fn fractiones_utroque_grano_computantur() {
     par_est(
@@ -112,8 +81,7 @@ fn fractiones_utroque_grano_computantur() {
     );
 }
 
-/// `voc`: concatenation is the only arithmetic text has, and the ordering is
-/// its UTF-8 bytes.
+/// `voc`: concatenation is its only arithmetic, and the ordering is its UTF-8 bytes.
 #[test]
 fn voces_iunguntur_et_comparantur() {
     par_est(
@@ -135,9 +103,8 @@ fn voces_iunguntur_et_comparantur() {
     );
 }
 
-/// `lit` and `veritas`: the two unowned scalars. Both compare as immediates —
-/// there is no `liss_bool_*` or `liss_char_*` entry point and there must not be
-/// one — and `veritas` additionally carries `et`, `vel` and `non`.
+/// The two unowned scalars: there is no `liss_bool_*` or `liss_char_*` entry point,
+/// and there must not be one.
 #[test]
 fn litterae_et_veritates_immediatae_sunt() {
     par_est(
@@ -168,12 +135,7 @@ fn litterae_et_veritates_immediatae_sunt() {
     );
 }
 
-/// Slots: `Let` binds, `Assign` rebinds, and `x = x + °I` must read the old
-/// value **before** it dies (spec §7.3.3). A `voc` doubling itself is the same
-/// rule where getting it wrong is a use-after-free rather than a wrong number.
-///
-/// The non-zero `redde` also proves the frees happened: a leaked slot would
-/// make the runtime say `memoria non liberata est` and exit 1 instead.
+/// `x = x + °I` must read the old value before it dies (spec §7.3.3).
 #[test]
 fn sedes_reguntur_et_liberantur() {
     par_est_plene(
@@ -202,9 +164,6 @@ fn sedes_reguntur_et_liberantur() {
     );
 }
 
-/// `divisio per nullum`, raised by `liss_int_div` itself with the statement's
-/// line — and D-08 with it: the line printed *before* the failure still reaches
-/// stdout, because `liss_panic` flushes before it writes its sentence.
 #[test]
 fn divisio_per_nullum_lineam_suam_nominat() {
     let (code, stdout, stderr) = curre(
@@ -221,8 +180,7 @@ fn divisio_per_nullum_lineam_suam_nominat() {
     assert_eq!(code, Some(1));
 }
 
-/// `modulus per nullum` is a **different sentence at a different site**, and
-/// the catalogue must be able to tell them apart (D-24).
+/// D-24: a different sentence at a different site.
 #[test]
 fn modulus_per_nullum_suam_sententiam_habet() {
     let (code, stdout, stderr) = curre(
@@ -238,8 +196,7 @@ fn modulus_per_nullum_suam_sententiam_habet() {
     assert_eq!(code, Some(1));
 }
 
-/// A fraction divided by a zero *count* raises the same sentence from
-/// `liss_frac_div`, which is a third site again.
+/// The same sentence from `liss_frac_div`, a third site again.
 #[test]
 fn fractio_per_nullum_quoque_prohibetur() {
     let (code, _, stderr) = curre(
@@ -256,25 +213,7 @@ fn fractio_per_nullum_quoque_prohibetur() {
     assert_eq!(code, Some(1));
 }
 
-/// **`vel` evaluates its right operand even when its left is `verus`.**
-///
-/// This is spec §3.5, and it is the one rule in this task that fails *silently*:
-/// a compiler that emitted the branch its author's reflexes reach for would
-/// print `verus` and exit 0 here, which looks like a better language and is a
-/// different one. The rule came from `interp.rs:131-135`, which evaluated both
-/// sides and *then* dispatched on the operator.
-///
-/// **The corpus carries it too, as of Task 19** —
-/// `conformance/errores/vel-utrumque-latus` is this exact program — and until
-/// then it did not: no `.liss` file in the project used `et` or `vel` as an
-/// operator, so this test and its `et` twin were the only guard there was,
-/// while three comments elsewhere described them as a redundant second check of
-/// a corpus that had never covered it.
-///
-/// The program is chosen so that short-circuiting and evaluating both are
-/// **observably** different, which a fault on the *left* operand would not be:
-/// `A vel B` evaluates `A` first either way, so only a fault in `B` can tell
-/// the two apart.
+/// Spec §3.5; `conformance/errores/vel-utrumque-latus` is this exact program.
 #[test]
 fn vel_dextrum_latus_quoque_aestimat() {
     let (code, stdout, stderr) = curre(
@@ -312,12 +251,7 @@ fn et_dextrum_latus_quoque_aestimat() {
     assert_eq!(code, Some(1));
 }
 
-/// A negated literal, which is where `Roman::negative()` finally matters: `-°V`
-/// parses to `Unary{Neg}` over a `Const`, and codegen folds it, so the sign
-/// travels in the emitted digit blob rather than through a call.
-///
-/// `-nullus` is the case a fold gets wrong: negating zero must stay the
-/// canonical, non-negative zero.
+/// `-nullus` is the case a fold gets wrong: negating zero must stay canonical zero.
 #[test]
 fn numeri_negativi_in_constantes_conflantur() {
     par_est_plene(
@@ -337,8 +271,6 @@ fn numeri_negativi_in_constantes_conflantur() {
     );
 }
 
-/// The fold, seen in the **object**: a program whose only negation is of a
-/// literal must not ask the linker for `liss_int_neg` at all.
 #[test]
 fn constans_negata_nullam_vocationem_relinquit() {
     use object::{Object, ObjectSymbol};
@@ -360,13 +292,8 @@ fn constans_negata_nullam_vocationem_relinquit() {
     assert!(petita.contains(&"liss_int_new"), "the constant itself is still built: {petita:?}");
 }
 
-/// **The checkpoint.** `conformance/currunt/exemplum-praecisio`, compiled and
-/// run, against the `emissio` the fixture is blessed with.
-///
-/// The fixture's `nuntii` are the *checker's* Latinity warnings, which a
-/// compiled program never prints — the CLI writes them before spawning the
-/// child (spec §9.5). So the compiled binary's own stderr must be **empty**,
-/// and that is what is asserted.
+/// The fixture's `nuntii` are the checker's warnings, which a compiled program never
+/// prints (spec §9.5), so this binary's own stderr must be empty.
 #[test]
 fn exemplum_praecisio_compilatum_currit() {
     let radix = radix();
@@ -381,12 +308,6 @@ fn exemplum_praecisio_compilatum_currit() {
     assert_eq!(code, Some(0));
 }
 
-/// **The checkpoint.** `conformance/currunt/numerus-sine-spatio` — `°X/°II`,
-/// the fixture that says whitespace is not load-bearing — compiled and run.
-///
-/// A **folder** program, so `Func::file` keeps its name; nothing here raises,
-/// so the name is never printed, but the two fixtures between them cover both
-/// modes of spec §4.1's `Option`.
 #[test]
 fn numerus_sine_spatio_compilatus_currit() {
     let radix = radix();
@@ -403,8 +324,7 @@ fn numerus_sine_spatio_compilatus_currit() {
     assert_eq!(code, Some(0));
 }
 
-/// A raise from a **folder** program names its file, exactly as
-/// `ProgramError`'s `Display` does — the other half of spec §4.1's `Option`.
+/// A folder program names its file — the other half of spec §4.1's `Option`.
 #[test]
 fn error_in_programmate_scidam_nominat() {
     let machina = liss_codegen::target::Target::hospes().expect("a supported host");
@@ -417,24 +337,8 @@ fn error_in_programmate_scidam_nominat() {
     assert_eq!(code, Some(1));
 }
 
-/// **A statement after `redde` is legal and must compile.**
-///
-/// The checker's all-paths analysis asks whether *any* statement returns, not
-/// whether the last one does — `checker.rs:128-131` says so outright: "`any`,
-/// not 'the last statement': a `redde` followed by unreachable code still
-/// returns, and this language has no dead-code lint to disagree with." So this
-/// program type-checks, and it runs to an empty stdout and exit 0.
-///
-/// Codegen used to walk every statement in a block unconditionally, so `redde`
-/// filled the Cranelift block and the next statement tried to add an
-/// instruction to a filled one: a panic in debug, and in release a `Defectus`
-/// telling the user their valid program had triggered an internal compiler
-/// failure. Nothing in `conformance/` or `examples/` had this shape, so neither
-/// this task's checkpoint nor Task 17's whole-corpus differential would have
-/// caught it.
-///
-/// `conformance/currunt/sententia-post-redditum` is the corpus's copy, which is
-/// what matters after Task 19 leaves the corpus as the only oracle.
+/// A statement after `redde` is legal; `conformance/currunt/sententia-post-redditum`
+/// is the corpus's copy.
 #[test]
 fn sententia_post_redditum_neglegitur() {
     par_est(
@@ -448,11 +352,8 @@ fn sententia_post_redditum_neglegitur() {
     );
 }
 
-/// The same shape with **owned** slots either side of the `redde`, which is
-/// where getting it wrong would be a leak rather than a crash: the teardown
-/// after a terminator must not run, and the `redde`'s own walk must already
-/// have freed everything — including the slot whose `Let` never executed, which
-/// is exactly what spec §5.4's "freeing null is a no-op" buys.
+/// The same shape with owned slots either side of the `redde`, where a mistake is a
+/// leak rather than a crash (spec §5.4: freeing null is a no-op).
 #[test]
 fn sedes_post_redditum_semel_liberantur() {
     par_est_plene(

@@ -1,58 +1,22 @@
-//! Control flow, and the ownership discipline that goes with it (spec §7).
-//!
-//! # What a passing fixture proves, and what it does not
-//!
-//! Every `memoria-*` case below ends "exit 0 with the blessed stdout", and by
-//! spec §7.5 that is a real statement about memory: the runtime checks the
-//! live-allocation count on the success path and exits **1** with
-//! `memoria non liberata est` if anything is still alive. `abolere` clears a
-//! header's magic **volatilely** before freeing (D-27 — a plain store was
-//! dead-store-eliminated, and shipped that way until this task), so a double
-//! free or a read after one is `defectus internus: memoria violata est: verificatio` rather
-//! than silent corruption.
-//!
-//! But a fixture proves the **sum** of §7.3's six rules, not any one of them:
-//! two compensating bugs — a missing free and a double free of a different
-//! object — would balance the count and pass. So each rule has a test below
-//! that isolates it, and the doc comment on each says which rule it is for and
-//! what the failure looks like. The fixtures are the integration; those are the
-//! unit.
-//!
-//! **One thing none of them can prove, and it is a consequence of the fix this
-//! task made.** `Corpus::libera` leaves every slot it frees null, so a
-//! *redundant* free of a slot is a no-op and over-freeing is systematically
-//! unobservable. A mutation meant to test an over-free must free through a
-//! fresh `use_var`, the way a real `0..params` sweep would, not by calling
-//! `libera` twice — see `emissio.rs`'s module doc. "I added a redundant free and
-//! the suite stayed green" proves nothing here.
+//! Control flow and the ownership discipline that goes with it (spec §7): one test
+//! per §7.3 rule beside the `memoria-*` fixtures. See docs/internals/testing.md.
 
 mod support;
 
 use support::{casus_par_est, par_est};
 
-// ---------------------------------------------------------------------------
-// The checkpoint
-// ---------------------------------------------------------------------------
-
-/// `examples/calc.liss` — a call, an `si` with no `aliter`, and an `Assign`
-/// inside the arm. The first program in the corpus that needs a branch.
+/// `examples/calc.liss`: the first program in the corpus that needs a branch.
 #[test]
 fn exemplum_calc_compilatum_currit() {
     casus_par_est("exemplum-calc");
 }
 
-/// `examples/computatrum` — a folder program with a package. Two calls, no
-/// control flow of its own; it is here because the checkpoint says so and
-/// because it is the only case that puts a mangled package symbol through the
-/// linker before Task 14 owns them.
+/// `examples/computatrum`: a folder program, and the only case that puts a mangled
+/// package symbol through the linker.
 #[test]
 fn exemplum_computatrum_compilatum_currit() {
     casus_par_est("exemplum-computatrum");
 }
-
-// ---------------------------------------------------------------------------
-// The six `memoria-*` cases
-// ---------------------------------------------------------------------------
 
 /// §7.3.3 in a loop: `s = s + s` three times over.
 #[test]
@@ -60,55 +24,38 @@ fn memoria_assignatio_in_ansa() {
     casus_par_est("memoria-assignatio-in-ansa");
 }
 
-/// §7.3.4 through five nested `Block::declares`, including a `dum` header and
-/// a `voc` parameter.
+/// §7.3.4 through five nested `Block::declares`, a `dum` header and a `voc` parameter.
 #[test]
 fn memoria_redditus_ex_ansis() {
     casus_par_est("memoria-redditus-ex-ansis");
 }
 
-/// §7.3.5 and §7.3.6 out of a nested `si`, past a `dum` header that owns a
-/// `voc`.
+/// §7.3.5 and §7.3.6 out of a nested `si`, past a `dum` header that owns a `voc`.
 #[test]
 fn memoria_abrumpe_ex_si() {
     casus_par_est("memoria-abrumpe-ex-si");
 }
 
-/// §7.3.5's exception at its narrowest: a `dum` header holding a `voc` whose
-/// loop is left only by `redde`, which never reaches the exit block where the
-/// header teardown lives.
+/// §7.3.5's exception at its narrowest: a `dum` header whose loop is left only by `redde`.
 #[test]
 fn memoria_caput_dum_redditum() {
     casus_par_est("memoria-caput-dum-redditum");
 }
 
-/// §7.3.2 across a back edge, twenty times, so a *drift* shows and not only an
-/// outright omission.
+/// §7.3.2 across a back edge, twenty times, so a drift shows and not only an omission.
 #[test]
 fn memoria_ansa_vocem_reponit() {
     casus_par_est("memoria-ansa-vocem-reponit");
 }
 
-/// The rule §7.3 was missing: a slot freed by a scope exit must be left
-/// **null**, or the next iteration's `continua` frees the same pointer again.
+/// A slot freed by a scope exit must be left null, or the next `continua` frees it again.
 #[test]
 fn memoria_sedes_post_continua() {
     casus_par_est("memoria-sedes-post-continua");
 }
 
-// ---------------------------------------------------------------------------
-// One test per §7.3 rule
-// ---------------------------------------------------------------------------
-
-/// **§7.3.1 — the statement root.** A call for effect is the only statement in
-/// the language whose expression tree leaves a live temporary nothing consumes,
-/// and `summare(°I, °II);` is the shape: an `ExprStmt` of type `ni`.
-///
-/// Task 12 implemented this arm and had nothing that reached it (its own report
-/// §9.2 says so). This is the first program that does. Without the free it is
-/// one leaked `LissInt` per call and `memoria non liberata est`, exit 1; the
-/// two calls make it two, so a fix that freed one root per *function* rather
-/// than per *statement* would still fail.
+/// §7.3.1, the statement root: a call for effect leaves a live temporary nothing
+/// consumes. Two calls, so a free per *function* rather than per *statement* still fails.
 #[test]
 fn radix_sententiae_semel_liberatur() {
     par_est(
@@ -128,18 +75,8 @@ munus initium reddit ni {
     );
 }
 
-/// **§7.3.2 — scope exit, in reverse declaration order.**
-///
-/// Reverse order is not observable from a program: the frees are independent,
-/// so a forward walk leaks nothing and every behavioural test passes. It is
-/// asserted **in the object** instead, by the order of the relocations against
-/// the two free entry points.
-///
-/// The function body declares `s` (a `voc`) and then `n` (a `ni`), so the
-/// teardown must call `liss_int_free` and *then* `liss_text_free`. A forward
-/// walk emits them the other way round. Cranelift does not reorder calls — they
-/// have side effects — so the order in the `.text` relocations is the order
-/// codegen emitted.
+/// §7.3.2, scope exit in reverse declaration order — asserted in the object, because
+/// a forward walk leaks nothing and every behavioural test passes.
 #[test]
 fn ambitus_ordine_averso_liberatur() {
     let prog = support::ir_solum(
@@ -158,21 +95,8 @@ fn ambitus_ordine_averso_liberatur() {
     );
 }
 
-/// **§7.3.3 — `Assign` is evaluate → free old → store**, asserted **in the
-/// object**, because no program can see it.
-///
-/// The behavioural form is [`assignatio_in_ansa_libratur`] below, and until
-/// D-27 was fixed it could not see the ordering at all: `abolere`'s
-/// `(*h).magic = 0` was dead-store-eliminated in every shipped build, so a read
-/// *immediately* after a free found the block intact and the right answer came
-/// out. That is fixed — the store is `write_volatile` now — and the mutation is
-/// caught both ways.
-///
-/// **This assertion is kept, and is the stronger of the two.** Relocation order
-/// is not probabilistic and does not depend on the runtime noticing anything:
-/// both `liss_text_copy`s and the `liss_text_concat` that consumes them must
-/// precede the `liss_text_free` of the old value, on a straight-line program so
-/// that `.text` layout order is execution order. See [`support::vocationes`].
+/// §7.3.3, `Assign` is evaluate → free old → store, asserted in the object: relocation
+/// order is not probabilistic. See [`support::vocationes`].
 #[test]
 fn assignatio_vetus_post_lectionem_liberatur() {
     let prog = support::ir_solum(
@@ -188,9 +112,7 @@ fn assignatio_vetus_post_lectionem_liberatur() {
         &prog,
         &["liss_text_copy", "liss_text_concat", "liss_text_free"],
     );
-    // `starts_with` rather than `&ordo[..4]`: a regression that emits *fewer*
-    // calls must fail with the message below, not with an opaque slice-index
-    // panic that says nothing about what the test is for.
+    // `starts_with` rather than `&ordo[..4]`: fewer calls must fail with the message below.
     assert!(
         ordo.starts_with(&[
             "liss_text_copy".to_owned(),
@@ -204,13 +126,7 @@ fn assignatio_vetus_post_lectionem_liberatur() {
     );
 }
 
-/// The same rule again, behaviourally and across a back edge: the answer is
-/// still right when the slot is rewritten three times.
-///
-/// Since D-27 this **does** catch the wrong order — the use-after-free reaches
-/// a cleared magic and reports `defectus internus: memoria violata est: verificatio`,
-/// exit 1 — as well as the missing free, which leaks three `LissText`s and
-/// reports `memoria non liberata est`. Both were checked by mutation.
+/// §7.3.3 again, behaviourally and across a back edge (D-27).
 #[test]
 fn assignatio_in_ansa_libratur() {
     par_est(
@@ -230,22 +146,8 @@ fn assignatio_in_ansa_libratur() {
     );
 }
 
-/// **§7.3.4 — `redde` frees every enclosing block, innermost first, and the
-/// parameter frame is one of them and only one of them.**
-///
-/// `nomen` is a `voc` **parameter**: slot 0, and also the first entry of the
-/// body block's `declares`. The `redde` is two scopes deep, so the walk must
-/// reach the body block from inside an `si` inside an `si` — and must arrive
-/// there exactly once.
-///
-/// - A walk that stopped at the innermost block leaks `intus` and `medium`.
-/// - A walk that also swept `0..params` off `Func::params` double-frees
-///   `nomen`, which `abolere`'s cleared magic reports as
-///   `defectus internus: memoria violata est: verificatio`.
-///
-/// The returned value is `nomen + medium`, a fresh `LissText` built from copies,
-/// so it survives a teardown that frees the slots it was built from — which is
-/// §7.3's "the returned temporary is never one of them".
+/// §7.3.4: `redde` frees every enclosing block, innermost first, and the parameter
+/// frame is one of them and only one of them.
 #[test]
 fn redditus_omnem_ambitum_semel_liberat() {
     par_est(
@@ -271,28 +173,8 @@ munus initium reddit ni {
     );
 }
 
-/// **§7.3.5 — `abrumpe` and `continua` free up to and including the loop body,
-/// and *not* the `dum` header.**
-///
-/// The header owns `caput`, a `voc`, and the teardown §7.3.5 emits once after
-/// the exit block is the only thing that frees it. So:
-///
-/// - if the post-exit teardown were dropped, `caput` leaks —
-///   `memoria non liberata est`, exit 1;
-/// - if the jumps also freed `header.declares`, `caput` is freed by the
-///   **`continua`** and the *next* iteration reads a null slot —
-///   `verifica`'s null leg, `defectus internus: memoria violata est: verificatio`, exit 1.
-///
-/// **The `continua` is what makes the second half testable, and that is a
-/// finding rather than a detail.** With `Corpus::libera` leaving each freed slot
-/// null, an `abrumpe` that over-freed the header would be *harmless*: the loop
-/// is over, so the exit block's teardown frees null and nothing observes it. It
-/// is `continua` — which returns to a body that still reads the header
-/// variable — that turns the same mistake into a fault. Written with `abrumpe`
-/// alone, this test passes over a codegen that gets §7.3.5 wrong.
-///
-/// Neither failure is a wrong answer, so the differential's *status* is the
-/// assertion and its stdout is the corroboration.
+/// §7.3.5: `abrumpe` and `continua` free up to and including the loop body, and not
+/// the `dum` header. The `continua` is what makes the over-free half testable.
 #[test]
 fn abrumptio_et_continuatio_caput_dum_non_liberant() {
     par_est(
@@ -312,18 +194,8 @@ fn abrumptio_et_continuatio_caput_dum_non_liberant() {
     );
 }
 
-/// **§7.3.6 — `continua` frees the same set as `abrumpe`, then jumps to the
-/// *step* block of a `dum` and the *condition* block of an `indem`.**
-///
-/// The target is what this isolates, and it is the difference between a program
-/// and a hang: a `dum`'s `continua` that jumped to the condition would skip
-/// `i = i + °I` and loop forever, and an `indem`'s that jumped to a step it does
-/// not have has nowhere to go. Both loops here `continua` on their *first*
-/// iteration, so a wrong target does not terminate — the test would time out
-/// rather than fail, which is worth knowing before reading the diff.
-///
-/// The `voc` in each body is what makes it a memory test as well: the jump
-/// leaves a scope, and leaving a scope frees it.
+/// §7.3.6: `continua` jumps to a `dum`'s step block and an `indem`'s condition block.
+/// A wrong target does not terminate, so this times out rather than failing.
 #[test]
 fn continuatio_ad_gradum_et_ad_condicionem_salit() {
     par_est(
@@ -350,17 +222,8 @@ fn continuatio_ad_gradum_et_ad_condicionem_salit() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// The shapes that break a CFG builder rather than a program
-// ---------------------------------------------------------------------------
-
-/// Both arms of an `si` return, so the join block has **no predecessors**.
-///
-/// This is the shape that fails inside `cranelift-frontend` rather than in the
-/// program: whatever codegen emits after the `si` goes into a block nothing
-/// reaches, and `use_var` there has no definition to find. It is also the shape
-/// where a `switch_to_block` guarded by "the current block is filled" alone is
-/// wrong — the arm may legitimately be *pristine*.
+/// Both arms of an `si` return, so the join block has no predecessors — the shape that
+/// fails inside `cranelift-frontend` rather than in the program.
 #[test]
 fn si_utroque_bracchio_reddente_compilatur() {
     par_est(
@@ -385,11 +248,7 @@ munus initium reddit ni {
     );
 }
 
-/// An `aliter` with an empty body, and an `si` with none.
-///
-/// The empty `aliter` arm is the *pristine block* the carried warning names: the
-/// builder switches to it and emits nothing at all before switching away, which
-/// `FunctionBuilder::is_filled` alone would reject.
+/// An empty `aliter` arm is a *pristine* Cranelift block, not a filled one.
 #[test]
 fn bracchium_vacuum_compilatur() {
     par_est(
@@ -410,16 +269,8 @@ fn bracchium_vacuum_compilatur() {
     );
 }
 
-/// `abrumpe` and `continua` fill a Cranelift block exactly as `redde` does, so
-/// the guard Task 12 added for a statement after `redde` must cover them —
-/// including the block's own scope teardown, which must **not** run a second
-/// time after a jump that already performed it.
-///
-/// The checker admits the dead statement for the same reason it admits one
-/// after `redde`: its all-paths analysis asks whether any statement returns, and
-/// it has no dead-code lint. Without the guard this is
-/// `you cannot add an instruction to a block already filled`; with the guard but
-/// without skipping the teardown it is a double free of `nota`.
+/// `abrumpe` and `continua` fill a Cranelift block exactly as `redde` does, and the
+/// block's teardown must not run a second time after a jump that already performed it.
 #[test]
 fn sententia_post_abrumpe_neglegitur() {
     par_est(
@@ -444,32 +295,8 @@ fn sententia_post_abrumpe_neglegitur() {
     );
 }
 
-/// **A terminator in a `dum` init clause.** The header is a second statement
-/// walk and owes the same guard as a block; without it the compiler crashes on
-/// a program a user can write.
-///
-/// `parser.rs:315` reads the init clause with `self.statement()?` — *any*
-/// statement — and the checker admits a terminator there, so all three of these
-/// type-check. Before the guard, every one of them was
-/// `you cannot add an instruction to a block already filled` in debug and
-/// `defectus internus: munus componi non potuit` in release: the `jump caput`
-/// that starts the loop is the instruction that lands in the filled block, so
-/// breaking out of the walk is not enough and `dum_intus` must return.
-///
-/// **These are compile-and-run against a written expectation, and they are the
-/// only pin on the behaviour anywhere.** That is the point of D-26 in
-/// `docs/defectus/2026-08-03-index.md`: the language has not decided what a
-/// terminator in a `dum` init clause means, and codegen's duty in the meantime
-/// is only to not crash. `interp.rs:325` discarded the `Flow` from
-/// `self.exec(init)`, so the interpreter looped forever on the first program
-/// and ignored the `abrumpe` outright in the second — that disagreement is what
-/// made the question visible, and it ended with the interpreter.
-///
-/// **They are still not `conformance/` fixtures, and the reason got stronger.**
-/// With two backends a fixture would have blessed one of them as the language;
-/// with one, it would settle an open question by implication, with no spec and
-/// nobody having decided. `generative.rs`'s `caput_dum_terminatum` is the other
-/// half — it keeps the generator from drawing the shape at all.
+/// D-26, a terminator in a `dum` init clause: the only pin on this behaviour anywhere,
+/// and deliberately not a `conformance/` fixture.
 #[test]
 fn caput_dum_terminatum_componitur() {
     // `redde` — control leaves the function from the init clause.
@@ -483,10 +310,7 @@ fn caput_dum_terminatum_componitur() {
     );
     assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
 
-    // `abrumpe` — binds to the *enclosing* loop, which is the checker's own
-    // rule: "`init`, `cond` and `step` are the loop's header, not its body: an
-    // `abrumpe` there is as loose as one outside." So the outer loop is left on
-    // its first iteration and nothing is printed.
+    // `abrumpe` — binds to the *enclosing* loop, which is left on its first iteration.
     let (code, out, err) = support::curre(
         r#"munus initium reddit ni {
     ni t = nullus;
@@ -501,9 +325,8 @@ fn caput_dum_terminatum_componitur() {
     );
     assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
 
-    // `continua` — the same, to the enclosing loop's step, so the outer loop
-    // runs its two iterations and prints nothing. A `voc` in the enclosing body
-    // makes it a memory assertion too: exit 0 is the live count at zero.
+    // `continua` — the same, to the enclosing loop's step; the `voc` makes it a memory
+    // assertion too, since exit 0 is the live count at zero.
     let (code, out, err) = support::curre(
         r#"munus initium reddit ni {
     ni t = nullus;
@@ -520,15 +343,7 @@ fn caput_dum_terminatum_componitur() {
     assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
 }
 
-/// The whole of control flow compiles for **both** targets.
-///
-/// Only the host's image is executed anywhere in this suite (Task 18 owns
-/// aarch64 under emulation), so without this the second target's CFG is never
-/// built at all — and `brif` on `i8`, the block ordering and the probestack
-/// prologue are all backend code that a `si` inside a `dum` is the first thing
-/// to reach. The assertion is `compila` returning an object with the right
-/// `e_machine`, which is what Cranelift's verifier and register allocator
-/// running clean look like from here.
+/// Without this the second target's CFG is never built at all.
 #[test]
 fn regimen_utrique_machinae_componitur() {
     use liss_codegen::target::Target;
@@ -559,13 +374,8 @@ fn regimen_utrique_machinae_componitur() {
     }
 }
 
-/// Loops nested three deep, with `abrumpe` and `continua` binding to the
-/// **innermost** enclosing loop.
-///
-/// A loop stack that recorded one target rather than a stack of them compiles
-/// fine and jumps to the wrong block, which is a wrong answer rather than a
-/// crash — so the recorded answer, which is the interpreter's, is the whole
-/// assertion.
+/// `abrumpe` and `continua` bind to the innermost enclosing loop; a stack that recorded
+/// one target compiles fine and gives a wrong answer.
 #[test]
 fn ansae_nidificatae_intimam_petunt() {
     par_est(

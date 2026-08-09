@@ -1,23 +1,6 @@
-//! Hand-written exercises of the C ABI's **representation and ownership**, on
-//! the host. Rendering lives in `emissio.rs`; see that file for why it is a
-//! separate binary with a single test in it.
-//!
-//! Assertions here read the layout back directly — sign, digits, bytes, element
-//! words — rather than going through a formatter. That is deliberate: a
-//! `liss_int_add` that produced the right *string* from the wrong digits would
-//! pass a rendering test, and the digits are the thing Tasks 11–15 will emit
-//! code against.
-//!
-//! **`liss_panic` is observed in a subprocess**, because it does not return: it
-//! flushes, writes one sentence to stderr and `_exit(1)`s. The test binary
-//! re-executes *itself* with `LISS_ABI_SCAENA` naming the scenario to run, so
-//! there is no second crate and no fixture file, and the assertion is on the
-//! exact bytes and the exact status a real program would produce. The
-//! alternative — a test-only hook that made `liss_panic` return — would have
-//! tested a `liss_panic` no compiled program ever calls.
-//!
-//! The live-allocation count is one per process, so every test that reads it
-//! runs under one mutex.
+//! The C ABI's representation and ownership, read back off the heap rather than
+//! through a formatter; `liss_panic` is observed in a subprocess. Rendering is
+//! `emissio.rs`. See docs/internals/testing.md.
 
 use std::process::{Command, Output};
 use std::sync::Mutex;
@@ -41,8 +24,6 @@ use liss_abi::{
     LissList, LissText, ONUS,
 };
 
-// ---------------------------------------------------------------- scaffolding
-
 /// The live count is one per process; everything that reads it serialises here.
 static SOLUS: Mutex<()> = Mutex::new(());
 
@@ -53,8 +34,7 @@ fn solus<T>(f: impl FnOnce() -> T) -> T {
     r
 }
 
-/// A `ni` from a host integer, built the way codegen will: little-endian
-/// digits handed to `liss_int_new`.
+/// A `ni` from a host integer, built the way codegen will: little-endian digits.
 unsafe fn ni(n: i64) -> *mut LissInt {
     unsafe { numerus(KIND_INT, n) }
 }
@@ -69,8 +49,7 @@ unsafe fn numerus(kind: u32, n: i64) -> *mut LissInt {
     unsafe { liss_int_new(kind, u64::from(n < 0), digiti.as_ptr(), digiti.len() as u64) }
 }
 
-/// A `LissInt`'s payload as `(negative, little-endian digits)` — the
-/// representation itself, read straight off the heap.
+/// A `LissInt`'s payload as `(negative, little-endian digits)`, read off the heap.
 unsafe fn digiti(p: *const LissInt) -> (bool, Vec<u8>) {
     unsafe {
         (
@@ -96,8 +75,7 @@ unsafe fn verba(p: *const LissText) -> String {
     }
 }
 
-/// A direct store into a list's item array — exactly what codegen emits, at
-/// `ONUS + 8*i`, with no per-element entry point in between.
+/// A direct store into a list's item array at `ONUS + 8*i`, as codegen emits it.
 unsafe fn pone(p: *mut LissList, i: usize, verbum: u64) {
     unsafe { *p.cast::<u8>().add(ONUS).cast::<u64>().add(i) = verbum };
 }
@@ -105,8 +83,6 @@ unsafe fn pone(p: *mut LissList, i: usize, verbum: u64) {
 unsafe fn lege(p: *const LissList, i: usize) -> u64 {
     unsafe { *p.cast::<u8>().cast_mut().add(ONUS).cast::<u64>().add(i) }
 }
-
-// ------------------------------------------------------------------- lifetime
 
 #[test]
 fn a_nested_list_builds_reads_appends_and_frees_to_zero() {
@@ -130,8 +106,7 @@ fn a_nested_list_builds_reads_appends_and_frees_to_zero() {
         // Three headers plus three integers.
         assert_eq!(liss_live_count(), 6);
 
-        // `m[°I]` — a deep copy, so the original stays whole and the read is
-        // not an alias.
+        // `m[°I]` — a deep copy, so the original stays whole and the read is not an alias.
         let interior = liss_list_get(liss_list_copy(m), ni(1), std::ptr::null(), 0) as *mut LissList;
         assert_ne!(interior, intus_a, "a deep copy is a different object");
         assert_eq!(consume(lege(interior, 1) as *mut LissInt), (false, vec![2]));
@@ -160,20 +135,13 @@ fn a_nested_list_builds_reads_appends_and_frees_to_zero() {
 fn freeing_a_null_is_a_no_op() {
     solus(|| unsafe {
         assert_eq!(liss_live_count(), 0);
-        // §7.3.2 frees `Block::declares` on scope exit, and `pop_scope` yields
-        // every slot bound *anywhere* in the block — including one whose `Let`
-        // never ran, because a `redde` above it left first. Cranelift needs
-        // every `Variable` defined on every path reaching a use, so codegen
-        // defines each slot to zero on entry and that free arrives here as
-        // null. Refusing it would turn a legal program into exit 1 with a
-        // corruption diagnostic.
+        // §7.3.2 frees slots whose `Let` never ran, so the free arrives here as null.
         liss_int_free(std::ptr::null_mut());
         liss_text_free(std::ptr::null_mut());
         liss_list_free(std::ptr::null_mut());
         assert_eq!(liss_live_count(), 0, "a no-op allocates and frees nothing");
 
-        // The same rule one level down: a list caught part-built holds zero
-        // words, and freeing it must walk past them rather than into them.
+        // A list caught part-built holds zero words, and the free must walk past them.
         let xs = liss_list_new(u64::from(KIND_TEXT), 3);
         pone(xs, 1, liss_text_new(b"duo".as_ptr(), 3) as u64);
         assert_eq!(liss_live_count(), 2);
@@ -183,26 +151,8 @@ fn freeing_a_null_is_a_no_op() {
     });
 }
 
-/// Every Latin sentence this crate can put in front of a user, read out of its
-/// own source.
-///
-/// **The diagnostic catalogue sees these now**, and this is no longer the only
-/// thing watching them. `liss-abi`'s markers — `liss_panic(` and `NUNTIUS_` —
-/// waited until Task 19, because adding them while `interp.rs` still raised the
-/// same three sentences would have turned six sites `ambiguous` and dropped the
-/// fixtured count by three, recording a loss where nothing was lost. The
-/// interpreter went in the same commit that added them.
-///
-/// This stays, and is worth keeping for what the catalogue still cannot do: it
-/// is **crate-local and exhaustive**, so it notices a sentence added anywhere in
-/// `liss-abi` even at a site no marker matches, where the ratchet notices only
-/// what its markers find. It counts no sites and touches no snapshot; it makes
-/// "a new Latin sentence appeared" a diff someone has to justify.
-///
-/// It reads `c"…"` literals only, so a `b"…"` message would still slip past it —
-/// the catalogue covers that gap now, and
-/// `catalogus.rs::byte_and_c_string_literals_are_extracted_like_any_other` pins
-/// that it does.
+/// Every Latin sentence this crate can say, read out of its own source: crate-local
+/// and exhaustive, where `catalogus.rs`'s ratchet notices only what its markers find.
 fn sententiae() -> Vec<String> {
     let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src"));
     let mut inventa = Vec::new();
@@ -215,8 +165,7 @@ fn sententiae() -> Vec<String> {
             .expect("utf-8 source")
             .lines()
         {
-            // Comment lines mention `c"…"` when they explain the convention.
-            // The crate uses no block comments, so this is exact.
+            // Whole-line comments only, and no block comments exist: docs/internals/testing.md.
             if linea.trim_start().starts_with("//") {
                 continue;
             }
@@ -243,24 +192,8 @@ fn every_latin_sentence_this_crate_can_say_is_listed_here() {
     assert_eq!(
         inventa,
         [
-            // Task 9. The signal handler's stack-exhaustion branch (spec §8.2),
-            // and the successor to the interpreter's `vocatio nimis alte
-            // implicata` — which is why it keeps the `vocatio` root. It is not
-            // a `liss_panic` site and never will be: a handler with no stack
-            // left writes byte constants and `_exit`s.
             "acervus vocationum exhaustus est",
-            // Reborn from `interp.rs`, which was fixtured there; the sites here
-            // are fixtured now and the interpreter is gone.
-            //
-            // **Two sentences, not one.** The handler's non-stack branch and
-            // `defectus::memoria_violata` report the same fact about the same
-            // program and cannot share a literal — a handler must not call
-            // `liss_panic`, and §10.3 wants the literal inline at the site the
-            // catalogue attributes it to. Until the whole-branch review they
-            // were worded identically, which made them a pair `catalogus.rs`
-            // could only ever downgrade: `fixtured` requires a workspace-unique
-            // pattern, and `ambiguous` is a one-way door. The tails name how the
-            // fault was found — the kernel's signal, or a `verifica`'s rejection.
+            // Two sentences, not one, deliberately: docs/internals/testing.md.
             "defectus internus: memoria violata est: signum",
             "defectus internus: memoria violata est: verificatio",
             "divisio per nullum",
@@ -320,9 +253,7 @@ fn append_in_a_loop_stays_balanced_and_copies_no_element() {
             if i == 1 {
                 primum = lege(xs, 0);
             }
-            // One header plus i integers: the steal frees the old header and
-            // copies no element. A copying `adde` would be quadratic here and
-            // would show as a count of 1 + i(i+1)/2.
+            // One header plus i integers: a copying `adde` would show as 1 + i(i+1)/2.
             assert_eq!(liss_live_count(), 1 + i as u64, "after adde #{i}");
             assert_eq!(lege(xs, 0), primum, "the first element word never moved");
         }
@@ -358,22 +289,18 @@ fn index_assignment_frees_what_it_displaces_and_borrows_the_list() {
     });
 }
 
-// ------------------------------------------------------------------ integers
-
 #[test]
 fn a_liss_int_carries_romans_canonical_representation() {
     solus(|| unsafe {
         assert_eq!(liss_live_count(), 0);
-        // Little-endian digits, no trailing zeros, and the empty payload the
-        // unique zero — byte for byte what `Roman::digits()` returns.
+        // Byte for byte what `Roman::digits()` returns; the empty payload is the zero.
         assert_eq!(consume(ni(0)), (false, vec![]));
         assert_eq!(consume(ni(1)), (false, vec![1]));
         assert_eq!(consume(ni(-25)), (true, vec![5, 2]));
         assert_eq!(consume(ni(1024)), (false, vec![4, 2, 0, 1]));
         assert_eq!(consume(ni(30532)), (false, vec![2, 3, 5, 0, 3]));
 
-        // Trailing zeros are stripped on the way in and zero is never negative,
-        // so a blob written non-canonically still lands canonical.
+        // A blob written non-canonically still lands canonical.
         let p = liss_int_new(KIND_INT, 1, [0u8, 0, 0].as_ptr(), 3);
         assert_eq!((*p).len, 0);
         assert_eq!((*p).neg, 0);
@@ -396,7 +323,6 @@ fn integer_arithmetic_consumes_and_returns_one_value() {
         assert_eq!(consume(liss_int_sub(ni(5), ni(13))), (true, vec![8]));
         assert_eq!(consume(liss_int_mul(ni(7), ni(6))), (false, vec![2, 4]));
         assert_eq!(consume(liss_int_neg(ni(7))), (true, vec![7]));
-        // Truncating toward zero, the remainder's sign following the dividend —
         // Rust's `i64` `/` and `%`, which is what the corpus is blessed against.
         assert_eq!(
             consume(liss_int_div(ni(-7), ni(2), std::ptr::null(), 0)),
@@ -435,8 +361,7 @@ fn arithmetic_is_unbounded() {
 fn fractions_share_the_integer_engine_and_differ_only_where_they_must() {
     solus(|| unsafe {
         assert_eq!(liss_live_count(), 0);
-        // add/sub/neg/cmp are the integer operations outright: two counts of
-        // the same grain add as integers.
+        // add/sub/neg/cmp are the integer operations outright.
         let sum = liss_int_add(numerus(KIND_FRAC_UNCIA, 12), numerus(KIND_FRAC_UNCIA, 4));
         assert_eq!(
             (*sum).h.kind,
@@ -468,8 +393,6 @@ fn fractions_share_the_integer_engine_and_differ_only_where_they_must() {
         assert_eq!(liss_live_count(), 0);
     });
 }
-
-// ---------------------------------------------------------------------- text
 
 #[test]
 fn text_concatenates_compares_and_frees() {
@@ -513,8 +436,6 @@ fn text_concatenates_compares_and_frees() {
         assert_eq!(liss_live_count(), 0);
     });
 }
-
-// --------------------------------------------------------------------- lists
 
 #[test]
 fn list_indexing_is_one_based() {
@@ -576,8 +497,6 @@ fn an_empty_list_is_one_allocation_with_a_length() {
     });
 }
 
-// ------------------------------------------------------------- raising paths
-
 fn in_subprocesso(scaena: &str) -> Output {
     Command::new(std::env::current_exe().expect("the test binary knows its own path"))
         .args(["--exact", "scaena", "--nocapture", "--test-threads=1"])
@@ -594,9 +513,7 @@ fn erratum(scaena: &str) -> (Option<i32>, String) {
     )
 }
 
-/// The scenario runner. Ordinary runs find no `LISS_ABI_SCAENA` and pass
-/// immediately; a run started by [`in_subprocesso`] performs one raising path
-/// and never returns.
+/// Ordinary runs find no `LISS_ABI_SCAENA` and pass immediately.
 #[test]
 fn scaena() {
     let Ok(nomen) = std::env::var("LISS_ABI_SCAENA") else {
@@ -650,10 +567,7 @@ fn scaena() {
                 liss_list_put(xs, ni(2), ni(9) as u64, scida, 3);
             }
             "digitus-corruptus" => {
-                // A `LissInt` whose payload holds a digit above 9 — the shape
-                // that reaches `Roman::from_digits`' `None` arm, and which
-                // would otherwise be `render_digit`'s `unreachable!` panic or a
-                // silent `u8` wrap in `mag_add`.
+                // A digit above 9: `Roman::from_digits`' `None` arm.
                 let p = ni(1);
                 *p.cast::<u8>().add(ONUS) = 12;
                 liss_print_int(p);
@@ -664,23 +578,17 @@ fn scaena() {
                 liss_int_free(p);
             }
             "usus-post-liberationem" => {
-                // Clearing the magic *before* the free is what makes this
-                // deterministic: neither musl nor glibc writes `'LISS'` back
-                // into the first four bytes of a just-freed small chunk, so
-                // the header still reads as not-an-object.
+                // Clearing the magic before the free is what makes this deterministic.
                 let p = ni(1);
                 liss_int_free(p);
                 liss_int_add(p, ni(2));
             }
             "numerus-pro-serie" => {
-                // Kind confusion in the direction `genus-alienum` does not
-                // cover: a `LissInt` handed to a list entry point. The magic
-                // is good; only the depth of the kind says otherwise.
+                // A `LissInt` handed to a list entry point: only the depth of the kind objects.
                 liss_list_free(ni(1).cast());
             }
             "genus-alienum" => {
-                // A `LissText` handed to an integer entry point: the magic is
-                // perfectly good and only the kind says otherwise.
+                // A `LissText` handed to an integer entry point: only the kind objects.
                 let t = liss_text_new(b"salve".as_ptr(), 5);
                 liss_print_int(t.cast());
             }
@@ -697,17 +605,9 @@ fn scaena() {
                 liss_exit(0);
             }
             "fistula-erratum" => {
-                // Both descriptors gone, and output pending so the flush
-                // actually reaches a `write`. A failing program must still
-                // exit **1**: a closed error channel is not permission to
-                // claim success, and `judge` reads exit 0 from a program that
-                // raised as a `clean success` violation. Before the flush
-                // stopped deciding the status, `scribe_ad` met `EPIPE` on
-                // descriptor 1 and `_exit(0)`d from inside `liss_panic`.
-                //
-                // `liss_custos_institue` is what sets `SIG_IGN` in a compiled
-                // program; this binary inherited it from `std::rt::init`, so
-                // say it here rather than lean on that.
+                // Both descriptors gone, output pending so the flush reaches a `write`.
+                // `liss_custos_institue` sets `SIG_IGN` in a compiled program; say it here
+                // rather than lean on `std::rt::init`.
                 libc::signal(libc::SIGPIPE, libc::SIG_IGN);
                 let mut fistula = [0 as libc::c_int; 2];
                 assert_eq!(libc::pipe(fistula.as_mut_ptr()), 0, "pipe");
@@ -754,8 +654,7 @@ fn division_and_modulus_by_zero_raise() {
             "Error in 'principale.liss', linea 3: modulus per nullum\n".to_string()
         )
     );
-    // `mnr`/`nr` division raises the same sentence — one literal, one site, and
-    // therefore uniquely attributable in the diagnostic catalogue.
+    // The same sentence, one literal at one site, so the catalogue can attribute it.
     assert_eq!(
         erratum("frac-divisio"),
         (
@@ -767,8 +666,7 @@ fn division_and_modulus_by_zero_raise() {
 
 #[test]
 fn a_diagnostic_without_a_file_names_only_its_line() {
-    // Spec §4.1 lowers `Func::file: None` to a zero-length name at the ABI;
-    // this is the `Error in linea N:` shape `ProgramError` renders for it.
+    // Spec §4.1 lowers `Func::file: None` to a zero-length name at the ABI.
     assert_eq!(
         erratum("divisio-sine-scida"),
         (Some(1), "Error in linea 7: divisio per nullum\n".to_string())
@@ -781,8 +679,8 @@ fn a_diagnostic_without_a_file_names_only_its_line() {
 
 #[test]
 fn an_index_outside_the_bounds_raises_with_roman_numerals() {
-    // Byte for byte what `conformance/errores/index-extra-fines/nuntii`,
-    // `index-infra-fines` and `index-scriptio-extra-fines` are blessed with.
+    // Byte for byte what `conformance/errores/index-{extra,infra,scriptio-extra}-fines`
+    // are blessed with.
     assert_eq!(
         erratum("index-supra"),
         (
@@ -805,8 +703,7 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
             "Error in 'principale.liss', linea 3: index extra fines: II (longitudo I)\n".to_string()
         )
     );
-    // An empty list reads `longitudo nullus` — D-12's rule that no user ever
-    // sees an Arabic number, applied to the length as well as the subscript.
+    // D-12: an empty list reads `longitudo nullus`, never an Arabic number.
     assert_eq!(
         erratum("index-vacuus"),
         (
@@ -815,8 +712,7 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
                 .to_string()
         )
     );
-    // A subscript with no `usize` at all takes the same branch as a subscript
-    // of zero, and prints in full.
+    // A subscript with no `usize` at all takes the same branch as one of zero.
     let (code, stderr) = erratum("index-immanis");
     assert_eq!(code, Some(1));
     assert!(
@@ -842,20 +738,15 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
             stderr, "Error: defectus internus: memoria violata est: verificatio\n",
             "{scaena} stderr",
         );
-        // A Rust panic crossing an `extern "C"` boundary aborts: SIGABRT and
-        // exit 134, which is D-04's shape and outside the error model
-        // entirely. Asserting the status rules it out; asserting the text
-        // rules out a panic that happened to be caught somewhere.
+        // A Rust panic across an `extern "C"` boundary aborts: SIGABRT, exit 134, D-04's shape.
         assert!(!stderr.contains("panicked"), "{scaena} must not be a Rust panic");
     }
 }
 
 #[test]
 fn a_closed_pipe_never_turns_a_failure_into_a_success() {
-    // The counterpart to `custos.rs`'s `a_closed_pipe_never_decides_the_exit_
-    // status`, on the other failing path. Nothing can be read back — the child
-    // has no working descriptor left — so the status is the whole assertion,
-    // and it is the whole point.
+    // The counterpart to `custos.rs`'s `a_closed_pipe_never_decides_the_exit_status`,
+    // on the other failing path; nothing can be read back, so the status is the assertion.
     let out = in_subprocesso("fistula-erratum");
     assert_eq!(
         out.status.code(),
@@ -866,10 +757,7 @@ fn a_closed_pipe_never_turns_a_failure_into_a_success() {
 
 #[test]
 fn a_leak_is_exit_one_and_a_clean_exit_is_exit_zero() {
-    // Exit 1 specifically, and not 70: `judge` treats any status outside
-    // {0, 1, 101} as "this came from `initium`, therefore legitimate", so a
-    // leak reported as 70 would be silently accepted by the one harness most
-    // meant to catch it.
+    // Exit 1 and not 70: `judge` treats any status outside {0, 1, 101} as legitimate.
     assert_eq!(
         erratum("memoria-non-liberata"),
         (Some(1), "Error: memoria non liberata est\n".to_string())

@@ -1,16 +1,5 @@
-//! What `scribe` writes: the output buffer, the flush, and the six
-//! `liss_print_*` entry points — checked by reading descriptor 1 back through a
-//! pipe, so the assertion covers the real path (buffer, release-store, flush,
-//! `write(2)`) rather than only the formatters.
-//!
-//! **This binary holds exactly one `#[test]`, and that is load-bearing.**
-//! Redirecting fd 1 redirects it for the whole process, and `libtest` writes
-//! its own progress lines (`test foo ... ok`) to that descriptor from the main
-//! thread as other tests finish. With more than one test here, those lines land
-//! in the middle of a captured value; the failure is intermittent and reads
-//! like a formatter bug. One test means `libtest` prints only before it starts
-//! and after it ends. A separate binary is what keeps that constraint from
-//! infecting the ownership tests in `abi.rs`.
+//! What `scribe` writes. Exactly one `#[test]` here, and that is load-bearing —
+//! see docs/internals/testing.md.
 
 use liss_abi::memoria::liss_live_count;
 use liss_abi::numeri::liss_int_new;
@@ -55,8 +44,7 @@ fn capta(f: impl FnOnce()) -> String {
     }
 }
 
-/// Render one value and return what it printed, minus the trailing newline
-/// `scribe` always appends.
+/// One value, minus the trailing newline `scribe` always appends.
 fn pinge(f: impl FnOnce()) -> String {
     capta(f)
         .strip_suffix('\n')
@@ -78,16 +66,10 @@ unsafe fn ni(n: i64) -> *mut LissInt {
     unsafe { liss_int_new(KIND_INT, u64::from(n < 0), digiti.as_ptr(), digiti.len() as u64) }
 }
 
-// ------------------------------------------------------------ golden vectors
-
-/// `tests/data/scriptio-aurea.txt`, captured from the interpreter while both
-/// implementations still existed (spec §10.4). `liss-runtime`'s own
-/// `golden.rs` skips the `List` rows because `scriptio` has no list formatter;
-/// those rows are precisely what this crate adds, so they are checked here.
+/// Captured from the interpreter (spec §10.4); the `List` rows `golden.rs` skips are checked here.
 const AUREA: &str = include_str!("../../liss-runtime/tests/data/scriptio-aurea.txt");
 
-/// The `Debug` shape of the interpreter's old `Value`, parsed back into
-/// something the ABI can build.
+/// The `Debug` shape of the interpreter's old `Value`.
 enum Nodus {
     Bool(bool),
     Char(char),
@@ -106,7 +88,7 @@ fn genus(n: &Nodus) -> u32 {
         Nodus::Char(_) => KIND_CHAR,
         Nodus::Numerus { kind, .. } => *kind,
         Nodus::Textus(_) => KIND_TEXT,
-        // An empty list has no element to ask; every element kind prints `[]`.
+        // An empty list has no element to ask.
         Nodus::Series(items) => items.first().map_or(KIND_INT, genus) + GRADUS,
     }
 }
@@ -206,7 +188,6 @@ fn lege_nodum(s: &str) -> (Nodus, &str) {
     panic!("unparsed golden payload: {s}");
 }
 
-/// Render one built value through whichever entry point its kind names.
 unsafe fn pinge_verbum(verbum: u64, kind: u32) -> String {
     pinge(|| unsafe {
         match kind {
@@ -226,7 +207,6 @@ fn scribe_writes_what_the_interpreter_wrote() {
     unsafe {
         assert_eq!(liss_live_count(), 0);
 
-        // ---- the golden vectors, including the list rows `golden.rs` skips.
         let mut probata = 0usize;
         let mut seriei = 0usize;
         for (i, linea) in AUREA.lines().enumerate() {
@@ -256,14 +236,13 @@ fn scribe_writes_what_the_interpreter_wrote() {
             "the list rows are what this crate adds over `golden.rs`; got {seriei}",
         );
 
-        // ---- scalars, which own nothing and free nothing.
         assert_eq!(pinge(|| liss_print_bool(1)), "verus");
         assert_eq!(pinge(|| liss_print_bool(0)), "falsus");
         assert_eq!(pinge(|| liss_print_char('x' as i32)), "x");
         assert_eq!(pinge(|| liss_print_char('\u{1F40D}' as i32)), "\u{1F40D}");
         assert_eq!(liss_live_count(), 0);
 
-        // ---- a list nested three deep, which no golden vector reaches.
+        // A list nested three deep, which no golden vector reaches.
         let intima = liss_list_new(u64::from(KIND_INT), 2);
         pone(intima, 0, ni(1) as u64);
         pone(intima, 1, ni(2) as u64);
@@ -275,7 +254,6 @@ fn scribe_writes_what_the_interpreter_wrote() {
         assert_eq!(pinge(|| liss_print_list(summa)), "[[[I, II]], []]");
         assert_eq!(liss_live_count(), 0);
 
-        // ---- a list of each remaining element kind.
         let veri = liss_list_new(u64::from(KIND_BOOL), 2);
         pone(veri, 0, 1);
         pone(veri, 1, 0);
@@ -301,9 +279,7 @@ fn scribe_writes_what_the_interpreter_wrote() {
         );
         assert_eq!(liss_live_count(), 0);
 
-        // ---- more output than the 8192-byte buffer holds. Each line is four
-        // bytes, so 4000 of them force the overflow flush several times over,
-        // and nothing may be lost, duplicated or reordered.
+        // More output than the 8192-byte buffer holds, several overflow flushes over.
         let scriptum = capta(|| {
             for _ in 0..4000 {
                 liss_print_int(ni(3000));
@@ -313,8 +289,7 @@ fn scribe_writes_what_the_interpreter_wrote() {
         assert_eq!(scriptum.matches("MMM\n").count(), 4000);
         assert!(scriptum.chars().all(|c| c == 'M' || c == '\n'));
 
-        // ---- a single value larger than the whole buffer, which `scribe`
-        // must split across flushes rather than truncate.
+        // A single value larger than the whole buffer: split across flushes, not truncated.
         let longum = "\u{1F40D}".repeat(5000);
         let scriptum = pinge(|| liss_print_text(liss_text_new(longum.as_ptr(), longum.len() as u64)));
         assert_eq!(scriptum, longum);
