@@ -4,6 +4,7 @@
 pub mod error;
 pub use liss_runtime::roman;
 pub use liss_runtime::fraction;
+pub mod spatium;
 pub mod token;
 pub mod lexer;
 pub mod ast;

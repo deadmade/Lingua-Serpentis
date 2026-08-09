@@ -58,11 +58,11 @@ crates/lingua-serpentis/src/cli.rs:419  Error: programma incipi non potest  → 
 crates/lingua-serpentis/src/cli.rs:425  Error: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:19  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/latinity.rs:40  nomen '{name}' fortasse non Latinum est  → fixtured
-crates/lingua-serpentis/src/lexer.rs:45  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/lexer.rs:59  chorda non clausa  → fixtured
-crates/lingua-serpentis/src/lexer.rs:68  littera invalida  → fixtured
-crates/lingua-serpentis/src/lexer.rs:86  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
-crates/lingua-serpentis/src/lexer.rs:92  signum ignotum: '{}'  → fixtured
+crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED
+crates/lingua-serpentis/src/lexer.rs:77  chorda non clausa  → fixtured
+crates/lingua-serpentis/src/lexer.rs:92  littera invalida  → fixtured
+crates/lingua-serpentis/src/lexer.rs:110  numerus Arabicus '{}' non licet; scribe '°V' vel simile  → fixtured
+crates/lingua-serpentis/src/lexer.rs:116  signum ignotum: '{}'  → fixtured
 crates/lingua-serpentis/src/parser.rs:33  expectatum: '{}'  → fixtured
 crates/lingua-serpentis/src/parser.rs:37  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/parser.rs:44  expressio nimis alte implicata  → fixtured

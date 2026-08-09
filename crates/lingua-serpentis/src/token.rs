@@ -1,4 +1,5 @@
 use crate::roman::{Roman, RomanNumber};
+use crate::spatium::Spatium;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
@@ -81,6 +82,7 @@ impl TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub line: usize,
+    pub spatium: Spatium,
 }
 
 impl From<RomanNumber> for TokenKind {
