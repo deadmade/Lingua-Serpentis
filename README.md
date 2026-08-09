@@ -72,10 +72,10 @@ design but is not implemented; macOS is not planned.
 | Path | |
 |---|---|
 | `crates/lingua-serpentis` | Lexer, parser, checker, and the `liss` command |
-| `crates/liss-ir` | The typed IR the checker emits |
-| `crates/liss-codegen` | Cranelift code generation, and the linker |
-| `crates/liss-runtime` | Roman numerals; compiled for both host and target |
-| `crates/liss-abi` | The musl-side runtime — its own workspace, see `Cargo.toml` |
+| `crates/ir` | The typed IR the checker emits |
+| `crates/codegen` | Cranelift code generation, and the linker |
+| `crates/runtime` | Roman numerals; compiled for both host and target |
+| `crates/abi` | The musl-side runtime — its own workspace, see `Cargo.toml` |
 | `crates/latinitas` | Latin morphology, backed by Whitaker's WORDS |
 | `conformance/` | 118 fixtures: programs that run, that are rejected, that warn |
 | `examples/` | Sample programs |
@@ -85,10 +85,10 @@ design but is not implemented; macOS is not planned.
 
 ```console
 $ cargo test
-$ cargo test --manifest-path crates/liss-abi/Cargo.toml
+$ cargo test --manifest-path crates/abi/Cargo.toml
 ```
 
-`liss-abi` is excluded from the workspace on purpose and needs the second command; the root
+`abi` is excluded from the workspace on purpose and needs the second command; the root
 `Cargo.toml` says why.
 
 ## Documentation

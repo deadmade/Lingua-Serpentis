@@ -1,0 +1,14 @@
+[package]
+name = "runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# Zero production dependencies, deliberately: this crate is compiled twice —
+# once for the host inside the compiler (`ir` needs `Roman` for integer
+# constants), once for musl inside `abi`'s staticlib — and both build
+# graphs must stay simple. See spec §11.
+[dependencies]
+
+[dev-dependencies]
+proptest = "1"

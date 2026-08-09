@@ -1,8 +1,8 @@
 # The ABI, the runtime, and the IR
 
-This document is the reference for the three crates that sit below the checker: `liss-abi`, the C
-ABI a compiled Lingua Serpentis program calls; `liss-runtime`, the arithmetic and formatting shared
-between the compiler and compiled programs; and `liss-ir`, the typed intermediate representation the
+This document is the reference for the three crates that sit below the checker: `abi`, the C
+ABI a compiled Lingua Serpentis program calls; `runtime`, the arithmetic and formatting shared
+between the compiler and compiled programs; and `ir`, the typed intermediate representation the
 checker emits and codegen consumes. It states the value representation, the kind codes, the
 consuming calling convention, the ownership invariants, the heap guard, the output path, the stack
 guard, and the shape of the IR — together with the reasons each of them is what it is, and the
@@ -14,26 +14,26 @@ the contract those 62 clauses all instantiate.
 
 ## 1. Overview: three crates and why they are three
 
-Everything above `liss-abi` — the lexer, the parser, the checker, the typed IR — deals in Rust
-values; everything below it is machine words that codegen emits. `liss-abi` is **the
+Everything above `abi` — the lexer, the parser, the checker, the typed IR — deals in Rust
+values; everything below it is machine words that codegen emits. `abi` is **the
 memory-safety-critical layer, and the only crate in the workspace containing `unsafe`**. The rules
-those words obey are stated once, in `liss-abi`, and are the contract codegen emits calls against.
+those words obey are stated once, in `abi`, and are the contract codegen emits calls against.
 
-**`liss-runtime` is compiled twice.** Once for the host, inside the compiler, because the typed IR
-needs `Roman` for integer constants; once for musl, embedded in `liss-abi`'s staticlib. `liss-abi`
+**`runtime` is compiled twice.** Once for the host, inside the compiler, because the typed IR
+needs `Roman` for integer constants; once for musl, embedded in `abi`'s staticlib. `abi`
 is compiled once, only for musl, and is never linked into the compiler — which is why the two
-crates cannot be one (spec §11). `liss-runtime` is dependency-free by construction: nothing in it
+crates cannot be one (spec §11). `runtime` is dependency-free by construction: nothing in it
 may depend on any crate, in either the host or the musl build. That is what makes compiling it
 twice, for two different targets, straightforward.
 
-**`liss-abi` is its own workspace, deliberately** (spec §9.1). `liss-codegen`'s `build.rs` invokes
+**`abi` is its own workspace, deliberately** (spec §9.1). `codegen`'s `build.rs` invokes
 cargo on it *while the outer build is already running*; a member of the root workspace would contend
 for the outer `.cargo-lock` and deadlock. The root `Cargo.toml` says so, and the second test command
-(`cargo test --manifest-path crates/liss-abi/Cargo.toml`) exists because of it.
+(`cargo test --manifest-path crates/abi/Cargo.toml`) exists because of it.
 
-**`liss-abi` is the only crate permitted `libc`** — the one dependency the whole workspace has
+**`abi` is the only crate permitted `libc`** — the one dependency the whole workspace has
 (spec §11): `write`, `_exit`, `malloc`, `free`, and, from Task 9, `sigaltstack`/`sigaction`, none
-of which std exposes. `liss-runtime`, `liss-ir` and `lingua-serpentis` stay at zero.
+of which std exposes. `runtime`, `ir` and `lingua-serpentis` stay at zero.
 
 Two build details follow from the same place. The crate is `crate-type = ["rlib", "staticlib"]`:
 `staticlib` is what the musl cross-build embeds, because every `#[unsafe(no_mangle)]` symbol is
@@ -41,7 +41,7 @@ garbage-collected out of an rlib; `rlib` is what the host test binary links agai
 runtime's `main` is behind the **`ingressus` feature**, off by default and required to stay off for
 every host build: this crate is *also* built as an `rlib` for its own tests, every test binary
 already defines `main`, and an ungated one here is a `duplicate symbol: main` at link time —
-measured, not feared. `liss-codegen/build.rs` turns the feature on for the two musl staticlibs it
+measured, not feared. `codegen/build.rs` turns the feature on for the two musl staticlibs it
 embeds, and nothing else does.
 
 The embedded runtime is always built `--release` regardless of the compiler's own profile, so "debug
@@ -92,27 +92,27 @@ rather than three — element `i` of a list is at `ONUS + 8*i`. `VERBUM` is 8: o
 whatever the element's kind, the two narrow scalars zero-extended into it, which is what makes the
 payload an array rather than a packed record codegen would have to compute offsets into.
 
-**Both are defined in `liss_runtime::dispositio`, not in `liss-abi`.** `liss-abi` owns the three
+**Both are defined in `runtime::dispositio`, not in `abi`.** `abi` owns the three
 `#[repr(C)]` headers and *was* the sole definition of the offset — but codegen is now a **writer**
 of the layout as well as a caller of the ABI: `liss_list_new` deliberately has no per-element setter
-and leaves codegen to store each element word itself. `liss-abi` is cross-compiled for musl and
-never linked into the compiler (spec §11), so `liss-codegen` cannot import from it; the alternative
+and leaves codegen to store each element word itself. `abi` is cross-compiled for musl and
+never linked into the compiler (spec §11), so `codegen` cannot import from it; the alternative
 was a second `24` in `emissio.rs` held to this one by a comment, which is precisely the arrangement
-Task 12 removed for `KIND_INT`. `liss-abi` re-exports it, so `liss_abi::ONUS` still names it.
+Task 12 removed for `KIND_INT`. `abi` re-exports it, so `abi::ONUS` still names it.
 
 ### The `const _` block: the proof, not the promise (lib.rs)
 
 The re-export alone would be a promise. The `const _` assertion block in `lib.rs` is what makes it a
 proof: it asserts `size_of` of all three headers equals `ONUS`, `align_of` of all three is 8,
-`size_of::<LissHdr>()` is 8, and `VERBUM == size_of::<u64>()`. The musl cross-build of `liss-abi` is
-a prerequisite of every compiled program (`liss-codegen/build.rs`, which also re-runs on
-`liss-runtime/src`), so a constant that drifted from the layout is a **build failure** rather than a
+`size_of::<LissHdr>()` is 8, and `VERBUM == size_of::<u64>()`. The musl cross-build of `abi` is
+a prerequisite of every compiled program (`codegen/build.rs`, which also re-runs on
+`runtime/src`), so a constant that drifted from the layout is a **build failure** rather than a
 wrong answer.
 
 `VERBUM` needs its own line and did not have one. `ONUS` is held by the three `size_of`s; the
 element **stride** is held by nothing at all, because the reader never spells it —
 `series::elementa` returns a `*mut u64` and every access is `.add(i)`, which is a hard-wired 8. So a
-`VERBUM` of 16 would have codegen store element `i` at `ONUS + 16*i` while `liss-abi` reads it at
+`VERBUM` of 16 would have codegen store element `i` at `ONUS + 16*i` while `abi` reads it at
 `ONUS + 8*i`: `quantum` would over-allocate (harmless), every element past the first would read as a
 zero word, and `liberare_verbum` and `copiare_verbum` both *skip* a zero word. Silent wrong answers
 and silent leaks, and nothing would fail to compile. Now something does. The assertion is written
@@ -141,13 +141,13 @@ is `kind >> 3`, how many `lista` levels deep — 0 for a scalar. `granum(kind)` 
 denominator a fractional kind counts in: XII for `mnr`, CCLXXXVIII for `nr`, and `None` for every
 other kind.
 
-**These live in `liss_runtime::genus`, not in `liss-abi`, for the same reason `ONUS` does.** They
+**These live in `runtime::genus`, not in `abi`, for the same reason `ONUS` does.** They
 are written by codegen and read by the runtime, and those two never share a compilation. Until Task
-12 the numbers existed twice — `KIND_INT` in `liss-abi` and a copied `GENUS_NI = 2` in
-`liss-codegen` — held together by a comment. `liss-runtime` is already a dependency of *both*, and
+12 the numbers existed twice — `KIND_INT` in `abi` and a copied `GENUS_NI = 2` in
+`codegen` — held together by a comment. `runtime` is already a dependency of *both*, and
 is dependency-free in both the host and the musl build, so it is the one place the two ends of the
-contract can genuinely share a definition, and it needs no new row in spec §11's table. `liss-abi`
-re-exports them, so `liss_abi::KIND_INT` still names the same constant.
+contract can genuinely share a definition, and it needs no new row in spec §11's table. `abi`
+re-exports them, so `abi::KIND_INT` still names the same constant.
 
 `genus.rs`'s own tests pin the two worked examples from spec §5.3 and their inverse, that every
 base fits below `GRADUS` (or the `|` would carry into the depth field), and that only the two
@@ -365,7 +365,7 @@ equality, so the recursion does not consume what the public entry point still ha
 - **`liss_list_get`** — `xs[i]`, 1-based, bounds-checked, returning a **deep copy**, consuming
   both `p` and `index`. The copy keeps the no-aliasing invariant: after the call the element is in
   the list and the result is a separate value the caller owns. Held by
-  `conformance/currunt/lista-index-lectio` and, more sharply, by `liss-codegen/tests/series.rs`'s
+  `conformance/currunt/lista-index-lectio` and, more sharply, by `codegen/tests/series.rs`'s
   `series_indicem_per_exemplar_legit`, which reads the emitted call sequence — a missing copy is
   visible there and invisible in a program that prints the right answer. `interp.rs:182` did the
   same thing with `items[i - 1].clone()`.
@@ -529,14 +529,14 @@ number of unciae, so it never emits a sub-uncia name — at most `NUMERAL et TWE
 
 ## 10. Output, streams, and the signal-handler buffer
 
-### The formatter (liss-runtime/scriptio.rs)
+### The formatter (runtime/scriptio.rs)
 
 Free functions rather than a `Display`/`ToString`-style method: each one is monomorphic (renders
 exactly one value shape) and *delivers* its bytes to a caller-supplied `Sink` rather than returning
 a `String`, which is what the runtime's static output buffer (spec §6) needs. Ported from
 `Value::display`'s match arms (the interpreter's `value.rs`, spec §5.5) — the same seven one-line
 bodies, unchanged, just monomorphised into separate functions. The list case is deliberately absent:
-it is `ekind`-driven, has no data here to drive it, and lands in `liss_abi::liss_print_list`.
+it is `ekind`-driven, has no data here to drive it, and lands in `abi::liss_print_list`.
 
 **"Delivers", not "does not allocate", and the difference is a defect.** `scribe_text`,
 `scribe_char` and `scribe_bool` genuinely allocate nothing. `scribe_int` and `scribe_frac` do: both
@@ -560,7 +560,7 @@ on it explicitly. It exists because it is the *only* randomised oracle for the f
 vectors cover only cases someone thought to write down. It earns its place because it is small,
 test-only, and the alternative is having no randomised oracle at all.
 
-### The buffer (liss-abi/scriptio.rs)
+### The buffer (abi/scriptio.rs)
 
 **The buffer is a `static mut [u8; 8192]` with a separate `AtomicUsize` length.** Not a `Vec`: no
 allocator involvement, no `realloc` window, no lock. The signal handler walks this buffer from a
@@ -598,7 +598,7 @@ is worth:
 success` violation, exit 1 carrying none is `diagnostic present`. Exit 1 *with* the sentence is the
 only failing outcome that satisfies the invariant, so the flush must not be able to pre-empt it.
 
-**Two scenarios measure it**, `fistula-abyssus` and `fistula-violatio` in `liss-abi/tests/custos.rs`
+**Two scenarios measure it**, `fistula-abyssus` and `fistula-violatio` in `abi/tests/custos.rs`
 (`a_closed_pipe_never_decides_the_exit_status`): the same two faults as `abyssus` and `violatio`,
 with stdout already closed, and **deliberately with different amounts of pending output, because
 that is the variable that used to decide the exit status**. `abyssus` leaves 13 bytes in the buffer,
@@ -642,7 +642,7 @@ read an element, and the closed-form kind code makes the recursion one subtracti
 on each element. The six `liss_print_*` entry points each append exactly one newline, as
 `StmtKind::Print` has always done; the two immediate kinds are not owned, so nothing is freed.
 
-### Exit status (liss-runtime/exitus.rs)
+### Exit status (runtime/exitus.rs)
 
 `exit_status(&Roman)` turns `initium`'s returned `ni` into a Unix exit status: **the value mod
 CCLVI, shifted non-negative** (a negative remainder gains one modulus). Moved from `interp.rs`
@@ -658,7 +658,7 @@ reditus 'initium' extra fines status exitus est; ad XLIV redactus
 ```
 
 `Warning` here is a minimal, dependency-free stand-in for a caller's own warning type, carrying only
-the message text, because `liss-runtime` cannot depend on `lingua-serpentis` or anything else; a
+the message text, because `runtime` cannot depend on `lingua-serpentis` or anything else; a
 caller with a richer warning type (file, line) wraps it.
 
 ---
@@ -779,7 +779,7 @@ message, never an invariant violation. A Lingua Serpentis program has no pointer
 ### Why the installer is called from `main`, and not from `.init_array`
 
 **The runtime's `main` must call `liss_custos_institue` before `liss_initium`, and nothing in
-`liss-abi` can make it.** `tests/custos.rs` carries the enforcement instead:
+`abi` can make it.** `tests/custos.rs` carries the enforcement instead:
 `a_main_in_this_crate_must_install_the_guard` fails the moment an entry point appears in `src/`
 without the call.
 
@@ -816,7 +816,7 @@ from.
 Compiled code provides `liss_initium` — the lowering of the user's `munus initium reddit ni`,
 returning one owned `ni`. It is undefined in the runtime object on purpose: it is the one symbol the
 program link supplies, and Task 10's test asserts it is still undefined in the embedded blob.
-`liss-abi` provides `main`, which owes four things:
+`abi` provides `main`, which owes four things:
 
 1. Call `liss_custos_institue` — first line, before anything can recurse. It also sets `SIGPIPE`
    to `SIG_IGN` (D-06, spec §6), so that is not repeated.
@@ -824,7 +824,7 @@ program link supplies, and Task 10's test asserts it is still undefined in the e
    counter is checked two lines later and a returned value nobody freed is a leak like any other.
    Reading before freeing matters: `roman_of` copies the digits out, so the pointer is dead by the
    time `exit_status` sees the value; freeing before the conversion would be reading freed memory.
-3. Convert with `liss_runtime::exit_status` and, if there is a truncation note, write it to stderr
+3. Convert with `runtime::exit_status` and, if there is a truncation note, write it to stderr
    *before* exiting, as `Monitum: …` — the same sentence and the same prefix the CLI wrote, so
    `conformance/monita/status-exitus-redactus` reads identically. Unbuffered, so it cannot queue
    behind program output that a closed descriptor 1 would then lose (D-10).
@@ -848,7 +848,7 @@ thread the runtime runs on.
 
 ---
 
-## 12. The typed IR (liss-ir)
+## 12. The typed IR (`ir`)
 
 Types only: no producer (the checker) and no consumer (codegen) live in this crate. See spec §4.
 **Every `Expr` node carries its own `Ty` so codegen never consults an environment and never infers
@@ -941,13 +941,13 @@ of the second's spelling. And the character immediately after `liss_` is always 
 digit of `n`), which is the collision proof against runtime entry points such as `liss_int_add` and
 `liss_panic`, whose next character is always a letter.
 
-A worked example, from `liss-codegen/tests/vocationes.rs`: `mathēmatica` escapes to
+A worked example, from `codegen/tests/vocationes.rs`: `mathēmatica` escapes to
 `math_u113_matica` — sixteen characters — and `quadrātum` to `quadr_u101_tum`, fourteen, so the
 package function comes out of the object as `liss_16_math_u113_matica_14_quadr_u101_tum`. **A
 per-*byte* escape would have written `_uc4__u93_` for the one `ē` and the length prefixes would
 still have been self-consistent**, so nothing but a written-out expectation catches it. That is why
 `nomina_non_ascii_per_fasciculos_transeunt` and `omne_munus_symbolum_fasciculi_sui_gerit` spell
-their expected symbols as literals rather than as `liss_ir::symbol(..)` calls: a mangling that
+their expected symbols as literals rather than as `ir::symbol(..)` calls: a mangling that
 changed would still agree with itself, and what these assert is that the *linker* sees what §4.3
 wrote down. The one to read closely there is `liss_5_alpha_7_initium` — the prefixes count the
 **escaped** components, and `alpha` is five characters and `initium` seven.
@@ -1066,7 +1066,7 @@ number this crate formats without going through `Roman`"* — is gone, and with 
 numeral anything in this language prints. `judge`'s `no Arabic digits` rule covers the location row
 because of it.
 
-**The risk in changing any of this is the build, not the diff.** `liss-codegen/build.rs`
+**The risk in changing any of this is the build, not the diff.** `codegen/build.rs`
 cross-compiles this crate into two prebuilt musl archives during the outer build; a stale archive
 leaves the two workspaces disagreeing while *both* test commands pass. Force a rebuild and confirm
 a runtime-origin fixture actually moved.

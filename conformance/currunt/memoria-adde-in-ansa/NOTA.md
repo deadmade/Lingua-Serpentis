@@ -12,7 +12,7 @@ answer.
 words — a header one longer, one `memcpy`, and only the old header freed — which
 is what keeps a loop of `adde` linear rather than quadratic. A copying
 implementation would print exactly the same six lines and exit 0 just the same.
-The steal is measured where it is visible, in `liss-abi`'s
+The steal is measured where it is visible, in `abi`'s
 `append_in_a_loop_stays_balanced_and_copies_no_element`, which reads the live
 count after each of a hundred appends and finds `1 + i`; this case's job is only
 to prove that codegen reaches that entry point and adds no bookkeeping of its

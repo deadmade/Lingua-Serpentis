@@ -20,7 +20,7 @@ fn musl_std_exists_for_both_targets() {
     }
 }
 
-/// Asserted here rather than skipped in `liss-codegen/tests/aemulatio.rs`, which runs under it.
+/// Asserted here rather than skipped in `codegen/tests/aemulatio.rs`, which runs under it.
 #[test]
 fn qemu_aarch64_is_on_the_path() {
     let out = Command::new("qemu-aarch64").arg("--version").output();

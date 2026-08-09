@@ -22,18 +22,18 @@ path = "src/bin/liss.rs"
 
 [dependencies]
 latinitas = { path = "../latinitas" }
-liss-ir = { path = "../liss-ir" }
-liss-runtime = { path = "../liss-runtime" }
-# The back end, as spec §9.1's diagram draws it. `liss-codegen` dev-depends on
+ir = { path = "../ir" }
+runtime = { path = "../runtime" }
+# The back end, as spec §9.1's diagram draws it. `codegen` dev-depends on
 # this crate for `tests/salve.rs`, so what remains is a **dev**-dependency
 # cycle, which cargo permits and a normal one would not.
-liss-codegen = { path = "../liss-codegen" }
+codegen = { path = "../codegen" }
 
 [dev-dependencies]
 insta = "1"
 libtest-mimic = "0.8"
 proptest = "1"
-# One scratch-directory implementation, shared with `liss-codegen`'s test support, which
+# One scratch-directory implementation, shared with `codegen`'s test support, which
 # cannot import this module: 2026-08-09-test-harness-libraries-design.md §7.
 tempfile = "3"
 # The diagnostic ratchet parses `crates/*/src` rather than scanning it, which is what lets the

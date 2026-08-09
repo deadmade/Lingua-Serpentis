@@ -1,0 +1,62 @@
+[package]
+name = "abi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+
+# Its own workspace, deliberately (spec §9.1). Task 10's `build.rs` invokes
+# cargo on this crate while the outer build is already running; a member of the
+# root workspace would contend for the outer `.cargo-lock` and deadlock.
+[workspace]
+
+# `staticlib` is what the musl cross-build embeds (Task 10) — every
+# `#[unsafe(no_mangle)]` symbol here is garbage-collected out of an rlib.
+# `rlib` is what the host test binary links against, which is how this task
+# tests the ABI before musl enters the picture.
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+# `ingressus` adds the runtime's `main` (spec §6). It is **off by default and
+# must stay off** for every host build: an integration test binary already
+# defines `main`, so an ungated one in the rlib is `duplicate symbol: main` at
+# link time. `codegen/build.rs` turns it on for the two musl staticlibs it
+# embeds, and nothing else does.
+[features]
+ingressus = []
+
+[dependencies]
+# The one dependency the whole workspace is permitted (spec §11): `write`,
+# `_exit`, `malloc`, `free`, and — from Task 9 — `sigaltstack`/`sigaction`,
+# none of which std exposes. `runtime`, `ir` and `lingua-serpentis`
+# stay at zero.
+libc = "0.2"
+runtime = { path = "../runtime" }
+
+# `custos` owns its own `main`. Every bound spec §8.2 derives describes the
+# *main* thread's stack, and `libtest` spawns a thread per test even at
+# `--test-threads=1`; a recursion on a worker faults in an ordinary `mmap`
+# megabytes from the band and takes the handler's other branch. Owning `main`
+# is the only way to put the scenario on the thread the runtime runs on.
+[[test]]
+name = "custos"
+path = "tests/custos.rs"
+harness = false
+
+# The embedded runtime is always built `--release` regardless of the compiler's
+# own profile (`codegen/build.rs`), so "debug build" never becomes a
+# property of *which* prebuilt musl archive shipped.
+#
+# `panic = "abort"` because `liss_panic` never unwinds (spec §6): no landing
+# pads and no `_Unwind_Resume` from this crate's own code. It does **not**
+# remove the need to prelink `libunwind.a` — the precompiled musl `libstd` is
+# built with unwinding and references `_Unwind_*` regardless — and cargo ignores
+# the setting for the `test` profile, so `cargo test --release` is unaffected.
+[profile.release]
+panic = "abort"
+
+[dev-dependencies]
+# `tests/abi.rs` redirects fd 1 through a pipe to read back what the output
+# buffer flushed, and re-executes itself to observe `liss_panic`, which does
+# not return. An integration test sees only the crate under test and its own
+# dev-dependencies, so `libc` is named twice.
+libc = "0.2"

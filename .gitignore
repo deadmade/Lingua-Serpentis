@@ -1,5 +1,5 @@
 # Rust build artefacts. The unanchored form is not redundant with the anchored
-# one: `crates/liss-abi` is a second workspace with its own `target/`.
+# one: `crates/abi` is a second workspace with its own `target/`.
 /target
 target/
 

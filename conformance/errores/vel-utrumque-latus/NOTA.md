@@ -15,7 +15,7 @@ For most of the milestone that argument ended "…and the corpus is blessed
 against it". **It was not.** Not one of the 124 `.liss` programs under
 `conformance/` and `examples/` used `et` or `vel` as an operator — the only
 matches for those words were the `et` inside a rendered fraction (`I et triens`)
-and Latin prose in comments. The rule rested entirely on two `liss-codegen` unit
+and Latin prose in comments. The rule rested entirely on two `codegen` unit
 tests, and three source comments described those tests as a redundant
 double-check of a corpus guard that did not exist. Anyone tidying them away on
 that basis would have left the invariant with no guard at all.

@@ -1,7 +1,7 @@
 # Code generation internals
 
 This document is the back end's design commentary, extracted from the source so that the source can
-stop carrying it. It covers `crates/liss-codegen`: the crate layout (`lib.rs`), the Cranelift code
+stop carrying it. It covers `crates/codegen`: the crate layout (`lib.rs`), the Cranelift code
 generator (`emissio.rs`), the target and embedded-runtime layer (`target.rs`), the in-process linker
 (`nexus.rs`) and the musl cross-build that fills them (`build.rs`). It is a reference, not a
 narrative: the ownership discipline is the largest section because it is the part a reader most
@@ -12,13 +12,13 @@ measurements rather than deduced from them.
 
 ## 1. Overview
 
-`liss-codegen` is the back end: the typed IR in, a static ELF out. Three pieces, in the order a
+`codegen` is the back end: the typed IR in, a static ELF out. Three pieces, in the order a
 program passes through them.
 
 | Module | |
 |---|---|
 | `target` | The two targets, and the four musl blobs embedded for each — put into the compiler's `.rodata` at *its* build time by `build.rs`. This is spec §2's first constraint made good: **no rustc on the machine running the compiler**, because there is no toolchain to invoke. |
-| `emissio` | Cranelift. `compila` takes a `liss_ir::Programma` and gives back one relocatable ELF object. |
+| `emissio` | Cranelift. `compila` takes a `ir::Programma` and gives back one relocatable ELF object. |
 | `nexus` | libwild, driven entirely from memory. `nexus::WildNexus` takes that object plus the four blobs and gives back the finished image. |
 
 **Nothing here touches the filesystem.** `compila` returns bytes and `iunge` returns bytes; whoever
@@ -87,7 +87,7 @@ targets.
 `Emissor` holds the `ObjectModule`, the Cranelift `Context` and `FunctionBuilderContext`, and three
 maps:
 
-- **`ordo`** — IR `liss_ir::FuncId` → the Cranelift `FuncId` it was declared under, indexed
+- **`ordo`** — IR `ir::FuncId` → the Cranelift `FuncId` it was declared under, indexed
   directly: `Programma::funcs[id]` *is* the function `id` names (spec §4.1), and the checker
   asserts it as it numbers them, so a `Vec` built in declaration order is the whole mapping a `Call`
   needs. Indexed directly means every function takes its own slot whether or not anything calls it:
@@ -161,11 +161,11 @@ what that test exists to rule out.
 ### `codex` — the kind code
 
 The kind code stamped into one value's header (spec §5.3). **Imported, not copied.** The constants
-moved down into `liss_runtime::genus`: `liss-abi` is cross-compiled for musl and never linked into
-the compiler (spec §11), so codegen cannot depend on *it* — but `liss-runtime` is already a
+moved down into `runtime::genus`: `abi` is cross-compiled for musl and never linked into
+the compiler (spec §11), so codegen cannot depend on *it* — but `runtime` is already a
 dependency of both ends and needs no new row in spec §11's table, so the writer and the reader of
-these numbers finally share one definition rather than a comment. `liss-abi` re-exports them, so
-`liss_abi::KIND_INT` still names this constant.
+these numbers finally share one definition rather than a comment. `abi` re-exports them, so
+`abi::KIND_INT` still names this constant.
 
 Only the three numeric codes are *written*, and only by `Corpus::numerus`: `voc`'s is stamped inside
 `liss_text_new`, and `veritas` and `lit` are immediates with no header to stamp. The whole closed
@@ -176,12 +176,12 @@ kind is the thing Task 15 reads off a `Ty` (`Ty::List(inner)` is `codex(inner) +
 
 The grain denominators, **read out of the shared table** rather than written again. A second
 `Grain → 12 | 288` here would have been the kind-code duplication one function lower down, and a
-worse one: the reader is `liss_abi::numeri::exige_granum`, which accepts XII or CCLXXXVIII and
+worse one: the reader is `abi::numeri::exige_granum`, which accepts XII or CCLXXXVIII and
 rejects everything else — so emitting `12` for an `nr` **passes that gate** and silently produces
 wrong arithmetic (`°II:I/II * °I:I/XXIV` is 30/288 with the right grain and 720/288 with the wrong
 one). A wrong answer, not a crash.
 
-`liss_runtime::genus::granum` returns an `Option` because it is total over every kind code, and
+`runtime::genus::granum` returns an `Option` because it is total over every kind code, and
 these two are the kinds that have a grain. The `Option` is discharged **at compile time**: a `const`
 initialiser that panics is a build failure, not a runtime one, so this costs neither a branch nor a
 `Defectus` sentence that could never be raised.
@@ -260,7 +260,7 @@ it. Copies happen at exactly one place: `Load` (§7.2). Everything else moves.
 | 6 | `continua` frees the same set, then jumps to the step | `Ansa::gradus` |
 
 **The one invariant that makes this tractable: every owned slot lives in some `Block::declares`.** A
-`dum` header is a `Block` for exactly that reason (`liss_ir`'s `StmtKind::For` says so at length),
+`dum` header is a `Block` for exactly that reason (`ir`'s `StmtKind::For` says so at length),
 so `redde` reaches the loop variable without a special case. Restated on `Corpus::ambitus`: **every
 owned slot in a function is in exactly one entry of that stack while it is live.**
 
@@ -392,11 +392,11 @@ place a deep copy and a deep free can disagree. Three consequences live in `emis
 - **`liss_list_new`'s element words are codegen's to write.** There is no per-element setter in the
   ABI, because there is nothing for one to do that a `store` does not; `Corpus::repone` is the whole
   of the layout, and `ONUS` and `VERBUM` are shared with the runtime through
-  `liss_runtime::dispositio` rather than written a second time here. The words do come back
+  `runtime::dispositio` rather than written a second time here. The words do come back
   **zeroed** — `allocare_nulla` is `calloc` — but nothing here leans on that: `Corpus::series`
   emits the constructor and then exactly `items.len()` stores with no call in between, so no
   partially built list is ever observable. The zeroing is a net for the *failing* path, where an
-  element expression raises before its store; see `liss_abi::memoria::allocare_nulla`.
+  element expression raises before its store; see `abi::memoria::allocare_nulla`.
 - **`liss_list_put` borrows.** It is one of exactly two non-consuming entry points, and the only one
   this file reaches with a bare `use_var` — see `Corpus::sententia`'s `IndexAssign`.
 
@@ -452,7 +452,7 @@ that would go quadratic first if the steal (below) ever regressed to a copy.
 - **`ExprKind::Append`** — `adde(xs, v)` is a **new** list one longer; the old one is consumed and
   its element words are **stolen**, not copied (spec §5.4). Nothing about that stealing is visible
   from the call site, and that is the point: this site would be identical if `_append` deep-copied
-  every element, so the property is the ABI's to hold and `liss-abi`'s
+  every element, so the property is the ABI's to hold and `abi`'s
   `append_in_a_loop_stays_balanced_and_copies_no_element` is the only thing that can measure it —
   it reads the live count after each of a hundred appends and finds `1 + i` rather than `1 +
   i(i+1)/2`. What codegen owes is to reach this entry point and add nothing, which
@@ -570,7 +570,7 @@ is usually already clean.
 ### `Nodus`, `terminatus` and `transi`
 
 `cranelift_codegen::ir::Block` is aliased to **`Nodus`** — one machine-level basic block —
-because `liss_ir::Block` is a *lexical* block, a list of statements and the slots it declares, and
+because `ir::Block` is a *lexical* block, a list of statements and the slots it declares, and
 the two appear within three lines of each other everywhere control flow is built.
 
 **`Corpus::terminatus`** answers whether the block being built already ends in a terminator. Spec
@@ -1009,7 +1009,7 @@ symbol in English, and none of that English survives the boundary (spec §9.3, D
 
 ## 10. The target layer and the embedded runtime (`target.rs`)
 
-`build.rs` cross-builds `liss-abi` for both musl triples, prelinks each with `libc.a` and
+`build.rs` cross-builds `abi` for both musl triples, prelinks each with `libc.a` and
 `libunwind.a`, and copies the three CRT objects out of the toolchain's `self-contained/` directory.
 `target.rs` is where those bytes surface: a program link is `Runtime::artefacta` with codegen's own
 object spliced in, and nothing else — no archives, no member resolution, no toolchain on the
@@ -1048,7 +1048,7 @@ nothing and copies nothing.
 | `meta` | Which target these bytes are for — carried so a `Runtime` that has been passed around still knows its own `emulatio` and `machina`. |
 | `crt1` | The C runtime's entry stub: `_start`, which calls `__libc_start_main`, which calls `main`. |
 | `crti` | The prologue half of `.init`/`.fini`. |
-| `nucleus` | **The runtime.** `liss-abi` cross-built for musl and prelinked (`ld -r`) with `libc.a` and `libunwind.a`, because rustc bundles neither into a `staticlib` — measured, spec §9.2. One strong undefined symbol survives in it, `liss_initium`, and compiled code is what supplies it. |
+| `nucleus` | **The runtime.** `abi` cross-built for musl and prelinked (`ld -r`) with `libc.a` and `libunwind.a`, because rustc bundles neither into a `staticlib` — measured, spec §9.2. One strong undefined symbol survives in it, `liss_initium`, and compiled code is what supplies it. |
 | `crtn` | The epilogue half. Must come last. |
 
 `Runtime::artefacta` returns the link line in order — `crt1.o`, `crti.o`, `programma.o`,
@@ -1209,7 +1209,7 @@ are load-bearing**:
 
 ## 11. The build script and the musl cross-build (`build.rs`)
 
-`build.rs` cross-builds `liss-abi` for both musl targets and prelinks each one into a single
+`build.rs` cross-builds `abi` for both musl targets and prelinks each one into a single
 relocatable object, so the shipped compiler can produce a static ELF with **no rustc, no `cc` and no
 linker on the host** (spec §2, §9.2).
 
@@ -1256,7 +1256,7 @@ undefined `_Unwind_*` symbols and the program link fails. With it, the only stro
 
 ### The four traps
 
-- **Recursive cargo deadlock.** `liss-abi` is its own workspace root *and* the inner build gets an
+- **Recursive cargo deadlock.** `abi` is its own workspace root *and* the inner build gets an
   `OUT_DIR`-local `--target-dir`. Either alone still contends on a `.cargo-lock`.
 - **Inherited environment.** Outer `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, `RUSTC_WRAPPER`,
   `CARGO_BUILD_TARGET` and the make jobserver variables all break a cross-build; each is removed
@@ -1278,16 +1278,16 @@ cargo build`, `rustup target add <triple>`, or setting `LISS_RUNTIME_DIR` to a p
 
 ### `aedifica` — the inner cargo
 
-`cargo build --release --features ingressus --target <meta>` on `liss-abi`.
+`cargo build --release --features ingressus --target <meta>` on `abi`.
 
 **Release always**, whatever profile the compiler itself is being built in. The alternative makes
 "debug build" a property of *which* prebuilt musl archive shipped, which doubles the artefact matrix
 for no benefit — the runtime is not what anyone debugs.
 
-**`--features ingressus`** is what adds `main`. It is off by default because `liss-abi` is also
+**`--features ingressus`** is what adds `main`. It is off by default because `abi` is also
 built as an rlib for its own tests, and a test binary already has a `main`.
 
-The target directory is `OUT_DIR`-local, **and this is half of the deadlock fix**: `liss-abi` being
+The target directory is `OUT_DIR`-local, **and this is half of the deadlock fix**: `abi` being
 its own workspace root stops it contending for the *outer* `.cargo-lock`; a private target directory
 stops it contending for the one in the shared `target/`. Either alone still blocks.
 
@@ -1324,7 +1324,7 @@ here — and that is precisely why it had to be reasoned about rather than obser
 ```text
 rust-lld -flavor gnu -r -o <runtime.o> \
     -u main -u __libc_start_main -u liss_int_add … (39 in all) \
-    <libliss_abi.a> <libc.a> <libunwind.a>
+    <libabi.a> <libc.a> <libunwind.a>
 ```
 
 **`-u` rather than `--whole-archive`.** `ld -r` pulls an archive member only to satisfy an undefined
@@ -1345,7 +1345,7 @@ A zero-length output is checked for explicitly, because a GNU `ld` built for one
 exactly that on the other.
 
 `signa_archivi` reads the symbols out of the archive rather than having them written down, so that
-adding an entry point to `liss-abi` needs no edit here — and so that *removing* one cannot leave a
+adding an entry point to `abi` needs no edit here — and so that *removing* one cannot leave a
 stale `-u` that fails the prelink with an undefined symbol. `desiderata_crt` skips weak undefined
 symbols (`_DYNAMIC`, `_init`, `_fini` all resolve to zero or come from `crti.o`) and the
 linker-synthesised `_GLOBAL_OFFSET_TABLE_`, which no archive defines and `-u` would only fail to
@@ -1411,9 +1411,9 @@ order and the handler's relocation closure, the CRT's `.init`/`.fini` epilogues,
 A blob wrong in any of those fails them exactly as a wrong cross-build would.
 
 It reads **no layout constant at all** — `ONUS`, `VERBUM` and the three `size_of`s appear nowhere
-in it. Those are held by the `const _: () = { … }` block in `liss-abi/src/lib.rs`, and that block
-is compiled only when `liss-abi` is, which on this path never happens: `conde` is skipped, and
-`liss-abi` is workspace-`exclude`d and a dependency of nothing here. So a stale blob whose
+in it. Those are held by the `const _: () = { … }` block in `abi/src/lib.rs`, and that block
+is compiled only when `abi` is, which on this path never happens: `conde` is skipped, and
+`abi` is workspace-`exclude`d and a dependency of nothing here. So a stale blob whose
 `dispositio` disagrees with today's source links cleanly, passes every test in this crate, and
 produces silent wrong answers. Recorded as **D-29**; the close is to export the layout constants as
 absolute symbols from the blob and compare them here, in a `target.rs` test that can see both.

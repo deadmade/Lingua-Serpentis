@@ -90,7 +90,7 @@ fn program(e: &Expr) -> String {
 
 /// D-26's shape: a `dum` whose **init clause** — the header's `(` to its first `;` — has a
 /// terminator. Textual, so no change to the `Expr` tree routes around it. The compiled behaviour
-/// is pinned by `caput_dum_terminatum_componitur` in `liss-codegen/tests/regimen.rs`.
+/// is pinned by `caput_dum_terminatum_componitur` in `codegen/tests/regimen.rs`.
 fn caput_dum_terminatum(src: &str) -> bool {
     const TERMINI: [&str; 3] = ["redde", "abrumpe", "continua"];
     for (i, _) in src.match_indices("dum") {

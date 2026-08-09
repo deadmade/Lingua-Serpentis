@@ -38,7 +38,7 @@ and `///` prose, so that the source could stop carrying it. They are reference d
 by subsystem, and they navigate by file and symbol name rather than line number. They track the code
 rather than any particular milestone, which is why they are undated.
 
-**`internals/codegen.md` — code generation.** `crates/liss-codegen`: the crate layout (`lib.rs`),
+**`internals/codegen.md` — code generation.** `crates/codegen`: the crate layout (`lib.rs`),
 the Cranelift code generator (`emissio.rs`), the target and embedded-runtime layer (`target.rs`),
 the in-process linker (`nexus.rs`) and the musl cross-build that fills them (`build.rs`). Twelve
 sections: the IR in and the object out, types and the shared tables, the ownership and free
@@ -47,8 +47,8 @@ recursive type, the two silent rules, control flow, constants and operators, the
 the target layer, the build script, and codegen's own diagnostics.
 
 **`internals/abi.md` — the ABI, the runtime, and the IR.** The three crates below the checker:
-`liss-abi`, the C ABI a compiled program calls; `liss-runtime`, the arithmetic and formatting shared
-between compiler and compiled program; and `liss-ir`, the typed IR the checker emits. It states the
+`abi`, the C ABI a compiled program calls; `runtime`, the arithmetic and formatting shared
+between compiler and compiled program; and `ir`, the typed IR the checker emits. It states the
 one-machine-word value representation (spec §5.1), the kind codes (spec §5.3), the consuming calling
 convention (spec §5.4), the ownership and null-or-live invariant (spec §7), the magic word, the heap
 guard, the output path and signal-handler buffer, the stack guard in `custos.rs` and why not
@@ -178,7 +178,7 @@ decision made by the one before:
   §11.1 — *"whether the grep needs to become a real parse"* — in the affirmative: the diagnostic
   ratchet reads a `syn` AST rather than source bytes. It amends nothing and supersedes nothing. It
   changes only test machinery, but it is the reason `CLAUDE.md`'s block-comment prohibition applies
-  to `crates/liss-abi/src` alone and no longer to `crates/*/src`.
+  to `crates/abi/src` alone and no longer to `crates/*/src`.
 - **`2026-08-09-caret-diagnostics-design.md`** amends the compiler-backend spec's §5.4 and §10 and
   supersedes the four-shape `Display` table in `internals/rationale.md`. It adds no dependency:
   §11's table is untouched. Read its §3 before changing anything that writes to stderr — every
@@ -247,3 +247,18 @@ followable.
 
 `internals/` is deliberately **undated**. Those four documents are evergreen reference that tracks
 the code, not a record of a decision made on a day. When the code changes, they are edited in place.
+
+## The back-end crates were renamed
+
+`liss-abi`, `liss-codegen`, `liss-ir` and `liss-runtime` are now `abi`, `codegen`, `ir` and
+`runtime`, with their directories renamed to match. The prefix bought nothing: everything here
+depends on everything else by path, nothing is published, and `latinitas` had never carried one.
+
+`internals/` and `defectus/` were rewritten, because both navigate by path and a stale path in
+either is simply wrong. **`superpowers/specs/` and `superpowers/plans/` were not.** Every one of
+them still says `liss-codegen`, and should — they are dated records of what was designed on a day,
+and the rule above is that a dated document is never edited except by amendment notice. Read the
+old name as the crate that now sits at the corresponding path.
+
+What did **not** change: the `liss` binary, the `.liss` extension, and the `liss_*` C symbols the
+ABI exports, which spec §5.4 fixes as the contract between generated code and the linked archive.

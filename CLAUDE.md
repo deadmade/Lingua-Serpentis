@@ -5,15 +5,15 @@ to build it; this file covers what is easy to get wrong.
 
 ## Build and test
 
-Work inside `nix develop`. The build cross-compiles `liss-abi` for both musl targets at compiler
-build time and fails without both musl `std`s; `crates/liss-codegen/build.rs` names the missing
+Work inside `nix develop`. The build cross-compiles `abi` for both musl targets at compiler
+build time and fails without both musl `std`s; `crates/codegen/build.rs` names the missing
 target and the flake when that happens.
 
 - `cargo test` — the workspace.
-- `cargo test --manifest-path crates/liss-abi/Cargo.toml` — the second workspace, which the first
+- `cargo test --manifest-path crates/abi/Cargo.toml` — the second workspace, which the first
   command does not reach.
 
-`crates/liss-abi` is `exclude`d from the root workspace deliberately: `liss-codegen/build.rs`
+`crates/abi` is `exclude`d from the root workspace deliberately: `codegen/build.rs`
 invokes cargo on it *during* an outer build, and a member would contend for the outer `.cargo-lock`.
 Do not "fix" this by adding it to `members`.
 
@@ -22,9 +22,15 @@ Do not "fix" this by adding it to `members`.
 - **There is no interpreter.** The tree-walker was deleted in `677c4b3`; `parse`, `check` and
   `interp::execute` no longer exist. The entry points are `parse_file` and `check_program`. The
   compiler is the only backend.
-- **Zero runtime dependencies is a rule** (spec §11), not a coincidence. `liss-runtime`, `liss-ir`
-  and `lingua-serpentis` have none. Only `liss-abi` may use `libc`; `liss-codegen` may use the crates
-  its `Cargo.toml` already names and no others. Adding a dependency is a change to the spec.
+- **Zero runtime dependencies is a rule** (spec §11), not a coincidence. `runtime`, `ir` and
+  `lingua-serpentis` have none. Only `abi` may use `libc`; `codegen` may use the crates its
+  `Cargo.toml` already names and no others. Adding a dependency is a change to the spec.
+- **`liss` on a symbol is not a crate name.** The four back-end crates were `liss-abi`,
+  `liss-codegen`, `liss-ir` and `liss-runtime` and are now `abi`, `codegen`, `ir` and `runtime`. The
+  `liss_*` C symbols the ABI exports — `liss_int_add`, `liss_list_new`, `liss_panic`,
+  `liss_initium` — are the contract spec §5.4 fixes between generated code and the linked archive,
+  and did not change. Neither did the `liss` binary or the `.liss` extension. Anything that rewrites
+  identifiers in bulk must anchor on the whole crate name, never on the `liss` prefix.
 - **Diagnostics are Latin, and ratcheted.** `tests/catalogus.rs` parses `crates/*/src` with `syn`
   and a **non-recursive** `read_dir`, so anything under `src/bin/` is invisible to it. That is why
   the `liss` driver lives in `cli.rs` and `src/bin/liss.rs` is a shim that says nothing. New
@@ -38,8 +44,11 @@ Do not "fix" this by adding it to `members`.
   118 diagnostic sites, so deleting or adding a comment line above any of them fails
   `tests/catalogus.rs`. Re-bless it, then check the header still reads
   `118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed` and that only the `:line`
-  field moved — a changed count means a site was gained, lost or reclassified.
-- **Never write a `/* … */` block comment under `crates/liss-abi/src`.** `liss-abi/tests/abi.rs`'s
+  field moved — a changed count means a site was gained, lost or reclassified. Renaming a crate
+  directory is the one change where the `:line` test does not apply: `extract_sites` sorts by full
+  path, so a new directory name reorders the whole file. Compare the sorted set of
+  message-and-status pairs across the re-bless instead, and require it to be identical.
+- **Never write a `/* … */` block comment under `crates/abi/src`.** `abi/tests/abi.rs`'s
   `sententiae` greps that crate's own source for the `c"…"` literals it must enumerate, and skips
   whole-line `//` comments only; a block comment would hide a sentence or invent one. The rule used
   to cover all of `crates/*/src` because `catalogus.rs` scanned text too — it parses now, and a

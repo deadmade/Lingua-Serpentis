@@ -4,7 +4,7 @@ use lingua_serpentis::ast::{ParsedFile, ParsedProgram};
 use lingua_serpentis::checker::check_program_typed;
 use lingua_serpentis::lexer::tokenize;
 use lingua_serpentis::parser::parse_file;
-use liss_ir as ir;
+use ir as ir;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
@@ -373,7 +373,7 @@ fn every_expression_node_carries_a_type() {
                     ir::ExprKind::Binary { op, operand_ty, lhs, rhs } => {
                         assert_eq!(&lhs.ty, operand_ty, "lhs of {op:?}");
                         assert_eq!(&rhs.ty, operand_ty, "rhs of {op:?}");
-                        use liss_runtime::BinOp;
+                        use runtime::BinOp;
                         let comparison =
                             matches!(op, BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Lt);
                         if comparison {
@@ -555,11 +555,11 @@ fn only_the_root_initium_is_the_entry_point() {
         &[("mathematica", &[("mathematica/summa.liss", PKG_MATH)] as &[_])],
     );
     let entries: Vec<_> = p.funcs.iter().filter(|f| f.is_entry).map(|f| &f.symbol).collect();
-    assert_eq!(entries, vec![&liss_ir::symbol(None, "initium")]);
+    assert_eq!(entries, vec![&ir::symbol(None, "initium")]);
     let pkg = p
         .funcs
         .iter()
-        .find(|f| f.symbol == liss_ir::symbol(Some("mathematica"), "initium"))
+        .find(|f| f.symbol == ir::symbol(Some("mathematica"), "initium"))
         .expect("the package initium");
     assert!(!pkg.is_entry);
     assert_eq!(pkg.params, 1);
@@ -574,7 +574,7 @@ fn a_qualified_call_resolves_to_the_package_functions_id() {
     let summa = p
         .funcs
         .iter()
-        .position(|f| f.symbol == liss_ir::symbol(Some("mathematica"), "summa"))
+        .position(|f| f.symbol == ir::symbol(Some("mathematica"), "summa"))
         .unwrap();
     let root = func(&p, "initium");
     let ir::StmtKind::Print(call) = &root.body.stmts[0].kind else { panic!("scribe") };

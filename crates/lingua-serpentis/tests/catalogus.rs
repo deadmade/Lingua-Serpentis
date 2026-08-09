@@ -84,7 +84,7 @@ fn pattern_counts(sites: &[Site]) -> std::collections::HashMap<&str, usize> {
     counts
 }
 
-/// `liss-abi`'s messages are `b"…"` and `c"…"`, and nothing in the extractor mentions either.
+/// `abi`'s messages are `b"…"` and `c"…"`, and nothing in the extractor mentions either.
 #[test]
 fn byte_and_c_string_literals_are_extracted_like_any_other() {
     let cases = [
@@ -376,7 +376,7 @@ impl<'ast> syn::visit::Visit<'ast> for Lector {
 fn extract_sites() -> Vec<Site> {
     let root = support::repo_root();
     let mut files: Vec<_> =
-        ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
+        ["lingua-serpentis", "latinitas", "runtime", "ir", "codegen", "abi"]
             .iter()
             .flat_map(|c| {
                 std::fs::read_dir(root.join("crates").join(c).join("src"))

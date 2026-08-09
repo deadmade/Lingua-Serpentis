@@ -224,7 +224,7 @@ fn fraction_divide_by_zero_errors() {
         "munus initium reddit ni { nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z); redde nullus; }",
     );
     // Raised by the compiled image, not the compiler, so it keeps the one-line
-    // grammar until `liss-abi` adopts the block form.
+    // grammar until `abi` adopts the block form.
     assert_eq!(erratum(&r), "erratum: divisio per nullum\n  in linea I\n");
 }
 

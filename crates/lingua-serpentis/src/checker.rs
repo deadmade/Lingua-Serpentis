@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::error::{LinguaError, LResult, ProgramError};
 use crate::spatium::Spatium;
 use crate::roman::Roman;
-use liss_ir as ir;
+use ir as ir;
 use std::collections::{HashMap, HashSet};
 
 /// `FloatLit` is the not-yet-resolved type of a fractional literal, and of arithmetic
@@ -374,7 +374,7 @@ impl Checker {
                     .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line, spatium: Some(spatium), })?;
                 let lowered = self.check_args(name, &params, args, spatium)?;
                 // A bare call resolves in the checker's own namespace, never the root's;
-                // liss-codegen/tests/vocationes.rs is the only test that would notice.
+                // codegen/tests/vocationes.rs is the only test that would notice.
                 let func = self.func_id(self.namespace.as_deref(), name);
                 let ty = ty_of(&ret);
                 Ok((InferTy::Known(ret),

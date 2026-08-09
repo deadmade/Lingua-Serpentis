@@ -4,6 +4,36 @@ expression: report
 ---
 118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
+crates/abi/src/custos.rs:25  acervus vocationum exhaustus est  → fixtured
+crates/abi/src/custos.rs:31  defectus internus: memoria violata est: signum  → UNCOVERED
+crates/abi/src/defectus.rs:123  memoria non liberata est  → UNCOVERED
+crates/abi/src/defectus.rs:139  divisio per nullum  → fixtured
+crates/abi/src/defectus.rs:154  modulus per nullum  → fixtured
+crates/abi/src/defectus.rs:175  index extra fines: {} (longitudo {})  → fixtured
+crates/abi/src/defectus.rs:191  defectus internus: memoria violata est: verificatio  → UNCOVERED
+crates/abi/src/defectus.rs:205  memoria exhausta est  → UNCOVERED
+crates/codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
+crates/codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
+crates/codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED
+crates/codegen/src/emissio.rs:150  defectus internus: munus declarari non potuit: externum  → UNCOVERED
+crates/codegen/src/emissio.rs:173  defectus internus: objectum institui non potuit  → UNCOVERED
+crates/codegen/src/emissio.rs:199  defectus internus: munus declarari non potuit: proprium  → UNCOVERED
+crates/codegen/src/emissio.rs:210  defectus internus: munus vocatum non inventum: definitio  → UNCOVERED
+crates/codegen/src/emissio.rs:279  defectus internus: datum definiri non potuit  → UNCOVERED
+crates/codegen/src/emissio.rs:284  defectus internus: munus componi non potuit  → UNCOVERED
+crates/codegen/src/emissio.rs:292  defectus internus: munus 'initium' in programmate non inventum  → UNCOVERED
+crates/codegen/src/emissio.rs:322  defectus internus: objectum scribi non potuit  → UNCOVERED
+crates/codegen/src/emissio.rs:442  defectus internus: datum declarari non potuit: constans  → UNCOVERED
+crates/codegen/src/emissio.rs:462  defectus internus: datum declarari non potuit: scida  → UNCOVERED
+crates/codegen/src/emissio.rs:813  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
+crates/codegen/src/nexus.rs:149  imago non coniuncta est: argumenta  → UNCOVERED
+crates/codegen/src/nexus.rs:153  imago non coniuncta est: perscrutatio  → UNCOVERED
+crates/codegen/src/nexus.rs:159  imago non coniuncta est: nexus  → UNCOVERED
+crates/codegen/src/nexus.rs:165  imago non coniuncta est: imago abest  → UNCOVERED
+crates/codegen/src/nexus.rs:175  defectus internus: artefactum non est ELF  → UNCOVERED
+crates/codegen/src/nexus.rs:182  defectus internus: artefacta machinis diversis composita sunt  → UNCOVERED
+crates/codegen/src/nexus.rs:193  defectus internus: machina ignota est  → UNCOVERED
+crates/codegen/src/nexus.rs:194  defectus internus: nihil coniungendum est  → UNCOVERED
 crates/lingua-serpentis/src/checker.rs:178  variabilis ignota: '{}'  → fixtured
 crates/lingua-serpentis/src/checker.rs:209  functio '{}' numerum argumentorum falsum accepit  → fixtured
 crates/lingua-serpentis/src/checker.rs:218  argumentum typum '{}' expectat, sed '{}' datum est  → fixtured
@@ -90,38 +120,8 @@ crates/lingua-serpentis/src/program.rs:72  scida '{}' signis incognitis scripta 
 crates/lingua-serpentis/src/program.rs:74  scida '{}' aperiri non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:80  directorium programmatis legi non potest  → UNCOVERED
 crates/lingua-serpentis/src/program.rs:87  directorium percurri non potest  → UNCOVERED
-crates/liss-abi/src/custos.rs:25  acervus vocationum exhaustus est  → fixtured
-crates/liss-abi/src/custos.rs:31  defectus internus: memoria violata est: signum  → UNCOVERED
-crates/liss-abi/src/defectus.rs:123  memoria non liberata est  → UNCOVERED
-crates/liss-abi/src/defectus.rs:139  divisio per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:154  modulus per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:175  index extra fines: {} (longitudo {})  → fixtured
-crates/liss-abi/src/defectus.rs:191  defectus internus: memoria violata est: verificatio  → UNCOVERED
-crates/liss-abi/src/defectus.rs:205  memoria exhausta est  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:150  defectus internus: munus declarari non potuit: externum  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:173  defectus internus: objectum institui non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:199  defectus internus: munus declarari non potuit: proprium  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:210  defectus internus: munus vocatum non inventum: definitio  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:279  defectus internus: datum definiri non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:284  defectus internus: munus componi non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:292  defectus internus: munus 'initium' in programmate non inventum  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:322  defectus internus: objectum scribi non potuit  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:442  defectus internus: datum declarari non potuit: constans  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:462  defectus internus: datum declarari non potuit: scida  → UNCOVERED
-crates/liss-codegen/src/emissio.rs:813  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:149  imago non coniuncta est: argumenta  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:153  imago non coniuncta est: perscrutatio  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:159  imago non coniuncta est: nexus  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:165  imago non coniuncta est: imago abest  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:175  defectus internus: artefactum non est ELF  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:182  defectus internus: artefacta machinis diversis composita sunt  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:193  defectus internus: machina ignota est  → UNCOVERED
-crates/liss-codegen/src/nexus.rs:194  defectus internus: nihil coniungendum est  → UNCOVERED
-crates/liss-runtime/src/exitus.rs:21  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
-crates/liss-runtime/src/roman.rs:191  numerus Romanus vacuus  → fixtured
-crates/liss-runtime/src/roman.rs:203  numerus Romanus invalidus: '{}'  → fixtured
-crates/liss-runtime/src/roman.rs:237  numerus sine '°': '{}'  → UNCOVERED
-crates/liss-runtime/src/roman.rs:249  fractio sine denominatore  → fixtured
+crates/runtime/src/exitus.rs:21  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
+crates/runtime/src/roman.rs:191  numerus Romanus vacuus  → fixtured
+crates/runtime/src/roman.rs:203  numerus Romanus invalidus: '{}'  → fixtured
+crates/runtime/src/roman.rs:237  numerus sine '°': '{}'  → UNCOVERED
+crates/runtime/src/roman.rs:249  fractio sine denominatore  → fixtured

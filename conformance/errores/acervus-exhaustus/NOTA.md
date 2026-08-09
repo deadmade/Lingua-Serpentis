@@ -49,5 +49,5 @@ fired early would pass this case and fail that one.
 before the exhaustion still reaches stdout, because the handler flushes (spec
 §6, D-08).
 
-On aarch64 the same sentence is pinned by `liss-codegen/tests/aemulatio.rs`'s
+On aarch64 the same sentence is pinned by `codegen/tests/aemulatio.rs`'s
 `acervus_exhaustus_sub_aemulatore`, under `qemu-aarch64` and outside the corpus.

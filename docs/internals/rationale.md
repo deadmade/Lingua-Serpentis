@@ -26,9 +26,9 @@ So the pipeline stops at the typed IR:
 ```
 lexer::tokenize → parser::parse_file → latinity::lint_program → checker::check_program_typed
                                                                         ↓
-                                                             liss_ir::Programma
+                                                             ir::Programma
                                                                         ↓
-                                                    liss_codegen::compila → nexus → image
+                                                    codegen::compila → nexus → image
 ```
 
 **Running a program is a thing the `liss` binary does, not a thing this library does.** Spec §9.6
@@ -46,10 +46,10 @@ private `run_loaded` the five deleted entry points shared, so the compiled and i
 could not drift into different notions of what loading is. One path remains and the split is now
 merely where the code lives.
 
-`Roman` and its arithmetic, and fraction arithmetic, live in `liss-runtime` (spec §11) because they
-are compiled twice — once for the host inside this compiler, once for musl inside `liss-abi`.
+`Roman` and its arithmetic, and fraction arithmetic, live in `runtime` (spec §11) because they
+are compiled twice — once for the host inside this compiler, once for musl inside `abi`.
 `lib.rs` re-exports them so every `lingua_serpentis::roman::…` call site keeps working.
-`BinOp`/`UnOp` likewise moved down to `liss-runtime` (spec §5.5, §10.4): they carry no AST data of
+`BinOp`/`UnOp` likewise moved down to `runtime` (spec §5.5, §10.4): they carry no AST data of
 their own, just the operator's identity, so they belong with the arithmetic they drive rather than
 the syntax tree that names them.
 
@@ -181,7 +181,7 @@ punctuation in the message.
 
 ## The checker
 
-**`checker.rs`** does two jobs in one walk: it checks, and it lowers to `liss_ir`. `check_program`
+**`checker.rs`** does two jobs in one walk: it checks, and it lowers to `ir`. `check_program`
 is the checking-only form (it discards the IR) and exists so a checker test need not care about IR
 it is not asserting; `check_program_typed` is what the driver calls.
 
@@ -309,11 +309,11 @@ arm's `self.func_id(Some(p), name)` is forced by the syntax, since `alpha.porta`
 the flat `FuncId` table is the one place a cross-namespace binding can still happen by accident. The
 language forbids it in the other direction outright — a package cannot call a root function, because
 the root has no name to `affer` and `check_file` hands the checker only its own namespace's
-signatures. `liss-codegen/tests/vocationes.rs::vocatio_nuda_in_fasciculo_in_fasciculo_suo_solvitur`,
+signatures. `codegen/tests/vocationes.rs::vocatio_nuda_in_fasciculo_in_fasciculo_suo_solvitur`,
 over that file's `UMBRA` program, is the only test in the workspace that would notice; Part 2
 records what the mutation looks like.
 
-`ir::symbol` (liss-ir) mangles namespace and name to `liss_<n>_<ns>_<m>_<name>`, where `n` and `m`
+`ir::symbol` mangles namespace and name to `liss_<n>_<ns>_<m>_<name>`, where `n` and `m`
 are the byte lengths of the **escaped** components. Length-prefixing the escaped form is what keeps
 the mapping injective — without it, `symbol(None, "aê")` and `symbol(None, "a_u00ea_")` would
 collide, since the first's escape is a literal prefix of the second's spelling. The character
@@ -460,7 +460,7 @@ construction, because a directory name is not written on a line of anything.
 
 **`Error` became `erratum`** — it was the one English word the language said — and the line number
 became a Roman numeral, in the location row and in the gutter alike. That was D-12's last survivor,
-and it survived only because nothing had made it awkward enough to fix; `liss-abi`'s `decimales`
+and it survived only because nothing had made it awkward enough to fix; `abi`'s `decimales`
 went with it.
 
 **Gutter width is the numeral's**, not two: line 88 is `LXXXVIII`. The `|` column is shared by all
@@ -512,7 +512,7 @@ crates. `src/bin/liss.rs` is a shim that collects argv and calls `cli::liss`, an
 
 `run` stages an image through `O_EXCL`, mode bits, `unlink` and `/proc/self/fd`, none of which have
 a portable spelling. Spec §9.4 draws the Windows seam at the linker and does not pretend the answer
-exists yet, and `liss-codegen` embeds musl blobs for two Linux targets, so this crate is already a
+exists yet, and `codegen` embeds musl blobs for two Linux targets, so this crate is already a
 Linux compiler. Nothing in `cli.rs` is `#[cfg]`-guarded to suggest otherwise.
 
 ### Argument grammar
@@ -554,7 +554,7 @@ if these are on stderr before the spawn (spec §9.5).
 
 The back end's own failures are forwarded through a **bare hole**: `eprintln!("{}", d)`, already
 `Error: `-prefixed and already Latin, so the catalogue does not read it as a site of its own — the
-literal lives in `liss-codegen`.
+literal lives in `codegen`.
 
 ### Broken pipes
 
@@ -723,7 +723,7 @@ one has already cost something:
 - **Two sites with the same wording are permanently `ambiguous`.** `catalogus.rs` grants `fixtured`
   only to a workspace-unique pattern, and **nothing moves a site from `ambiguous` back to
   `fixtured`**. So where two call sites raise the same sentence they share one helper — that is why
-  `lookup_or_err` and `reserved_name_error` exist in the checker, why `liss-abi`'s `defectus` has
+  `lookup_or_err` and `reserved_name_error` exist in the checker, why `abi`'s `defectus` has
   `divisio_per_nullum` and `index_extra_fines`, and why `emissio.rs` has `sedes_ignota` and
   `saltus_extra_ansam`. Conversely, where two failures are genuinely different they get different
   tails: `munus vocatum non inventum: definitio` against `: vocatio`, `memoria violata est:
@@ -832,7 +832,7 @@ break" is repeated here.
 - **`check_expr`, the bare `Call` arm** — `self.func_id(self.namespace.as_deref(), name)` is the
   **sole namespace-sensitive `FuncId` binding in the compiler**. Bind it to `None` — which means the
   program's root — and a package's own unqualified call silently resolves to the **root's** function
-  of the same name. `liss-codegen/tests/vocationes.rs`'s `UMBRA` program is the one shape that
+  of the same name. `codegen/tests/vocationes.rs`'s `UMBRA` program is the one shape that
   catches it: the root declares `quadratum` as `n + °C`, the package `alpha` declares its own as
   `n * n`, and `alpha/a.liss`'s `porta` calls `quadratum` bare, so **`alpha.porta(°III)` is `IX`
   through the package's and `CIII` through the root's** — the wrong binding is a wrong *number*,
@@ -968,7 +968,7 @@ break" is repeated here.
   - `an_out_of_range_exit_status_warns_before_it_is_truncated` (**D-10**) →
     `conformance/monita/status-exitus-redactus` and
     `tests/cli.rs::an_out_of_range_exit_status_is_truncated_and_says_so`. **The note is the
-    *runtime's* now (`liss-abi`'s `ingressus`), not the interpreter's, so only an end-to-end test
+    *runtime's* now (`abi`'s `ingressus`), not the interpreter's, so only an end-to-end test
     can see it at all.**
   - `an_in_range_exit_status_says_nothing` →
     `tests/cli.rs::an_exit_status_that_already_fits_says_nothing`.
@@ -1038,7 +1038,7 @@ break" is repeated here.
   `munus` line for a header split across lines. Every other lint test keeps the header on one line,
   where the two coincide and the bug is invisible.
 
-## `liss-runtime`
+## `runtime`
 
 - **`Roman::div_rem`** and **`mag_divmod`** (roman.rs) — the zero guard used to be a `debug_assert!`
   inside `mag_divmod`, compiled out of release. With an empty divisor `mag_cmp` never reports
@@ -1064,21 +1064,21 @@ break" is repeated here.
   in English rather than saying `memoria exhausta est`. The fix is a `display_ad(&mut impl Sink)` on
   `Roman`, which is a change to `roman.rs`, not to `scriptio.rs`. **D-28**
 - **`dispositio::ONUS`** — the alternative was a second `24` in `emissio.rs` held to this one by a
-  comment, which is precisely the arrangement Task 12 removed for `KIND_INT`. `liss-abi` is never
-  linked into the compiler (§11), so the constant lives in `liss-runtime`, which both ends already
+  comment, which is precisely the arrangement Task 12 removed for `KIND_INT`. `abi` is never
+  linked into the compiler (§11), so the constant lives in `runtime`, which both ends already
   depend on.
 - **`dispositio::VERBUM`** — the more dangerous of the two constants, because **the reader never
-  spells it**: `liss_abi::series::elementa` returns a `*mut u64` and every access is `.add(i)`, a
+  spells it**: `abi::series::elementa` returns a `*mut u64` and every access is `.add(i)`, a
   stride the type system fixes at 8. A `VERBUM` of 16 would have codegen store element `i` at `ONUS
   + 16*i` while the runtime reads `ONUS + 8*i`: `quantum` would over-allocate (harmless), every
   element past the first would read as a zero word, and **both `liberare_verbum` and
   `copiare_verbum` skip a zero word** — silent wrong answers and silent leaks, with nothing failing
-  to compile. `liss-abi`'s `const _` block now asserts it.
+  to compile. `abi`'s `const _` block now asserts it.
 - **`exit_status`** (exitus.rs) — the truncation is specified (packages design §4.3) and stays. What
   was missing was any sign that it happened: `redde °CCC` exited 44 in silence, and `redde °CCLVI`
   exited 0, which reads as success. **D-10**
 
-## `liss-abi`
+## `abi`
 
 - **`memoria::abolere`** — a plain `(*h).magic = 0` before the free **does not clear it in a release
   build, and did not.** `free` ends the object's lifetime, so LLVM's dead-store elimination removes
@@ -1169,14 +1169,14 @@ break" is repeated here.
   was held by nothing at all until `VERBUM == size_of::<u64>()` was asserted here. See the
   `dispositio::VERBUM` entry above for what drift would have cost. **Now something does fail to
   compile.**
-- **`lib.rs`, the kind codes** — `liss-codegen` used to carry a copied `GENUS_NI = 2` with a comment
+- **`lib.rs`, the kind codes** — `codegen` used to carry a copied `GENUS_NI = 2` with a comment
   as the only thing tying the two together. The writer and the reader of these numbers now share one
-  definition in `liss_runtime::genus`.
+  definition in `runtime::genus`.
 - **`lib.rs`, the `ingressus` feature** — an ungated `main` in this crate is a `duplicate symbol:
   main` at link time, because the crate is also built as an `rlib` for its own tests and every test
   binary already defines `main`. **Measured, not feared.**
 
-## `liss-codegen`
+## `codegen`
 
 - **`Corpus::libera`** (emissio.rs) — without the null store back into a freed slot, a `continua`
   frees a slot declared later in the loop body: null on the first iteration, and on the iteration
@@ -1215,7 +1215,7 @@ break" is repeated here.
 - **`Corpus::comparatio`, the scalar path** — the three-way result is signed: `minor_est` on `ni` is
   the `-1` case, and an unsigned compare against zero would read it as 255.
 - **`granum`** (emissio.rs) — a second `Grain → 12 | 288` table in this file would be worse than the
-  kind-code duplication it resembles. The reader is `liss_abi::numeri::exige_granum`, which accepts
+  kind-code duplication it resembles. The reader is `abi::numeri::exige_granum`, which accepts
   XII or CCLXXXVIII and rejects everything else — so emitting `12` for an `nr` **passes that gate**
   and silently produces wrong arithmetic: `°II:I/II * °I:I/XXIV` is 30/288 with the right grain and
   720/288 with the wrong one. A wrong answer, not a crash.
@@ -1318,17 +1318,17 @@ break" is repeated here.
 - **`Emissor::novus`** (emissio.rs) — `liss_panic` never unwinds and `redde`/`abrumpe`/`continua`
   are syntactic, so there is no unwinder to feed and `.eh_frame` would be dead weight in every
   compiled binary.
-- **`ex_horreo`** (liss-codegen/build.rs) — `rerun-if-changed` on the blob *directory* watches its
+- **`ex_horreo`** (codegen/build.rs) — `rerun-if-changed` on the blob *directory* watches its
   listing; replacing a `runtime.o` in place changes no listing, and the stale bytes would survive
   every rebuild until somebody added or removed a file. Each blob is named individually.
 - **`ex_horreo`** — with `LISS_RUNTIME_DIR` set, the layout proof runs zero times. The `const _`
-  block in `liss-abi/src/lib.rs` is compiled only when `liss-abi` is, which on that path never
-  happens: `conde` is skipped, and `liss-abi` is workspace-`exclude`d and a dependency of nothing
+  block in `abi/src/lib.rs` is compiled only when `abi` is, which on that path never
+  happens: `conde` is skipped, and `abi` is workspace-`exclude`d and a dependency of nothing
   there. **So a stale blob whose `dispositio` disagrees with today's source links cleanly, passes
   every test in the crate, and produces silent wrong answers.** The close is to export the layout
   constants as absolute symbols from the blob and compare them in a `target.rs` test that can see
   both. **D-29**
-- **`Defectus::novus`** (liss-codegen/src/lib.rs) — the one constructor, and the sentence must be
+- **`Defectus::novus`** (codegen/src/lib.rs) — the one constructor, and the sentence must be
   written inline at the call site: spec §10.3 makes `Defectus::novus(` a catalogue marker, and a
   site that forwards a constant carries no literal of its own and the ratchet reports it `UNPARSED`.
   No foreign error is ever interpolated into one — Cranelift's `ModuleError`, `object`'s write
@@ -1361,7 +1361,7 @@ Three consequences for anyone working near it:
   would bless one backend's answer as the language's; now it would bless *the* answer as the
   language's, which is worse — the corpus is what the compiler is held to, so a fixture would close
   the question by implication, with no spec and no one having decided.
-  `liss-codegen/tests/regimen.rs`'s `caput_dum_terminatum_componitur` pins the compiled behaviour
+  `codegen/tests/regimen.rs`'s `caput_dum_terminatum_componitur` pins the compiled behaviour
   instead, and is now the **only** pin on it anywhere.
 - **`lingua-serpentis/tests/generative.rs`'s `caput_dum_terminatum` refuses the shape by a check
   rather than by luck**, so a widened generator cannot draw a program whose meaning is undecided.

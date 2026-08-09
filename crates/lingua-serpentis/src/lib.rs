@@ -2,8 +2,8 @@
 //! binary is what compiles and runs.
 
 pub mod error;
-pub use liss_runtime::roman;
-pub use liss_runtime::fraction;
+pub use runtime::roman;
+pub use runtime::fraction;
 pub mod fragmentum;
 pub mod pictura;
 pub mod spatium;

@@ -4,8 +4,8 @@
 use crate::error::{ProgramError, Warning};
 use crate::program::{Program, SourceFile};
 use crate::render;
-use liss_codegen::nexus::{Nexus, WildNexus};
-use liss_codegen::target::Target;
+use codegen::nexus::{Nexus, WildNexus};
+use codegen::target::Target;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::fd::AsRawFd;
@@ -206,10 +206,10 @@ pub fn liss(args: &[String]) -> ! {
         Task::Build => Some(destination(&inv, single)),
     };
 
-    let objectum = match liss_codegen::compila(&ir, &machina) {
+    let objectum = match codegen::compila(&ir, &machina) {
         Ok(o) => o,
         // A bare hole, so the catalogue does not read this as a site of its own;
-        // the literal lives in `liss-codegen`.
+        // the literal lives in `codegen`.
         Err(d) => {
             eprintln!("{}", d);
             exit(1);

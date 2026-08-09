@@ -12,10 +12,10 @@ number is stated, a test asserts it.
 
 ```console
 $ cargo test
-$ cargo test --manifest-path crates/liss-abi/Cargo.toml
+$ cargo test --manifest-path crates/abi/Cargo.toml
 ```
 
-`crates/liss-abi` is `exclude`d from the root workspace on purpose — `liss-codegen/build.rs`
+`crates/abi` is `exclude`d from the root workspace on purpose — `codegen/build.rs`
 invokes cargo on it *during* an outer build, and a member would contend for the outer
 `.cargo-lock` — so the first command does not reach it and the second is not optional. A run that
 only does the first leaves `abi.rs`, `custos.rs` and `emissio.rs` unexecuted, which is most of what
@@ -37,11 +37,11 @@ Work inside `nix develop`. Two environment facts are asserted rather than assume
 | `programs.rs` | lingua-serpentis | Whole programs, compiled and run: the pipeline end to end |
 | `ir.rs` | lingua-serpentis | Typed-IR snapshots and targeted assertions (spec §4) |
 | `instrumenta.rs` | lingua-serpentis | Toolchain and environment assertions |
-| `salve.rs`, `scalares.rs` | liss-codegen | Compile-and-run: the pipeline, every type, every operator |
-| `regimen.rs`, `series.rs`, `vocationes.rs` | liss-codegen | Control flow, lists, calls — and object inspection |
-| `aemulatio.rs` | liss-codegen | aarch64 images run under `qemu-aarch64` |
-| `golden.rs` | liss-runtime | The captured `scribe` golden vectors |
-| `abi.rs`, `custos.rs`, `emissio.rs` | liss-abi | The C ABI: representation, ownership, guard page, output |
+| `salve.rs`, `scalares.rs` | codegen | Compile-and-run: the pipeline, every type, every operator |
+| `regimen.rs`, `series.rs`, `vocationes.rs` | codegen | Control flow, lists, calls — and object inspection |
+| `aemulatio.rs` | codegen | aarch64 images run under `qemu-aarch64` |
+| `golden.rs` | runtime | The captured `scribe` golden vectors |
+| `abi.rs`, `custos.rs`, `emissio.rs` | abi | The C ABI: representation, ownership, guard page, output |
 
 Unit tests live in `#[cfg(test)]` modules inside `crates/*/src`; the ratchet deliberately does not
 see them (below).
@@ -107,14 +107,14 @@ this suite from rotting.
 ### What it parses, and the consequence
 
 **It parses, and does not scan.** `extract_sites` reads `crates/<c>/src` for six crates —
-`lingua-serpentis`, `latinitas`, `liss-runtime`, `liss-ir`, `liss-codegen`, `liss-abi` — with a
+`lingua-serpentis`, `latinitas`, `runtime`, `ir`, `codegen`, `abi` — with a
 **non-recursive `read_dir`**, keeping `.rs` files and sorting them, and hands each to
 `syn::parse_file`. A file that does not parse is a panic naming it, deliberately: softening that
 would silently drop every site in the file.
 
-That list is complete: `liss-runtime` joined when `roman.rs` and `exitus.rs` moved out of
-`lingua-serpentis`; `liss-abi` joined on creation, ahead of need, so that no message could slip in
-unrecorded between its birth and its marker; `liss-ir` and `liss-codegen` joined with
+That list is complete: `runtime` joined when `roman.rs` and `exitus.rs` moved out of
+`lingua-serpentis`; `abi` joined on creation, ahead of need, so that no message could slip in
+unrecorded between its birth and its marker; `ir` and `codegen` joined with
 `Defectus::novus(`.
 
 **Nothing under `src/bin/` is visible to it.** That is why the `liss` driver lives in `cli.rs` and
@@ -127,12 +127,12 @@ carrying `#[cfg(test)]`. This replaced a `production_source` that truncated each
 most one such module and it always runs to EOF; the attribute check holds however many a file
 grows and wherever they sit.
 
-**This is why the source may carry block comments** everywhere except `crates/liss-abi/src`. Until
+**This is why the source may carry block comments** everywhere except `crates/abi/src`. Until
 2026-08-09 the ratchet searched source text for eleven marker strings, and could not tell a
 statement from a sentence about one — so `CLAUDE.md` forbade `/* … */` under all of `crates/*/src`,
 and a comment could not sit between a marker and its literal. Comments are not tokens. See
 `docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md`, and §6 there for why
-`liss-abi/tests/abi.rs`'s own line-oriented scanner keeps the rule.
+`abi/tests/abi.rs`'s own line-oriented scanner keeps the rule.
 
 ### The eleven markers
 
@@ -170,7 +170,7 @@ would otherwise be invisible.
 The last three are the back end's, added in Task 19 with the crates that own them (spec §10.3).
 `liss_panic(` finds the runtime's raises; `Defectus::novus(` finds the compiler's own failures;
 `NUNTIUS_` finds the signal handler's messages, which are not call sites at all but `static` byte
-constants. They were deferred to Task 19 on purpose: `liss-abi` re-raises `divisio per nullum`,
+constants. They were deferred to Task 19 on purpose: `abi` re-raises `divisio per nullum`,
 `modulus per nullum` and `index extra fines: {} (longitudo {})`, and `interp.rs` raised all three
 too; adding `liss_panic(` while both implementations stood would have made each pattern non-unique,
 so six sites would have read `ambiguous` and the count would have recorded a *loss* of coverage
@@ -184,7 +184,7 @@ table, and §10.3 makes that a rule rather than a habit: a site written
 ### Finding the message literal
 
 **`primum_literale`** takes the first string, byte-string or C-string literal in the site's own
-token stream, descending into groups. `liss-abi`'s messages are byte strings and C strings —
+token stream, descending into groups. `abi`'s messages are byte strings and C strings —
 `b"Error: "`, `c"acervus vocationum exhaustus est"` — never plain `&str`, because the crate is
 `no_std`-shaped and async-signal-safe; all three are `syn::Lit` arms and all three are read. A char
 literal is not: `Lit::Char` falls through, which is what lets
@@ -372,7 +372,7 @@ in the language. The caret may sit *at* the end of its line, which is the insert
 `;` is reported at, but never past it.
 
 **`numeral round-trips` is what keeps an Arabic line number out of the location row**, and it is
-only possible because `liss-abi` stopped writing one (`abi.md` §13). Writing its test found the hole
+only possible because `abi` stopped writing one (`abi.md` §13). Writing its test found the hole
 in the first draft: `linea 3` parses as no numeral at all, which left the line unset and skipped the
 check entirely — so the one shape the rule exists to ban was the one shape it passed.
 
@@ -558,7 +558,7 @@ protecting nothing. Its positives are D-26's own three spellings in the init cla
 of its negatives is a terminator in the loop **body**, which is an ordinary program both backends
 agree about and which the corpus holds as `conformance/currunt/memoria-caput-dum-redditum`. The
 behaviour is pinned instead by `caput_dum_terminatum_componitur` in
-`liss-codegen/tests/regimen.rs`, deliberately **not** by a `conformance/` fixture: with one backend
+`codegen/tests/regimen.rs`, deliberately **not** by a `conformance/` fixture: with one backend
 left, a fixture would settle the question by implication rather than by decision.
 
 ## The CLI suites
@@ -646,7 +646,7 @@ into `Error: memoria non liberata est`.
 
 ## Codegen: recorded answers and the object
 
-`liss-codegen/tests/support/mod.rs` is the pipeline spelled once. Until Task 19 `par_est` was a live
+`codegen/tests/support/mod.rs` is the pipeline spelled once. Until Task 19 `par_est` was a live
 **differential**: it ran each source through both backends and required the two `Rendered` values
 equal, so the oracle was the interpreter the corpus is blessed against rather than a hand-copied
 string. That is what made one test per operator cheap enough to write, and why forty-seven of them
@@ -664,7 +664,7 @@ subtraction, by identity**: the checker's Latinity warnings, obtained from the s
 `latinity::lint_program` call on the same `ParsedProgram` and rendered the way
 `lingua_serpentis::render` renders them, are `strip_prefix`ed off the front of the blessed stderr —
 because the CLI writes those and *then* spawns the child (§9.5). It used to be a `Monitum` prefix
-filter, and that was wrong: **the runtime writes `Monitum` lines too**, and `liss-abi`'s
+filter, and that was wrong: **the runtime writes `Monitum` lines too**, and `abi`'s
 `ingressus.rs` writes the D-10 truncated-exit-status note at run time, which is exactly
 `conformance/monita/status-exitus-redactus`. A filter keyed on the word would have deleted a
 diagnostic the compiled program is *required* to emit.
@@ -789,7 +789,7 @@ that quietly does not run is worse than none, because the suite reports green ei
 one of those greens means the second
 architecture works. Where `qemu-user` differs from a kernel is recorded exactly: `si_addr` is
 faithful, so both branches of §8.2's discriminator are reachable; the guest stack does *not* grow on
-demand, so `liss-abi`'s `the_bounds_are_the_mapping_top_minus_the_limit` would fail under emulation
+demand, so `abi`'s `the_bounds_are_the_mapping_top_minus_the_limit` would fail under emulation
 and stays on the host; `SIGBUS` cannot be provoked and is checked by inspecting the installer in
 `target.rs`'s `the_guard_traps_both_sigsegv_and_sigbus`; the page size is the host's 4 KiB.
 `current_dir` is set to the scratch directory not for tidiness but for **containment** — on an
@@ -826,7 +826,7 @@ misconfiguration becomes self-diagnosing, because it makes this test pass and
 `acervus_exhaustus_sub_aemulatore` fail, the opposite pattern from a real §8 regression where both
 fail. The first costs ~1.4 s (16 MiB of guest stack to fill), the second ~0.10 s.
 
-## The runtime ABI: `liss-abi`
+## The runtime ABI: `abi`
 
 **`abi.rs`** reads the layout back directly — sign, digits, bytes, element words — rather than going
 through a formatter, because a `liss_int_add` that produced the right *string* from the wrong digits
@@ -851,12 +851,12 @@ captured value and the failure is intermittent and reads like a formatter bug. O
 `libtest` prints only before it starts and after it ends. A separate binary is what keeps that
 constraint from infecting the ownership tests in `abi.rs`.
 
-**`liss-runtime/tests/golden.rs`** pins `scriptio` against `tests/data/scriptio-aurea.txt`, captured
+**`runtime/tests/golden.rs`** pins `scriptio` against `tests/data/scriptio-aurea.txt`, captured
 from the interpreter's `Value::display()` (§10.4). **The generator is gone and the data cannot be
 regenerated, which is the point** — `crates/lingua-serpentis/examples/scriptio-aurea.rs` was deleted
 in Task 19 with `value.rs`. A golden vector that can be regenerated by the implementation under test
 is not a golden vector; if a row disagrees with `scriptio`, the row is right. `List` rows are
-skipped here because `scriptio` has no list formatter — those rows are precisely what `liss-abi`'s
+skipped here because `scriptio` has no list formatter — those rows are precisely what `abi`'s
 `emissio.rs` adds, and it reads the same file.
 
 ## Environment assertions: `instrumenta.rs`
@@ -883,24 +883,24 @@ impose nothing; the rules below are what the two remaining *text* scanners still
 cheap and they catch things no type system can. **These are the rules a future maintainer must
 keep.**
 
-### Never introduce a block comment into `crates/liss-abi/src`
+### Never introduce a block comment into `crates/abi/src`
 
-`liss-abi/tests/abi.rs`'s `sententiae()` skips a line only when its trimmed start is `//`. A
+`abi/tests/abi.rs`'s `sententiae()` skips a line only when its trimmed start is `//`. A
 `/* … */` containing `c"…"` becomes a phantom sentence, and one hiding a real `c"…"` removes it.
-The affected tree is `crates/liss-abi/src` only.
+The affected tree is `crates/abi/src` only.
 
 **This rule used to cover all six trees `catalogus.rs` reads.** Its comment guard tested whether the
 text left of a marker on its own line contained `//`, so a block comment mentioning
 `Defectus::novus(` or `NUNTIUS_` invented a phantom site. `catalogus.rs` parses now and a token
-stream has no comments, so `crates/{lingua-serpentis, latinitas, liss-runtime, liss-ir,
-liss-codegen}/src` are free of it —
+stream has no comments, so `crates/{lingua-serpentis, latinitas, runtime, ir,
+codegen}/src` are free of it —
 `docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6, and
 `a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not` asserts the freedom rather than
 assuming it.
 
-### Never write a `c"…"` — or an unpaired `c"` — in a trailing comment in `liss-abi/src`
+### Never write a `c"…"` — or an unpaired `c"` — in a trailing comment in `abi/src`
 
-`sententiae()` greps every `c"…"` out of `crates/liss-abi/src/*.rs`, skipping **whole-line**
+`sententiae()` greps every `c"…"` out of `crates/abi/src/*.rs`, skipping **whole-line**
 comments only, and `every_latin_sentence_this_crate_can_say_is_listed_here` asserts that the
 resulting set equals a hardcoded eight-element list:
 
@@ -920,7 +920,7 @@ assertion. An **unpaired** `c"` in a trailing comment panics the test outright, 
 extractor does `rest.find('"').expect("a diagnostic literal closes on its own line")`.
 
 The test is kept alongside the catalogue for what the ratchet cannot do: it is **crate-local and
-exhaustive**, so it notices a sentence added anywhere in `liss-abi` even where no marker matches.
+exhaustive**, so it notices a sentence added anywhere in `abi` even where no marker matches.
 It counts no sites and touches no snapshot; it makes "a new Latin sentence appeared" a diff someone
 has to justify. It reads `c"…"` only, so a `b"…"` message would slip past it — the catalogue covers
 that gap, and `catalogus.rs::byte_and_c_string_literals_are_extracted_like_any_other` pins that it
@@ -934,10 +934,10 @@ were a pair `catalogus.rs` could only ever downgrade, since `fixtured` requires 
 pattern and `ambiguous` is a one-way door. The tails name how the fault was found: the kernel's
 signal, or a `verifica`'s rejection.
 
-### A `fn main(` in `liss-abi/src` must also contain `liss_custos_institue(`
+### A `fn main(` in `abi/src` must also contain `liss_custos_institue(`
 
 `custos.rs`'s `a_main_in_this_crate_must_install_the_guard` is a bare `contains` over whole file
-text, **comments included**, requiring any `crates/liss-abi/src/*.rs` file containing `fn main(` to
+text, **comments included**, requiring any `crates/abi/src/*.rs` file containing `fn main(` to
 also contain `liss_custos_institue(`. Crude on purpose: it fires the moment an entry point appears
 without the call, and asserts nothing about a crate that has no entry point. The hole it closes is
 that every other check in that file installs the guard explicitly, so a `main` that called
@@ -964,7 +964,7 @@ Two sites worded identically can never be better than `ambiguous`, and no fixtur
 When a new site would duplicate an existing sentence, give it a distinguishing tail rather than
 reusing the wording.
 
-### `#[cfg(test)]` no longer has to end the file — except in `liss-abi/src`
+### `#[cfg(test)]` no longer has to end the file — except in `abi/src`
 
 **This rule is retired for `catalogus.rs`.** It read: keep unit-test modules last and the attribute
 at column 0 on its own line, because `production_source` truncated each file at the first
@@ -972,7 +972,7 @@ at column 0 on its own line, because `production_source` truncated each file at 
 The ratchet now skips items by their `#[cfg(test)]` attribute, which holds however many such modules
 a file has and wherever they sit.
 
-It still binds `crates/liss-abi/src`, for a different reason and by a different test:
+It still binds `crates/abi/src`, for a different reason and by a different test:
 `sententiae()` reads whole files with no notion of a test module, and
 `every_latin_sentence_this_crate_can_say_is_listed_here` asserts an exact eight-element set, so a
 `c"…"` written inside a unit test in that crate is a ninth sentence and a failure.
