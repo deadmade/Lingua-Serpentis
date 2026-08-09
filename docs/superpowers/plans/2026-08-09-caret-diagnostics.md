@@ -69,13 +69,13 @@ the question-index row, the spec table row, the amends-chain entry, and the comp
 
 **Files:** `crates/lingua-serpentis/src/token.rs`, `src/lexer.rs`.
 
-- [ ] Step 1: Write the failing tests — `°XXV` spans the whole numeral including `°`; a multi-line
+- [x] Step 1: Write the failing tests — `°XXV` spans the whole numeral including `°`; a multi-line
       string spans open-quote to close-quote with `linea` at the opening line (D-03); a non-ASCII
       identifier's span is byte-correct; the separator give-back at `lexer.rs:40-42` shrinks the span.
-- [ ] Step 2: Run them and verify they fail to compile — `Token` has no `spatium`.
-- [ ] Step 3: Add `Spatium`; add `spatium` to `Token`, keeping `line`.
-- [ ] Step 4: Build the `offsets` prefix-sum table in `tokenize` and record spans at every push.
-- [ ] Step 5: Both test commands green. Hand-check `conformance/errores/linea-post-chordam`.
+- [x] Step 2: Run them and verify they fail to compile — `Token` has no `spatium`.
+- [x] Step 3: Add `Spatium`; add `spatium` to `Token`, keeping `line`.
+- [x] Step 4: Build the `offsets` prefix-sum table in `tokenize` and record spans at every push.
+- [x] Step 5: Both test commands green. Hand-check `conformance/errores/linea-post-chordam`.
 
 Pure addition; nothing reads `spatium` yet.
 
@@ -83,11 +83,11 @@ Pure addition; nothing reads `spatium` yet.
 
 **Files:** new `crates/lingua-serpentis/src/fragmentum.rs`.
 
-- [ ] Step 1: Write the failing tests — the whole edge-case table of design §5, plus the alignment
+- [x] Step 1: Write the failing tests — the whole edge-case table of design §5, plus the alignment
       invariant `caret == textus[..byte].chars().count()`, plus `°` explicitly.
-- [ ] Step 2: Run and verify they fail.
-- [ ] Step 3: Implement `extract`. Pure, no I/O.
-- [ ] Step 4: Both commands green.
+- [x] Step 2: Run and verify they fail.
+- [x] Step 3: Implement `extract`. Pure, no I/O.
+- [x] Step 4: Both commands green.
 
 Zero wiring; cannot break anything.
 
@@ -95,9 +95,9 @@ Zero wiring; cannot break anything.
 
 **Files:** new test under `crates/lingua-serpentis/tests/`.
 
-- [ ] Step 1: Read all 86 `nuntii`, parse each line to `(genus, file, line, message)`,
+- [x] Step 1: Read all 86 `nuntii`, parse each line to `(genus, file, line, message)`,
       `insta`-snapshot the ~99 tuples.
-- [ ] Step 2: Commit that snapshot **on the old grammar**.
+- [x] Step 2: Commit that snapshot **on the old grammar**.
 
 **This must land before Task 6.** If it slips, the whole safety argument of design §10 is gone.
 
@@ -105,13 +105,13 @@ Zero wiring; cannot break anything.
 
 **Files:** `crates/lingua-serpentis/tests/support/diag.rs`.
 
-- [ ] Step 1: `Genus`, `Diagnostica`, `parse_stderr` returning blocks plus residue.
-- [ ] Step 2: `judge`'s six changes — last *block* not last line; the exit-0 branch, which currently
+- [x] Step 1: `Genus`, `Diagnostica`, `parse_stderr` returning blocks plus residue.
+- [x] Step 2: `judge`'s six changes — last *block* not last line; the exit-0 branch, which currently
       requires every stderr line to start with `Monitum`; Roman `line in range` with a round-trip
       check; `file exists` from the location row; the new `caret aligns`; `no Arabic digits` widened
       per design §8.
-- [ ] Step 3: Keep `parse_diagnostic`'s rule that a *warning* yields `None`.
-- [ ] Step 4: Both commands green — nothing emits the new form yet.
+- [x] Step 3: Keep `parse_diagnostic`'s rule that a *warning* yields `None`.
+- [x] Step 4: Both commands green — nothing emits the new form yet.
 
 Doing this before the emitter is what keeps the robustness suite from being red across two
 consecutive tasks.
@@ -122,14 +122,14 @@ consecutive tasks.
 191, 198, 252, 303, 404, 419, 425`), `crates/liss-codegen/src/lib.rs:21`,
 `crates/lingua-serpentis/tests/catalogus.rs`, all 86 `nuntii`.
 
-- [ ] Step 1: `erratum:`/`monitum:`, the location row, Roman line numbers via
+- [x] Step 1: `erratum:`/`monitum:`, the location row, Roman line numbers via
       `roman::Roman::from_u64(n).display()`.
-- [ ] Step 2: Fix `catalogus.rs::observed_messages` to collect only severity-prefixed lines — design
+- [x] Step 2: Fix `catalogus.rs::observed_messages` to collect only severity-prefixed lines — design
       §9's false-green, and it cannot wait for a later task.
-- [ ] Step 3: Fix the wording assertions that move: `error.rs:89-128`, `lib.rs:87,99,114`,
+- [x] Step 3: Fix the wording assertions that move: `error.rs:89-128`, `lib.rs:87,99,114`,
       `tests/cli.rs`, `tests/liss_cli.rs`, `tests/programs.rs`, `liss-codegen/tests/scalares.rs`,
       `vocationes.rs:13`, `aemulatio.rs:158,182`.
-- [ ] Step 4: `LISS_BLESS=1 cargo test --test conformance`, then the three diff checks and the Task 4
+- [x] Step 4: `LISS_BLESS=1 cargo test --test conformance`, then the three diff checks and the Task 4
       snapshot.
 
 Largest blast radius in the plan.
@@ -138,18 +138,18 @@ Largest blast radius in the plan.
 
 **Files:** `src/ast.rs`, `src/parser.rs`, `src/latinity.rs`.
 
-- [ ] Step 1: `name_span` on `StmtKind::Let` and `FuncDecl`; per-parameter spans. `ParsedFile` gains
+- [x] Step 1: `name_span` on `StmtKind::Let` and `FuncDecl`; per-parameter spans. `ParsedFile` gains
       `src`.
-- [ ] Step 2: Delete `FuncDecl::def_line` — three uses, all subsumed.
-- [ ] Step 3: Both commands green. Populated but unused.
+- [x] Step 2: Delete `FuncDecl::def_line` — three uses, all subsumed.
+- [x] Step 3: Both commands green. Populated but unused.
 
 ## Task 8: Warning snippets
 
 **Files:** `src/error.rs`, `src/latinity.rs`, `src/lib.rs`, `src/cli.rs`.
 
-- [ ] Step 1: `Warning.fragmentum`; `lint_program` attaches it; `warnings_to` emits the block — and
+- [x] Step 1: `Warning.fragmentum`; `lint_program` attaches it; `warnings_to` emits the block — and
       so does the success path at `cli.rs:184-185`.
-- [ ] Step 2: Bless ~20 lines across ~8 files; the three checks and the Task 4 snapshot.
+- [x] Step 2: Bless ~20 lines across ~8 files; the three checks and the Task 4 snapshot.
 
 Warnings before errors: ~20 lines rather than 74, on a corpus where `monita/ordo-trans-scidas`
 proves multi-block output and `monita/fons-unicus` proves the `strip()` path.
@@ -158,8 +158,8 @@ proves multi-block output and `monita/fons-unicus` proves the `strip()` path.
 
 **Files:** `src/lexer.rs` (5 sites), and a mechanical `spatium: None` sweep across ~45 others.
 
-- [ ] Step 1: `LinguaError` gains `spatium: Option<Spatium>`; the sweep.
-- [ ] Step 2: Both commands green. Re-bless the catalogue; ~50 rows move by line only, and the
+- [x] Step 1: `LinguaError` gains `spatium: Option<Spatium>`; the sweep.
+- [x] Step 2: Both commands green. Re-bless the catalogue; ~50 rows move by line only, and the
       pairing check must print nothing.
 
 ## Task 10: `Expr` becomes `{ kind, span }`
@@ -167,8 +167,8 @@ proves multi-block output and `monita/fons-unicus` proves the `strip()` path.
 **Files:** `src/ast.rs`, `src/parser.rs` (58 sites), `src/checker.rs` (22), `tests/ir.rs`,
 `tests/generative.rs`.
 
-- [ ] Step 1: One `Parser` helper — take the position before the production, close it after.
-- [ ] Step 2: Both commands green, **zero fixture movement**, and `tests/ir.rs`'s six snapshots
+- [x] Step 1: One `Parser` helper — take the position before the production, close it after.
+- [x] Step 2: Both commands green, **zero fixture movement**, and `tests/ir.rs`'s six snapshots
       unchanged.
 
 Spans populated, still unused. Zero movement is what makes an 80-site mechanical change
@@ -179,12 +179,12 @@ behaviour changes.
 
 **Files:** `src/checker.rs`, `src/parser.rs`, `src/error.rs`, `src/lib.rs`.
 
-- [ ] Step 1: `checker.rs` drops the threaded `line: usize` from its six methods.
+- [x] Step 1: `checker.rs` drops the threaded `line: usize` from its six methods.
       `Parser::err()` uses the current token's span. `ProgramError::in_file` gains `&src`, 7 sites.
-- [ ] Step 2: **Record which fixtures move lines, before blessing**, and confirm each moved to a
+- [x] Step 2: **Record which fixtures move lines, before blessing**, and confirm each moved to a
       line that genuinely holds the offending expression.
-- [ ] Step 3: Turn on `caret aligns` and the widened `no Arabic digits` for real.
-- [ ] Step 4: Bless ~74 lines; the three checks and the Task 4 snapshot.
+- [x] Step 3: Turn on `caret aligns` and the widened `no Arabic digits` for real.
+- [x] Step 4: Bless ~74 lines; the three checks and the Task 4 snapshot.
 
 `ir::Stmt.line` keeps its present value — `emissio.rs:549` copies it into `Corpus::linea` and
 `locus()` hands it to every fallible runtime entry point.
@@ -193,24 +193,24 @@ behaviour changes.
 
 **Files:** `crates/liss-abi/src/defectus.rs`, `src/ingressus.rs`, `tests/{abi,custos}.rs`.
 
-- [ ] Step 1: Reorder the writes; `Roman::from_u64(n).display()` for the line; delete `decimales`
+- [x] Step 1: Reorder the writes; `Roman::from_u64(n).display()` for the line; delete `decimales`
       and its buffer; move `MONITUM_PRAEFIXUM`.
-- [ ] Step 2: **Force a rebuild of the embedded musl archives and confirm a runtime-origin fixture
+- [x] Step 2: **Force a rebuild of the embedded musl archives and confirm a runtime-origin fixture
       actually moved** — a stale staticlib is how this task fails silently with both commands green.
-- [ ] Step 3: Bless the 13 runtime fixtures. Both commands.
+- [x] Step 3: Bless the 13 runtime fixtures. Both commands.
 
 ## Task 13: One grammar
 
 **Files:** `tests/support/diag.rs`, `tests/robustness.rs:15-33`.
 
-- [ ] Step 1: Delete Task 5's compatibility branch; rewrite the pinned shapes.
-- [ ] Step 2: Both commands green.
+- [x] Step 1: Delete Task 5's compatibility branch; rewrite the pinned shapes.
+- [x] Step 2: Both commands green.
 
 ## Task 14: Documentation
 
-- [ ] `docs/internals/rationale.md` §"Errors, warnings and rendering" — replaces the 4×2 table.
-- [ ] `docs/internals/testing.md` §"The robustness invariant" and the `judge` table.
-- [ ] `docs/internals/abi.md` §13 — the runtime's shapes.
-- [ ] `docs/defectus/2026-08-03-index.md` — a `D-NN` for the display-width limitation.
-- [ ] `CLAUDE.md` — the `VIA`-echoes-`examples/` coupling of design §11.
-- [ ] Re-verify the catalogue header; enumerate every moved row against the design doc.
+- [x] `docs/internals/rationale.md` §"Errors, warnings and rendering" — replaces the 4×2 table.
+- [x] `docs/internals/testing.md` §"The robustness invariant" and the `judge` table.
+- [x] `docs/internals/abi.md` §13 — the runtime's shapes.
+- [x] `docs/defectus/2026-08-03-index.md` — a `D-NN` for the display-width limitation.
+- [x] `CLAUDE.md` — the `VIA`-echoes-`examples/` coupling of design §11.
+- [x] Re-verify the catalogue header; enumerate every moved row against the design doc.

@@ -426,14 +426,70 @@ A failed run is not only its message. Two things the program had already produce
 
 Both are empty for an error raised before there was anything to collect.
 
-`Display` gives four shapes for each of `ProgramError` and `Warning`, on file × line:
+Both also carry a **`fragmentum`**: the one source line the diagnostic points at, already
+extracted. `Display` renders it and never reads a file, which is the whole reason it is taken early
+— see below.
+
+`Display` writes the three-level grammar of
+`superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3, through `pictura::depinge`:
 
 ```
-Error in 'mathematica/summa.liss', linea 5: …    Monitum in 'a.liss', linea 2: …
-Error in 'x.liss': …                             Monitum in 'a.liss': …
-Error in linea 5: …                              Monitum in linea 3: …
-Error: …                                         Monitum: …
+erratum: <sententia>          ← always
+  in '<scida>', linea <N>     ← when the diagnostic has a location
+     |
+ <N> | <the source line>      ← when the source was in hand too
+     |        ^^^
 ```
+
+**Each level is independent of the one below**, which is what lets the compiled image — which
+knows its file and line but has no source text at run time — emit the first two and stop, rather
+than keeping a grammar of its own (`abi.md` §13). Six shapes result, on severity × location:
+
+```
+erratum: …                          monitum: …
+  in 'mathematica/summa.liss', linea V   in 'a.liss', linea II
+erratum: …                          monitum: …
+  in 'x.liss'                         in 'a.liss'
+erratum: …                          monitum: …
+  in linea V                          in linea III
+erratum: …                          monitum: …
+```
+
+The bare fourth must survive: a package-folder Latinity warning has no file and no line by
+construction, because a directory name is not written on a line of anything.
+
+**`Error` became `erratum`** — it was the one English word the language said — and the line number
+became a Roman numeral, in the location row and in the gutter alike. That was D-12's last survivor,
+and it survived only because nothing had made it awkward enough to fix; `liss-abi`'s `decimales`
+went with it.
+
+**Gutter width is the numeral's**, not two: line 88 is `LXXXVIII`. The `|` column is shared by all
+four rows, and the location row keeps a fixed two-space indent regardless, so the header is a
+two-line unit whose shape does not depend on whether a snippet follows. Nothing ends in whitespace:
+this repository has no `.gitattributes`, and a blessed fixture with a trailing space is one
+editor-on-save from a diff nobody meant to make.
+
+### Why the fragment is taken early
+
+`strip` clears `e.file = None` *after* the error exists, so a single-source program reads
+`in linea V` rather than naming the synthetic `fons.liss`. A renderer that looked the source up by
+filename would therefore have to guess "the first root file" for every single-source program —
+reviving exactly the coupling that makes `fons.liss` delicate. Extracting where the text is still
+in hand costs nothing: `strip` goes on clearing the *header's* filename, and the fragment beside it
+stays correct. It also keeps `render`'s signature, and keeps `cli::finish` callable on the `load`
+failure path, where no source exists at all.
+
+`fragmentum::extract` is pure and does no I/O, which is what lets every edge case be a unit test
+rather than a fixture: a span crossing lines shows its first line only, a span at EOF or on an empty
+file or past 200 characters draws nothing, a tab becomes one space, a `\r` is stripped, and every
+offset is floored onto a `char` boundary before anything slices with it — `extract` must not be a
+way to panic the compiler.
+
+**Columns are counted in `char`s, not bytes.** The renderer prints the line and counts the caret
+from the same character iteration, so alignment is exact for all ASCII, for `°` — which begins every
+numeral in the language and is two bytes wide — and for every accented letter `is_alphabetic()`
+admits into an identifier. A wide character misaligns by one column each; spec §11 forbids
+`unicode-width`, and that is the accepted cost.
 
 **`render`** (`lib.rs`) puts warnings on stderr — so they never contaminate piped program output —
 program output on stdout, and the program's own exit status on success, 1 on any error. On the error

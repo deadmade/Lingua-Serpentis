@@ -1038,14 +1038,38 @@ codegen that emits a null pointer instead means the same thing, so accepting bot
 comparison and removes a way for the two halves of the contract to disagree. `line` of 0 likewise
 means "no line". Codegen supplies them because a signal handler has no line table and this design
 emits no debug information (spec §8.4), so there is no ambient location for the runtime to consult.
-The four shapes reproduce `ProgramError`'s `Display` exactly:
+The four shapes are the **first two levels** of the diagnostic grammar
+(`superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3), which `ProgramError`'s `Display`
+writes in full:
 
 ```text
-Error in 'principale.liss', linea 3: index extra fines: X (longitudo II)
-Error in linea 3: divisio per nullum
-Error in 'principale.liss': ...
-Error: memoria non liberata est
+erratum: index extra fines: X (longitudo II)
+  in 'principale.liss', linea III
+
+erratum: divisio per nullum
+  in linea III
+
+erratum: ...
+  in 'principale.liss'
+
+erratum: memoria non liberata est
 ```
+
+**The third level — the source line under a caret — is never written here, and that is by design
+rather than by omission.** Each level of the grammar is independent of the one below precisely so
+this can stop after two: a running program has no source text, and getting it one would mean
+widening the ABI, which §5.4 pins at `(file, line)`.
+
+The line number is a **Roman numeral**, through the same `Roman::display()` the `{}`-hole loop two
+lines below already calls. `decimales` — the function whose own doc comment called it *"the one
+number this crate formats without going through `Roman`"* — is gone, and with it the last Arabic
+numeral anything in this language prints. `judge`'s `no Arabic digits` rule covers the location row
+because of it.
+
+**The risk in changing any of this is the build, not the diff.** `liss-codegen/build.rs`
+cross-compiles this crate into two prebuilt musl archives during the outer build; a stale archive
+leaves the two workspaces disagreeing while *both* test commands pass. Force a rebuild and confirm
+a runtime-origin fixture actually moved.
 
 **Arity is validated before a single byte is written.** A hole with no argument used to render as a
 literal `{}`, which produces a *plausible* exit-1 Latin diagnostic — braces are not digits,

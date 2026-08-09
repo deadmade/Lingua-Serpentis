@@ -58,8 +58,14 @@ fixture directory holds:
 - `NOTA.md` — why the case exists, where one was written.
 
 `cargo test --test conformance` runs them (`harness = false`, one named trial per fixture).
-`LISS_BLESS=1` rewrites the expectation files from actual output — read the diff before committing
-it; blessing a regression is the one way this suite fails silently.
+`LISS_BLESS=1` rewrites the expectation files from actual output — blessing a regression is the one
+way this suite fails silently. **`tests/nuntii.rs` is the net**: it snapshots all 99 diagnostics in
+the corpus with the framing stripped, so a blessing that changes a *sentence* or a *line* moves it
+and a blessing that changes only the shape does not. Never bless without re-running it.
+
+- **A diagnostic now echoes the source line it points at**, so `nuntii` files contain program text.
+  `conformance/currunt/exemplum-praecisio` reaches `examples/praecisio.liss` through its `VIA` file
+  and warns twice, which means **editing that example moves a conformance expectation.**
 
 ## Conventions
 

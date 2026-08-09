@@ -283,11 +283,34 @@ Each row prints as `{file}:{line}  {pattern}  → {status}`, under a header the 
 `UNCOVERED` and `UNPARSED` are legal states, but they are *visible* states — the header is the
 number the project is choosing to live with.
 
+### The blessing net: `nuntii.rs`
+
+`LISS_BLESS=1` rewrites all 86 `nuntii` files from actual output, and **blessing a regression is the
+one way this corpus fails silently.** Nothing before could tell a diagnostic that changed *shape*
+from one that changed *sentence*.
+
+`nuntii.rs` closes that. It reads the committed files — not the compiler, which is what it is
+guarding — and snapshots every diagnostic in the corpus reduced to `(genus, scida, linea,
+sententia)`, with the framing discarded: 86 fixtures, 99 diagnostics. **A blessing that moves this
+snapshot changed a sentence or a line number, and neither is a framing change.** Two companions keep
+it honest: every non-empty line of every file must be accounted for as a diagnostic or as framing
+belonging to one, and every rendered numeral must be the way the language writes that number — the
+corpus being the widest sample of rendered numerals there is.
+
+It reads through `support::diag::parse_stderr`, the same parser `judge` uses, which makes it a
+second check on that too: a parser that quietly returned nothing would empty the snapshot rather
+than pass.
+
+Bless in **narrow commits, never one wide one**, and check the diff mechanically rather than by eye:
+every added line must be framing, every removed header must pair with an added one carrying the
+identical message, and no file may appear or vanish — `bless` deletes a `nuntii` whose stream came
+back empty, so a fixture that silently stopped producing stderr would disappear rather than fail.
+
 ## The robustness invariant
 
-> Within a timeout, the process terminates with either exit 0 and a stderr containing only `Monitum`
-> lines, or exit 1 and a stderr whose final line is a well-formed diagnostic. Any other outcome is a
-> defect.
+> Within a timeout, the process terminates with either exit 0 and a stderr that is nothing but
+> warning blocks, or exit 1 and a stderr whose last error block is well-formed. Any other outcome is
+> a defect.
 
 `support/diag.rs` is that specification; `robustness.rs` and `generative.rs` are its two callers.
 Every input runs in its own process, because a stack overflow aborts and cannot be caught in
@@ -295,14 +318,27 @@ process.
 
 ### The grammar
 
-`parse_diagnostic` recognises exactly three shapes, and
-`the_diagnostic_grammar_parses_all_three_shapes` pins them:
+`parse_stderr` reads the whole of stderr into blocks plus **residue** — the lines that belonged to
+no block. Residue is a finding, not noise: under the block grammar the rows after a header are
+framing the language wrote, so a line that is neither a header nor framing is something else
+entirely (a panic, a leaked English sentence, a half-written message).
 
-- `Error: <message>` — `Structural`, about the program's shape;
-- `Error in linea N: <message>` — `Line`, single-source mode;
-- `Error in '<file>', linea N: <message>` — `FileLine`, folder mode.
+A block is a header at column 0 — `erratum: ` or `monitum: ` — then an optional `  in …` location
+row, then optional gutter rows. Nothing separates two blocks but the next column-0 severity word,
+which is what the parser keys on; a blank line would put a genuinely empty line into stderr, and
+several consumers iterate it.
 
-`Monitum in linea 2: nomen` and `thread 'main' panicked` parse as `None`, which is itself a finding.
+**It reads errors only, in the sense that matters.** A warning parses as a `Monitum` block and is
+never the failure `judge` looks for — if one counted, a run that warned and never failed would be
+accepted as a well-formed failure. `a_warning_is_not_a_failure_however_it_is_framed` pins that.
+
+Two consequences worth stating, because both were faults in the one-line era:
+
+- **The last *block*, not the last line.** The last physical line of a failing run is now a caret
+  row. The tempting fix of reading the *first* line instead silently breaks the case where warnings
+  precede the error.
+- **The exit-0 branch broke just as hard, and less visibly.** It required every stderr line to begin
+  with `Monitum`, which a warning's location, gutter and caret rows do not.
 
 ### `judge`
 
@@ -315,18 +351,38 @@ trip the Rust-type-name rule for a user who named a variable `Semicolon`.
 |---|---|
 | `terminates` | Still running at the deadline |
 | `no abort` | Killed by a signal, **or** the message `programma abrupte cessavit` |
-| `clean success` | Exit 0 with a stderr line that is not a `Monitum` |
+| `clean success` | Exit 0 with residue, or with an `erratum` block |
 | `no panic` | Exit 101 |
-| `diagnostic present` | Exit 1 with empty stderr |
-| `diagnostic grammar` | Exit 1 with an unparseable last line |
+| `diagnostic present` | Exit 1 with no error block |
+| `diagnostic grammar` | Exit 1 with residue — a line belonging to no block |
 | `no internal defect` | A message beginning `defectus internus: ` |
 | `no leak` | The message `memoria non liberata est` |
-| `file exists` | A `FileLine` naming a file not in the program |
+| `file exists` | A location naming a file not in the program |
 | `line in range` | `linea 0`, or past the end of the named file |
+| `numeral round-trips` | A location whose numeral is not how the language writes that number |
+| `caret aligns` | A gutter numeral disagreeing with the location's, or a caret past the line beneath it |
 | `message non-empty` | An empty message |
 | `Latin only` | An `ENGLISH_WORDS` token: `file`, `must`, `have`, `extension`, `reading`, `directory`, `invalid`, `expected` |
 | `no Arabic digits` | An ASCII digit outside a quoted span |
 | `no Rust type names` | One of the 24 `RUST_TYPE_NAMES` (`Semicolon`, `RParen`, `LBrace`, …) |
+
+**`caret aligns` is the only automated check that a caret points where it claims.** Nothing else
+notices a renderer counting columns in bytes, and `°` — two bytes, one column — begins every numeral
+in the language. The caret may sit *at* the end of its line, which is the insertion point a missing
+`;` is reported at, but never past it.
+
+**`numeral round-trips` is what keeps an Arabic line number out of the location row**, and it is
+only possible because `liss-abi` stopped writing one (`abi.md` §13). Writing its test found the hole
+in the first draft: `linea 3` parses as no numeral at all, which left the line unset and skipped the
+check entirely — so the one shape the rule exists to ban was the one shape it passed.
+
+`no Arabic digits` reaches further than the message now. The honest formulation is *the rule covers
+every byte the language wrote and exempts only the bytes the user wrote*: the header outside quoted
+spans, the location row except inside the quoted file path (`a1.liss` is a legal filename), and the
+gutter numeral. **The echoed source and the caret row are exempt by construction** — the snippet is
+user input reproduced verbatim, and the likeliest thing in it is the Arabic digit the diagnostic is
+complaining about. Any stricter rule makes `conformance/errores/numerus-arabicus`
+self-contradictory.
 
 Any status outside {0, 1, 101} came from `initium` and is legitimate. English is checked *before*
 digits, so `Error: file must have .liss extension` is reported as an untranslated string rather than
