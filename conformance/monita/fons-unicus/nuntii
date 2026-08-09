@@ -1,2 +1,5 @@
 monitum: nomen 'result' fortasse non Latinum est
   in linea II
+    |
+ II |   ni result = °V;
+    |      ^^^^^^

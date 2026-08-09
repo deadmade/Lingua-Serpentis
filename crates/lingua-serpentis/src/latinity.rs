@@ -31,6 +31,10 @@ pub fn lint_program(prog: &ParsedProgram) -> Vec<Warning> {
         let mut ws = lint(&file.ast.funcs);
         for w in &mut ws {
             w.file = Some(file.path.clone());
+            // Here and nowhere later: `strip` clears the file name off a
+            // single-source warning further down the pipeline, so a renderer
+            // resolving source by name would have nothing left to resolve.
+            w.fragmentum = w.spatium.and_then(|s| crate::fragmentum::extract(&file.src, s));
         }
         out.extend(ws);
     }

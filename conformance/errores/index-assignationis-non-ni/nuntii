@@ -1,4 +1,7 @@
 monitum: nomen 'xs' fortasse non Latinum est
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I];
+    |            ^^
 erratum: index assignationis 'ni' esse debet
   in 'principale.liss', linea III

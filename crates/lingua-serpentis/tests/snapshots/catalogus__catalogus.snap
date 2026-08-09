@@ -57,7 +57,7 @@ crates/lingua-serpentis/src/cli.rs:404  erratum: scida temporaria creari non pot
 crates/lingua-serpentis/src/cli.rs:419  erratum: programma incipi non potest  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:425  erratum: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:20  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
-crates/lingua-serpentis/src/latinity.rs:43  nomen '{name}' fortasse non Latinum est  → fixtured
+crates/lingua-serpentis/src/latinity.rs:47  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/lexer.rs:77  chorda non clausa  → fixtured
 crates/lingua-serpentis/src/lexer.rs:92  littera invalida  → fixtured

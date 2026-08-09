@@ -1,5 +1,11 @@
 monitum: nomen fasciculi 'foobar' fortasse non Latinum est
 monitum: nomen 'result' fortasse non Latinum est
   in 'principale.liss', linea III
+     |
+ III |   ni result = foobar.quinque();
+     |      ^^^^^^
 monitum: nomen 'answer' fortasse non Latinum est
   in 'foobar/x.liss', linea II
+    |
+ II |   ni answer = °V;
+    |      ^^^^^^

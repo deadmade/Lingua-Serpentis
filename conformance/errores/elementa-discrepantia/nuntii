@@ -1,4 +1,7 @@
 monitum: nomen 'xs' fortasse non Latinum est
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I, "a"];
+    |            ^^
 erratum: elementa seriei discrepant: 'ni' et 'voc'
   in 'principale.liss', linea II

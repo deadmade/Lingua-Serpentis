@@ -107,7 +107,13 @@ fn warnings_go_to_stderr_and_output_to_stdout_separately() {
     let (code, out, err) = exited(&o);
     assert_eq!(code, 0);
     assert_eq!(out, "V\n");
-    assert_eq!(err, "monitum: nomen 'result' fortasse non Latinum est\n  in linea II\n");
+    // The whole block, caret included: this is the only test outside the corpus
+    // that pins what a rendered warning looks like end to end.
+    assert_eq!(
+        err,
+        "monitum: nomen 'result' fortasse non Latinum est\n  \
+         in linea II\n    |\n II |   ni result = °V;\n    |      ^^^^^^\n"
+    );
 }
 
 #[test]

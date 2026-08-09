@@ -1,4 +1,7 @@
 monitum: nomen 'xs' fortasse non Latinum est
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I];
+    |            ^^
 erratum: elementum typum 'ni' expectat, sed 'voc' datum est
   in 'principale.liss', linea III

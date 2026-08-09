@@ -1,4 +1,7 @@
 monitum: nomen 'xs' fortasse non Latinum est
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I];
+    |            ^^
 erratum: 'adde' duo argumenta accipit
   in 'principale.liss', linea III

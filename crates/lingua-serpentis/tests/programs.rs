@@ -78,8 +78,14 @@ fn praecisio_example_runs() {
     assert_eq!(
         emissio_cum_monitis(
             &r,
+            // The gutter is four columns wide for `XI` and five for `XII`: the width
+            // is the numeral's, and these two lines are where that shows.
             "monitum: nomen 'tertia_brevis' fortasse non Latinum est\n  in linea XI\n\
-             monitum: nomen 'tertia_longa' fortasse non Latinum est\n  in linea XII\n",
+             \x20   |\n XI |     mnr tertia_brevis = °I:I/III;   // granum unciae\n\
+             \x20   |         ^^^^^^^^^^^^^\n\
+             monitum: nomen 'tertia_longa' fortasse non Latinum est\n  in linea XII\n\
+             \x20    |\n XII |     nr tertia_longa = °I:I/III;     // granum scripuli\n\
+             \x20    |        ^^^^^^^^^^^^\n",
         ),
         "I et triens\nI et triens\nI\nI et semuncia\nII et semis\nI et triens\n"
     );
@@ -115,7 +121,12 @@ fn non_latin_name_warns_but_program_still_runs() {
     let r = curre(src);
     assert_eq!(r.stdout, "V\n");
     assert_eq!(r.code, 0);
-    assert_eq!(r.stderr, "monitum: nomen 'result' fortasse non Latinum est\n  in linea I\n");
+    assert_eq!(
+        r.stderr,
+        "monitum: nomen 'result' fortasse non Latinum est\n  in linea I\n   |\n \
+         I | munus initium reddit ni { ni result = °V; scribe(result); redde nullus; }\n   \
+         |                              ^^^^^^\n"
+    );
 }
 
 #[test]

@@ -85,6 +85,10 @@ const SALVE: &str = "munus initium reddit ni {\n  scribe(\"salve\");\n  redde nu
 /// One Latinity warning from the parent, one line of output from the child.
 const MONITUM: &str =
     "munus initium reddit ni {\n  ni counter = \u{b0}I;\n  scribe(counter);\n  redde nullus;\n}";
+/// What `MONITUM` renders to, below its location row: the gutter and the caret under
+/// `counter`. Written out rather than derived, so a renderer that stopped drawing
+/// snippets would fail here rather than agree with itself.
+const MONITUM_PICTURA: &str = "    |\n II |   ni counter = \u{b0}I;\n    |      ^^^^^^^\n";
 /// Fails at run time, on line 3.
 const DIVISIO: &str = "munus initium reddit ni {\n  ni z = \u{b0}I - \u{b0}I;\n  \
                        scribe(\u{b0}V / z);\n  redde nullus;\n}";
@@ -225,7 +229,7 @@ fn run_emits_the_parents_latinity_warnings_before_the_childs_output() {
     assert_eq!(code, Some(0));
     assert_eq!(
         merged,
-        "monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\nI\n"
+        format!("monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\n{MONITUM_PICTURA}I\n")
     );
 }
 
@@ -237,8 +241,10 @@ fn a_folder_programs_warnings_name_their_file() {
     assert_eq!(code, Some(0));
     assert_eq!(
         merged,
-        "monitum: nomen 'counter' fortasse non Latinum est\n  \
-         in 'principale.liss', linea II\nI\n"
+        format!(
+            "monitum: nomen 'counter' fortasse non Latinum est\n  \
+             in 'principale.liss', linea II\n{MONITUM_PICTURA}I\n"
+        )
     );
 }
 
@@ -250,7 +256,7 @@ fn build_emits_the_parents_latinity_warnings_too() {
     assert_eq!(r.code, Some(0), "stderr: {}", r.stderr);
     assert_eq!(
         r.stderr,
-        "monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\n"
+        format!("monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\n{MONITUM_PICTURA}")
     );
 }
 

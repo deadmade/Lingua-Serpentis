@@ -1,3 +1,6 @@
 monitum: nomen 'xs' fortasse non Latinum est
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I, °II];
+    |            ^^
 Error in 'principale.liss', linea 3: index extra fines: X (longitudo II)

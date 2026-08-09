@@ -1,4 +1,10 @@
 monitum: nomen 'tertia_brevis' fortasse non Latinum est
   in linea XI
+    |
+ XI |     mnr tertia_brevis = °I:I/III;   // granum unciae
+    |         ^^^^^^^^^^^^^
 monitum: nomen 'tertia_longa' fortasse non Latinum est
   in linea XII
+     |
+ XII |     nr tertia_longa = °I:I/III;     // granum scripuli
+     |        ^^^^^^^^^^^^
