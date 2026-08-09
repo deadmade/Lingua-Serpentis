@@ -1,2 +1,5 @@
 erratum: operatio typis 'ni' et 'voc' non convenit
   in 'principale.liss', linea II
+    |
+ II |   ni x = °V + "a";
+    |          ^^^^^^^^

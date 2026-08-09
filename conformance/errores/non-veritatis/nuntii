@@ -1,2 +1,5 @@
 erratum: 'non' veritatem requirit
   in 'principale.liss', linea II
+    |
+ II |   veritas b = non °V;
+    |               ^^^^^^

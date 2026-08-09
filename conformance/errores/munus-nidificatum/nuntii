@@ -1,2 +1,5 @@
 erratum: functio 'interior' intra corpus definiri non potest; functiones nidificatae non sustinentur
   in 'principale.liss', linea II
+    |
+ II |   munus interior reddit ni { redde °I; }
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,2 +1,5 @@
 erratum: variabilis ignota: 'ignota'
   in 'principale.liss', linea V
+   |
+ V |   ni x = ignota;
+   |          ^^^^^^

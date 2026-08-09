@@ -1,2 +1,5 @@
 erratum: typus post 'reddit' expectatus
   in 'principale.liss', linea IV
+    |
+ IV | munus computa reddit {
+    |                      ^

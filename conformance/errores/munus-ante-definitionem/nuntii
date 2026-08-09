@@ -1,2 +1,5 @@
 erratum: munus ante definitionem expectatum
   in 'principale.liss', linea II
+    |
+ II |   computa() { }
+    |             ^

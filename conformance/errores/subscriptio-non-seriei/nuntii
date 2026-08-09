@@ -1,2 +1,5 @@
 erratum: 'x' non est series (typus 'ni')
   in 'principale.liss', linea III
+     |
+ III |   x[°I] = °II;
+     |   ^^^^^^^^^^^^

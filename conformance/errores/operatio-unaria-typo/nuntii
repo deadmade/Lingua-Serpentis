@@ -1,2 +1,5 @@
 erratum: negatio numerum requirit
   in 'principale.liss', linea II
+    |
+ II |   veritas b = -verus;
+    |               ^^^^^^

@@ -1,2 +1,5 @@
 erratum: vocatio functionis post nomen fasciculi expectata
   in 'principale.liss', linea II
+    |
+ II |   scribe(mathematica.summa);
+    |                           ^

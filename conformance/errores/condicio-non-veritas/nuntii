@@ -1,2 +1,5 @@
 erratum: condicio 'veritas' esse debet
   in 'principale.liss', linea II
+    |
+ II |   si (°V) { scribe(°I); }
+    |       ^^

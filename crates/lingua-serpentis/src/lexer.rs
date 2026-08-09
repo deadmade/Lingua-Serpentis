@@ -59,7 +59,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                 }
                 let lexeme: String = chars[start..i].iter().collect();
                 let value = crate::roman::parse_roman(&lexeme)
-                    .map_err(|m| LinguaError { message: m, line })?;
+                    .map_err(|m| LinguaError { message: m, line, spatium: None, })?;
                 tokens.push(Token { kind: value.into(), line, spatium: sp(start, i, line) });
             }
             '"' => {
@@ -74,7 +74,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                     i += 1;
                 }
                 if i >= chars.len() {
-                    return Err(LinguaError { message: "chorda non clausa".into(), line: opened_on });
+                    return Err(LinguaError { message: "chorda non clausa".into(), line: opened_on, spatium: None, });
                 }
                 let text: String = chars[start..i].iter().collect();
                 i += 1;
@@ -89,7 +89,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                 let quote = i;
                 i += 1;
                 if i + 1 >= chars.len() || chars[i + 1] != '\'' {
-                    return Err(LinguaError { message: "littera invalida".into(), line });
+                    return Err(LinguaError { message: "littera invalida".into(), line, spatium: None, });
                 }
                 let ch = chars[i];
                 i += 2;
@@ -109,13 +109,13 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             c if c.is_ascii_digit() => {
                 return Err(LinguaError {
                     message: format!("numerus Arabicus '{}' non licet; scribe '°V' vel simile", c),
-                    line,
+                    line, spatium: None,
                 });
             }
             _ => {
                 return Err(LinguaError {
                     message: format!("signum ignotum: '{}'", c),
-                    line,
+                    line, spatium: None,
                 });
             }
         }

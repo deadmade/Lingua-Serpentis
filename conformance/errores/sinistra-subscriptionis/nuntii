@@ -1,2 +1,5 @@
 erratum: sinistra subscriptionis variabilis esse debet
   in 'principale.liss', linea II
+    |
+ II |   [°I][°I] = °II;
+    |            ^

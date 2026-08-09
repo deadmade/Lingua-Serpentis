@@ -1,2 +1,5 @@
 erratum: 'longitudo' seriem expectat, non 'ni'
   in 'principale.liss', linea II
+    |
+ II |   scribe(longitudo(°V));
+    |          ^^^^^^^^^^^^^

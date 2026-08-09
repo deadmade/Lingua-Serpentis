@@ -1,2 +1,5 @@
 erratum: variabilis ignota: 'y'
   in 'principale.liss', linea II
+    |
+ II |   scribe(y);
+    |          ^

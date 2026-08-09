@@ -1,2 +1,5 @@
 erratum: functio 'differentia' in fasciculo 'mathematica' non inventa
   in 'principale.liss', linea III
+     |
+ III |   scribe(mathematica.differentia(°V, °II));
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

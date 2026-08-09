@@ -5,3 +5,6 @@ monitum: nomen 'xs' fortasse non Latinum est
     |            ^^
 erratum: 'adde' duo argumenta accipit
   in 'principale.liss', linea III
+     |
+ III |   scribe(longitudo(adde(xs)));
+     |                    ^^^^^^^^

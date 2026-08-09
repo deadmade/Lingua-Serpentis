@@ -5,3 +5,6 @@ monitum: nomen 'xs' fortasse non Latinum est
     |            ^^
 erratum: elementa seriei discrepant: 'ni' et 'voc'
   in 'principale.liss', linea II
+    |
+ II |   ni lista xs = [°I, "a"];
+    |                 ^^^^^^^^^

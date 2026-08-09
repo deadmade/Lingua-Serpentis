@@ -5,3 +5,6 @@ monitum: nomen 'xs' fortasse non Latinum est
     |            ^^
 erratum: index seriei 'ni' esse debet
   in 'principale.liss', linea III
+     |
+ III |   ni y = xs["a"];
+     |          ^^^^^^^

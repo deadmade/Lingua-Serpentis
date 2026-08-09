@@ -1,2 +1,5 @@
 erratum: nomen 'longitudo' reservatum est
   in 'principale.liss', linea IV
+    |
+ IV | munus longitudo reddit ni {
+    |       ^^^^^^^^^

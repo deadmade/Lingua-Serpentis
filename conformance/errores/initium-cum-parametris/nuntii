@@ -1,2 +1,5 @@
 erratum: munus 'initium' nihil capere et 'ni' reddere debet
   in 'principale.liss', linea II
+    |
+ II | munus initium capit (ni a) reddit ni { redde nullus; }
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

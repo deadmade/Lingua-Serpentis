@@ -5,3 +5,6 @@ monitum: nomen 'xs' fortasse non Latinum est
     |            ^^
 erratum: index assignationis 'ni' esse debet
   in 'principale.liss', linea III
+     |
+ III |   xs["a"] = °II;
+     |   ^^^^^^^^^^^^^^

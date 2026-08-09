@@ -1,2 +1,5 @@
 erratum: 'adde' seriem expectat, non 'ni'
   in 'principale.liss', linea II
+    |
+ II |   scribe(adde(°V, °I));
+    |          ^^^^^^^^^^^^

@@ -1,2 +1,5 @@
 erratum: 'x' iam typum 'ni' habet, sed 'voc' datum est
   in 'principale.liss', linea III
+     |
+ III |   x = "chorda";
+     |   ^^^^^^^^^^^^^

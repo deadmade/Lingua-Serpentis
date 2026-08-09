@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::error::{LinguaError, LResult, ProgramError};
+use crate::spatium::Spatium;
 use crate::roman::Roman;
 use liss_ir as ir;
 use std::collections::{HashMap, HashSet};
@@ -172,10 +173,11 @@ impl Checker {
         })
     }
     /// `lookup`, raising the out-of-scope diagnostic. One site, not three (D-24).
-    fn lookup_or_err(&self, name: &str, line: usize) -> LResult<(Type, ir::SlotId)> {
+    fn lookup_or_err(&self, name: &str, spatium: Spatium) -> LResult<(Type, ir::SlotId)> {
+        let line = spatium.linea();
         self.lookup(name).ok_or_else(|| LinguaError {
             message: format!("variabilis ignota: '{}'", name),
-            line,
+            line, spatium: Some(spatium),
         })
     }
     /// Bind `name` to a freshly allocated slot of the current function.
@@ -199,23 +201,24 @@ impl Checker {
             .expect("every resolved call target was numbered by assign_func_ids")
     }
 
-    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], line: usize)
+    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], spatium: Spatium)
         -> LResult<Vec<ir::Expr>>
     {
+        let line = spatium.linea();
         if params.len() != args.len() {
             return Err(LinguaError {
                 message: format!("functio '{}' numerum argumentorum falsum accepit", fname),
-                line,
+                line, spatium: Some(spatium),
             });
         }
         let mut lowered = Vec::with_capacity(args.len());
         for (want, arg) in params.iter().zip(args.iter_mut()) {
-            let (got, node) = self.resolve_expr(arg, Some(want.clone()), line)?;
+            let (got, node) = self.resolve_expr(arg, Some(want.clone()))?;
             if got != *want {
                 return Err(LinguaError {
                     message: format!("argumentum typum '{}' expectat, sed '{}' datum est",
                         Self::type_name(want), Self::type_name(&got)),
-                    line,
+                    line, spatium: Some(spatium),
                 });
             }
             lowered.push(node);
@@ -239,7 +242,11 @@ impl Checker {
         }
     }
 
-    fn check_expr(&self, e: &mut Expr, line: usize) -> LResult<(InferTy, ir::Expr)> {
+    fn check_expr(&self, e: &mut Expr) -> LResult<(InferTy, ir::Expr)> {
+        // The expression's own span, not the statement's: this is what puts a
+        // caret under the subexpression a diagnostic is actually about.
+        let spatium = e.spatium;
+        let line = spatium.linea();
         match &mut e.kind {
             ExprKind::Int(r) => Ok((InferTy::Known(Type::Int),
                 konst(ir::Ty::Int, ir::Const::Int(r.clone())))),
@@ -265,12 +272,12 @@ impl Checker {
             ExprKind::Bool(b) => Ok((InferTy::Known(Type::Bool),
                 konst(ir::Ty::Bool, ir::Const::Bool(*b)))),
             ExprKind::Ident(name) => {
-                let (t, slot) = self.lookup_or_err(name, line)?;
+                let (t, slot) = self.lookup_or_err(name, spatium)?;
                 let ty = ty_of(&t);
                 Ok((InferTy::Known(t), ir::Expr { ty, kind: ir::ExprKind::Load(slot) }))
             }
             ExprKind::Unary { op, expr } => {
-                let (t, arg) = self.check_expr(expr, line)?;
+                let (t, arg) = self.check_expr(expr)?;
                 let res = match op {
                     UnOp::Not if t == InferTy::Known(Type::Bool) => InferTy::Known(Type::Bool),
                     UnOp::Neg => match t {
@@ -278,36 +285,36 @@ impl Checker {
                         InferTy::Known(Type::Int) => InferTy::Known(Type::Int),
                         InferTy::Known(Type::Float) => InferTy::Known(Type::Float),
                         InferTy::Known(Type::Double) => InferTy::Known(Type::Double),
-                        _ => return Err(LinguaError { message: "negatio numerum requirit".into(), line }),
+                        _ => return Err(LinguaError { message: "negatio numerum requirit".into(), line, spatium: Some(spatium), }),
                     },
-                    _ => return Err(LinguaError { message: "'non' veritatem requirit".into(), line }),
+                    _ => return Err(LinguaError { message: "'non' veritatem requirit".into(), line, spatium: Some(spatium), }),
                 };
                 let ty = infer_ir_ty(&res);
                 Ok((res, ir::Expr { ty, kind: ir::ExprKind::Unary { op: *op, arg: Box::new(arg) } }))
             }
             ExprKind::Binary { op, left, right } => {
-                let (lt, lir) = self.check_expr(left, line)?;
-                let (rt, rir) = self.check_expr(right, line)?;
-                self.check_binary(*op, lt, rt, left, right, lir, rir, line)
+                let (lt, lir) = self.check_expr(left)?;
+                let (rt, rir) = self.check_expr(right)?;
+                self.check_binary(*op, lt, rt, left, right, lir, rir, spatium)
             }
             ExprKind::Call { package: Some(p), name, args } => {
                 if !self.imports.contains(p) {
                     return Err(LinguaError {
                         message: format!("fasciculus '{}' non allatus est", p),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
                 // Dead by construction, kept rather than `.expect`ed because an
                 // unreachable panic is still a panic; it reads UNCOVERED (D-24).
                 let sigs = self.packages.get(p).ok_or_else(|| LinguaError {
                     message: format!("fasciculus '{}' inter allatos non inventus", p),
-                    line,
+                    line, spatium: Some(spatium),
                 })?;
                 let (params, ret) = sigs.get(name).cloned().ok_or_else(|| LinguaError {
                     message: format!("functio '{}' in fasciculo '{}' non inventa", name, p),
-                    line,
+                    line, spatium: Some(spatium),
                 })?;
-                let lowered = self.check_args(name, &params, args, line)?;
+                let lowered = self.check_args(name, &params, args, spatium)?;
                 let func = self.func_id(Some(p), name);
                 let ty = ty_of(&ret);
                 Ok((InferTy::Known(ret),
@@ -316,46 +323,46 @@ impl Checker {
             ExprKind::Call { package: None, name, args } => {
                 if name.as_str() == "longitudo" {
                     if args.len() != 1 {
-                        return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });
+                        return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line, spatium: Some(spatium), });
                     }
-                    let (t, arg) = self.resolve_expr(&mut args[0], None, line)?;
+                    let (t, arg) = self.resolve_expr(&mut args[0], None)?;
                     return match t {
                         Type::List(_) => Ok((InferTy::Known(Type::Int),
                             ir::Expr { ty: ir::Ty::Int, kind: ir::ExprKind::Len(Box::new(arg)) })),
                         other => Err(LinguaError {
                             message: format!("'longitudo' seriem expectat, non '{}'", Self::type_name(&other)),
-                            line,
+                            line, spatium: Some(spatium),
                         }),
                     };
                 }
                 if name.as_str() == "adde" {
                     if args.len() != 2 {
-                        return Err(LinguaError { message: "'adde' duo argumenta accipit".into(), line });
+                        return Err(LinguaError { message: "'adde' duo argumenta accipit".into(), line, spatium: Some(spatium), });
                     }
                     // A bare empty list literal takes its element type from the value.
                     let empty_list_arg = matches!(&args[0].kind, ExprKind::ListLit(v) if v.is_empty());
                     if empty_list_arg {
-                        let (vt, item) = self.resolve_expr(&mut args[1], None, line)?;
+                        let (vt, item) = self.resolve_expr(&mut args[1], None)?;
                         let (_, list) = self.resolve_expr(
-                            &mut args[0], Some(Type::List(Box::new(vt.clone()))), line)?;
+                            &mut args[0], Some(Type::List(Box::new(vt.clone()))))?;
                         let ty = ir::Ty::List(Box::new(ty_of(&vt)));
                         return Ok((InferTy::Known(Type::List(Box::new(vt))), ir::Expr { ty,
                             kind: ir::ExprKind::Append { list: Box::new(list), item: Box::new(item) } }));
                     }
-                    let (lt, list) = self.resolve_expr(&mut args[0], None, line)?;
+                    let (lt, list) = self.resolve_expr(&mut args[0], None)?;
                     let elem = match lt {
                         Type::List(inner) => *inner,
                         other => return Err(LinguaError {
                             message: format!("'adde' seriem expectat, non '{}'", Self::type_name(&other)),
-                            line,
+                            line, spatium: Some(spatium),
                         }),
                     };
-                    let (vt, item) = self.resolve_expr(&mut args[1], Some(elem.clone()), line)?;
+                    let (vt, item) = self.resolve_expr(&mut args[1], Some(elem.clone()))?;
                     if vt != elem {
                         return Err(LinguaError {
                             message: format!("'adde': series '{}' elementum '{}' non accipit",
                                 Self::type_name(&elem), Self::type_name(&vt)),
-                            line,
+                            line, spatium: Some(spatium),
                         });
                     }
                     let ty = ir::Ty::List(Box::new(ty_of(&elem)));
@@ -364,8 +371,8 @@ impl Checker {
                 }
                 let (params, ret) = self.funcs.get(name)
                     .cloned()
-                    .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line })?;
-                let lowered = self.check_args(name, &params, args, line)?;
+                    .ok_or_else(|| LinguaError { message: format!("functio ignota: '{}'", name), line, spatium: Some(spatium), })?;
+                let lowered = self.check_args(name, &params, args, spatium)?;
                 // A bare call resolves in the checker's own namespace, never the root's;
                 // liss-codegen/tests/vocationes.rs is the only test that would notice.
                 let func = self.func_id(self.namespace.as_deref(), name);
@@ -374,25 +381,25 @@ impl Checker {
                     ir::Expr { ty, kind: ir::ExprKind::Call { func, args: lowered } }))
             }
             ExprKind::ListLit(elems) => {
-                let (elem, items) = self.check_list_elems(elems, None, line)?;
+                let (elem, items) = self.check_list_elems(elems, None, spatium)?;
                 let ty = ir::Ty::List(Box::new(ty_of(&elem)));
                 Ok((InferTy::Known(Type::List(Box::new(elem))),
                     ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
             }
             ExprKind::Index { base, index } => {
-                let (base_ty, base_ir) = self.resolve_expr(base, None, line)?;
+                let (base_ty, base_ir) = self.resolve_expr(base, None)?;
                 let elem = match base_ty {
                     Type::List(inner) => *inner,
                     other => return Err(LinguaError {
                         message: format!("res typi '{}' subscribi non potest (non est series)",
                             Self::type_name(&other)),
-                        line,
+                        line, spatium: Some(spatium),
                     }),
                 };
-                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int), line)?;
+                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int))?;
                 if it != Type::Int {
                     return Err(LinguaError {
-                        message: "index seriei 'ni' esse debet".into(), line });
+                        message: "index seriei 'ni' esse debet".into(), line, spatium: Some(spatium), });
                 }
                 let ty = ty_of(&elem);
                 Ok((InferTy::Known(elem), ir::Expr { ty, kind: ir::ExprKind::Index {
@@ -403,27 +410,28 @@ impl Checker {
 
     /// `expected` fixes the element type; `None` infers it from the first element.
     /// Returns the ELEMENT type, which callers wrap in `Type::List`.
-    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, line: usize)
+    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, spatium: Spatium)
         -> LResult<(Type, Vec<ir::Expr>)>
     {
+        let line = spatium.linea();
         if elems.is_empty() {
             return match expected {
                 Some(t) => Ok((t, Vec::new())),
                 None => Err(LinguaError {
-                    message: "typus elementorum seriei vacuae ignotus".into(), line }),
+                    message: "typus elementorum seriei vacuae ignotus".into(), line, spatium: Some(spatium), }),
             };
         }
         let (first_el, rest) = elems.split_first_mut().unwrap();
-        let (first, first_ir) = self.resolve_expr(first_el, expected.clone(), line)?;
+        let (first, first_ir) = self.resolve_expr(first_el, expected.clone())?;
         let mut items = vec![first_ir];
         for el in rest {
             let want = expected.clone().or_else(|| Some(first.clone()));
-            let (t, node) = self.resolve_expr(el, want, line)?;
+            let (t, node) = self.resolve_expr(el, want)?;
             if t != first {
                 return Err(LinguaError {
                     message: format!("elementa seriei discrepant: '{}' et '{}'",
                         Self::type_name(&first), Self::type_name(&t)),
-                    line,
+                    line, spatium: Some(spatium),
                 });
             }
             items.push(node);
@@ -432,9 +440,10 @@ impl Checker {
     }
 
     /// Type a list literal against an optional expected list type.
-    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>, line: usize)
+    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>)
         -> LResult<(Type, ir::Expr)>
     {
+        let spatium = e.spatium;
         let elem_expected = match &expected {
             Some(Type::List(inner)) => Some((**inner).clone()),
             _ => None,
@@ -443,20 +452,22 @@ impl Checker {
             ExprKind::ListLit(v) => v,
             _ => unreachable!("resolve_list called on non-list"),
         };
-        let (elem, items) = self.check_list_elems(elems, elem_expected, line)?;
+        let (elem, items) = self.check_list_elems(elems, elem_expected, spatium)?;
         let ty = ir::Ty::List(Box::new(ty_of(&elem)));
         Ok((Type::List(Box::new(elem)), ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
     }
 
     /// A `FloatLit` becomes the expected float type; with no float context it defaults
     /// to `nr`; demanded as a non-float type it is an error.
-    fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>, line: usize)
+    fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>)
         -> LResult<(Type, ir::Expr)>
     {
+        let spatium = e.spatium;
+        let line = spatium.linea();
         if matches!(e.kind, ExprKind::ListLit(_)) {
-            return self.resolve_list(e, expected, line);
+            return self.resolve_list(e, expected);
         }
-        match self.check_expr(e, line)? {
+        match self.check_expr(e)? {
             (InferTy::Known(t), node) => Ok((t, node)),
             (InferTy::FloatLit, mut node) => {
                 let ty = match expected {
@@ -465,7 +476,7 @@ impl Checker {
                     Some(other) => return Err(LinguaError {
                         message: format!("numerus fractus typum 'mnr' vel 'nr' requirit, non '{}'",
                             Self::type_name(&other)),
-                        line,
+                        line, spatium: Some(spatium),
                     }),
                     None => Type::Double,
                 };
@@ -479,14 +490,15 @@ impl Checker {
     #[allow(clippy::too_many_arguments)]
     fn check_binary(&self, op: BinOp, lt: InferTy, rt: InferTy,
                     left: &mut Expr, right: &mut Expr,
-                    mut lir: ir::Expr, mut rir: ir::Expr, line: usize)
+                    mut lir: ir::Expr, mut rir: ir::Expr, spatium: Spatium)
         -> LResult<(InferTy, ir::Expr)>
     {
+        let line = spatium.linea();
         use InferTy::*;
         let mismatch = || LinguaError {
             message: format!("operatio typis '{}' et '{}' non convenit",
                 Self::infer_name(&lt), Self::infer_name(&rt)),
-            line,
+            line, spatium: Some(spatium),
         };
         let res = match op {
             BinOp::Add => match (&lt, &rt) {
@@ -541,7 +553,7 @@ impl Checker {
                 (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Bool)) }
                 (Known(Type::List(_)), Known(Type::List(_))) => Err(LinguaError {
                     message: "series ordine comparari non potest (par_est/par_non_est tantum)".into(),
-                    line,
+                    line, spatium: Some(spatium),
                 }),
                 (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
                 _ => Err(mismatch()),
@@ -565,43 +577,44 @@ impl Checker {
     /// which only a `munus` declaration does.
     fn check_stmt(&mut self, s: &mut Stmt) -> LResult<Option<ir::Stmt>> {
         let line = s.line;
+        let spatium = s.spatium;
         match &mut s.kind {
             StmtKind::Let { ty, name, value, .. } => {
-                let (vt, value_ir) = self.resolve_expr(value, Some(ty.clone()), line)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(ty.clone()))?;
                 if vt != *ty {
                     return Err(LinguaError {
                         message: format!("'{}' typum '{}' expectat, sed '{}' datum est",
                             name, Self::type_name(ty), Self::type_name(&vt)),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
                 let slot = self.declare(name.clone(), ty.clone());
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Let { slot, value: value_ir } }))
             }
             StmtKind::Assign { name, value } => {
-                let (target, slot) = self.lookup_or_err(name, line)?;
-                let (vt, value_ir) = self.resolve_expr(value, Some(target.clone()), line)?;
+                let (target, slot) = self.lookup_or_err(name, spatium)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(target.clone()))?;
                 // `iam` distinguishes assigning from declaring; `Let` above keeps the
                 // original wording (D-24). This note stays outside the constructor.
                 if vt != target {
                     return Err(LinguaError {
                         message: format!("'{}' iam typum '{}' habet, sed '{}' datum est",
                             name, Self::type_name(&target), Self::type_name(&vt)),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Assign { slot, value: value_ir } }))
             }
             StmtKind::Print(e) => {
-                let (_, node) = self.resolve_expr(e, None, line)?;
+                let (_, node) = self.resolve_expr(e, None)?;
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Print(node) }))
             }
             StmtKind::ExprStmt(e) => {
-                let (_, node) = self.resolve_expr(e, None, line)?;
+                let (_, node) = self.resolve_expr(e, None)?;
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::ExprStmt(node) }))
             }
             StmtKind::If { cond, then, else_ } => {
-                let cond_ir = self.expect_bool(cond, line)?;
+                let cond_ir = self.expect_bool(cond)?;
                 let then_ir = self.check_block(then)?;
                 let else_ir = match else_ {
                     Some(eb) => Some(self.check_block(eb)?),
@@ -611,7 +624,7 @@ impl Checker {
                     cond: cond_ir, then: then_ir, else_: else_ir } }))
             }
             StmtKind::While { cond, body } => {
-                let cond_ir = self.expect_bool(cond, line)?;
+                let cond_ir = self.expect_bool(cond)?;
                 let body_ir = self.check_loop_body(body)?;
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::While { cond: cond_ir, body: body_ir } }))
             }
@@ -621,7 +634,7 @@ impl Checker {
                     // `init`, `cond` and `step` are the loop's header, not its body:
                     // an `abrumpe` there is as loose as one outside (D-26).
                     let init_ir = self.check_stmt(init)?;
-                    let cond_ir = self.expect_bool(cond, line)?;
+                    let cond_ir = self.expect_bool(cond)?;
                     let step_ir = self.check_stmt(step)?;
                     let body_ir = self.check_loop_body(body)?;
                     Ok((init_ir, cond_ir, step_ir, body_ir))
@@ -640,44 +653,44 @@ impl Checker {
             StmtKind::Func(f) => {
                 // Reaching here means a `munus` in a `dum` header, which the parser
                 // accepts and nothing can call: checked, then dropped.
-                self.check_func_decl(f, line)?;
+                self.check_func_decl(f, spatium)?;
                 Ok(None)
             }
             StmtKind::Return(e) => {
                 let want = self.current_ret.clone();
-                let (got, node) = self.resolve_expr(e, Some(want.clone()), line)?;
+                let (got, node) = self.resolve_expr(e, Some(want.clone()))?;
                 if got != want {
                     return Err(LinguaError {
                         message: format!("reditus typum '{}' expectat, sed '{}' datum est",
                             Self::type_name(&want), Self::type_name(&got)),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Return(node) }))
             }
             StmtKind::IndexAssign { name, index, value } => {
-                let (target, slot) = self.lookup_or_err(name, line)?;
+                let (target, slot) = self.lookup_or_err(name, spatium)?;
                 let elem = match target {
                     Type::List(inner) => *inner,
                     other => return Err(LinguaError {
                         message: format!("'{}' non est series (typus '{}')", name, Self::type_name(&other)),
-                        line,
+                        line, spatium: Some(spatium),
                     }),
                 };
-                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int), line)?;
+                let (it, index_ir) = self.resolve_expr(index, Some(Type::Int))?;
                 if it != Type::Int {
                     // The assigning form; conformance/errores/index-assignationis-non-ni.
                     return Err(LinguaError {
                         message: "index assignationis 'ni' esse debet".into(),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
-                let (vt, value_ir) = self.resolve_expr(value, Some(elem.clone()), line)?;
+                let (vt, value_ir) = self.resolve_expr(value, Some(elem.clone()))?;
                 if vt != elem {
                     return Err(LinguaError {
                         message: format!("elementum typum '{}' expectat, sed '{}' datum est",
                             Self::type_name(&elem), Self::type_name(&vt)),
-                        line,
+                        line, spatium: Some(spatium),
                     });
                 }
                 Ok(Some(ir::Stmt { line, kind: ir::StmtKind::IndexAssign {
@@ -685,10 +698,10 @@ impl Checker {
             }
             // D-07
             StmtKind::Break if self.loop_depth == 0 => {
-                Err(LinguaError { message: "'abrumpe' extra iterationem".into(), line })
+                Err(LinguaError { message: "'abrumpe' extra iterationem".into(), line, spatium: Some(spatium), })
             }
             StmtKind::Continue if self.loop_depth == 0 => {
-                Err(LinguaError { message: "'continua' extra iterationem".into(), line })
+                Err(LinguaError { message: "'continua' extra iterationem".into(), line, spatium: Some(spatium), })
             }
             StmtKind::Break => Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Break })),
             StmtKind::Continue => Ok(Some(ir::Stmt { line, kind: ir::StmtKind::Continue })),
@@ -697,7 +710,8 @@ impl Checker {
 
     /// The scope it pushes is the parameter frame, so the body block's `declares`
     /// opens with slots `0..params` and every `redde` frees them too (§7.3.4).
-    fn check_func_decl(&mut self, f: &mut FuncDecl, line: usize) -> LResult<ir::Func> {
+    fn check_func_decl(&mut self, f: &mut FuncDecl, spatium: Spatium) -> LResult<ir::Func> {
+        let line = spatium.linea();
         self.push_scope();
         // Slots are numbered per function, so a fresh table; restored below.
         let outer_slots = std::mem::take(&mut self.slot_types);
@@ -719,7 +733,7 @@ impl Checker {
         if !is_entry && !returns {
             return Err(LinguaError {
                 message: format!("munus '{}' non in omni via reddit", f.name),
-                line,
+                line, spatium: Some(spatium),
             });
         }
         if !returns {
@@ -755,7 +769,7 @@ impl Checker {
             if let StmtKind::Func(f) = &s.kind {
                 return Err(LinguaError {
                     message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
-                    line: s.line,
+                    line: s.line, spatium: Some(s.spatium),
                 });
             }
             stmts.extend(self.check_stmt(s)?);
@@ -763,12 +777,14 @@ impl Checker {
         Ok(stmts)
     }
 
-    fn expect_bool(&self, cond: &mut Expr, line: usize) -> LResult<ir::Expr> {
-        let (t, node) = self.check_expr(cond, line)?;
+    fn expect_bool(&self, cond: &mut Expr) -> LResult<ir::Expr> {
+        let spatium = cond.spatium;
+        let line = spatium.linea();
+        let (t, node) = self.check_expr(cond)?;
         if t == InferTy::Known(Type::Bool) {
             Ok(node)
         } else {
-            Err(LinguaError { message: "condicio 'veritas' esse debet".into(), line })
+            Err(LinguaError { message: "condicio 'veritas' esse debet".into(), line, spatium: Some(spatium), })
         }
     }
 }
@@ -835,10 +851,11 @@ fn resolve_pair(ast: &mut Expr, node: &mut ir::Expr, ty: Type) {
 }
 
 /// The names the language keeps for its own builtins. One copy, not two (D-24).
-fn reserved_name_error(name: &str, line: usize) -> Option<LinguaError> {
+fn reserved_name_error(name: &str, spatium: Spatium) -> Option<LinguaError> {
+        let line = spatium.linea();
     matches!(name, "longitudo" | "adde").then(|| LinguaError {
         message: format!("nomen '{}' reservatum est", name),
-        line,
+        line, spatium: Some(spatium),
     })
 }
 
@@ -849,13 +866,13 @@ fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramErr
     for file in files {
         for s in &file.ast.funcs {
             let StmtKind::Func(f) = &s.kind else { continue };
-            if let Some(e) = reserved_name_error(&f.name, s.line) {
-                return Err(ProgramError::in_file(&file.path, e));
+            if let Some(e) = reserved_name_error(&f.name, f.name_span) {
+                return Err(ProgramError::in_file(&file.path, &file.src, e));
             }
             if sigs.contains_key(&f.name) {
-                return Err(ProgramError::in_file(&file.path, LinguaError {
+                return Err(ProgramError::in_file(&file.path, &file.src, LinguaError {
                     message: format!("functio '{}' bis definita", f.name),
-                    line: s.line,
+                    line: s.line, spatium: Some(s.spatium),
                 }));
             }
             let ptypes = f.params.iter().map(|(t, _, _)| t.clone()).collect();
@@ -897,9 +914,9 @@ fn check_file(
 ) -> Result<(), ProgramError> {
     for imp in &file.ast.imports {
         if !pkg_sigs.contains_key(&imp.package) {
-            return Err(ProgramError::in_file(&file.path, LinguaError {
+            return Err(ProgramError::in_file(&file.path, &file.src, LinguaError {
                 message: format!("fasciculus '{}' non inventus", imp.package),
-                line: imp.line,
+                line: imp.line, spatium: None,
             }));
         }
     }
@@ -910,7 +927,6 @@ fn check_file(
     c.imports = file.ast.imports.iter().map(|i| i.package.clone()).collect();
     c.func_ids = func_ids.clone();
     for s in file.ast.funcs.iter_mut() {
-        let line = s.line;
         // Only `munus` declarations reach here, and `parse_file` is what guarantees it.
         let StmtKind::Func(f) = &mut s.kind else { continue };
         debug_assert_eq!(
@@ -918,7 +934,7 @@ fn check_file(
             Some(&ir::FuncId(out.len() as u32)),
             "lowering order must be the order assign_func_ids numbered",
         );
-        let lowered = c.check_func_decl(f, line).map_err(|e| ProgramError::in_file(&file.path, e))?;
+        let lowered = c.check_func_decl(f, s.spatium).map_err(|e| ProgramError::in_file(&file.path, &file.src, e))?;
         out.push(lowered);
     }
     Ok(())
@@ -948,9 +964,9 @@ pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, Pr
                     for s in &file.ast.funcs {
                         if let StmtKind::Func(f) = &s.kind {
                             if f.name == "initium" {
-                                return Err(ProgramError::in_file(&file.path, LinguaError {
+                                return Err(ProgramError::in_file(&file.path, &file.src, LinguaError {
                                     message: "munus 'initium' nihil capere et 'ni' reddere debet".into(),
-                                    line: s.line,
+                                    line: s.line, spatium: Some(s.spatium),
                                 }));
                             }
                         }
@@ -992,7 +1008,7 @@ mod tests {
     fn check_totum(src: &str) -> LResult<()> {
         let mut p = pprog(&[("fons.liss", src)], &[]);
         check_program(&mut p)
-            .map_err(|e| LinguaError { message: e.message, line: e.line.unwrap_or(1) })
+            .map_err(|e| LinguaError { message: e.message, line: e.line.unwrap_or(1), spatium: None, })
     }
 
     #[test]

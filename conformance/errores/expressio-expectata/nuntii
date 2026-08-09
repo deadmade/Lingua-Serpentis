@@ -1,2 +1,5 @@
 erratum: expressio expectata
   in 'principale.liss', linea II
+    |
+ II |   ni x = ;
+    |          ^

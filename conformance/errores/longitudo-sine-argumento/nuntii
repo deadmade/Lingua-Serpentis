@@ -1,2 +1,5 @@
 erratum: 'longitudo' unum argumentum accipit
   in 'principale.liss', linea II
+    |
+ II |   scribe(longitudo());
+    |          ^^^^^^^^^^^

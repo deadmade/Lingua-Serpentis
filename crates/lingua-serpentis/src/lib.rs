@@ -21,8 +21,8 @@ use program::{Program, SourceFile};
 pub use error::{ProgramError, Warning};
 
 fn parse_one(f: SourceFile) -> Result<ParsedFile, ProgramError> {
-    let tokens = lexer::tokenize(&f.src).map_err(|e| ProgramError::in_file(&f.path, e))?;
-    let ast = parser::parse_file(&tokens).map_err(|e| ProgramError::in_file(&f.path, e))?;
+    let tokens = lexer::tokenize(&f.src).map_err(|e| ProgramError::in_file(&f.path, &f.src, e))?;
+    let ast = parser::parse_file(&tokens).map_err(|e| ProgramError::in_file(&f.path, &f.src, e))?;
     Ok(ParsedFile { path: f.path, src: f.src, ast })
 }
 

@@ -1,2 +1,5 @@
 erratum: 'continua' extra iterationem
   in 'principale.liss', linea III
+     |
+ III |   continua;
+     |   ^^^^^^^^^

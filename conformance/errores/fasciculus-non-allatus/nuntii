@@ -1,2 +1,5 @@
 erratum: fasciculus 'mathematica' non allatus est
   in 'principale.liss', linea III
+     |
+ III |   redde mathematica.summa(°I, °II);
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^

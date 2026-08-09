@@ -1,2 +1,5 @@
 erratum: functio ignota: 'nusquam'
   in 'principale.liss', linea II
+    |
+ II |   scribe(nusquam());
+    |          ^^^^^^^^^

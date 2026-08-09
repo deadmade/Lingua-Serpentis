@@ -1,2 +1,5 @@
 erratum: functio 'duplum' bis definita
   in 'principale.liss', linea II
+    |
+ II | munus duplum capit (ni a) reddit ni { redde a + a; }
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,2 +1,5 @@
 erratum: reditus typum 'ni' expectat, sed 'voc' datum est
   in 'mathematica/summa.liss', linea II
+    |
+ II | munus summa capit (ni a, ni b) reddit ni { redde "salve"; }
+    |                                            ^^^^^^^^^^^^^^

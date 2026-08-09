@@ -1,2 +1,5 @@
 erratum: numerus fractus typum 'mnr' vel 'nr' requirit, non 'ni'
   in 'principale.liss', linea II
+    |
+ II |   ni x = °I:I/II;
+    |          ^^^^^^^

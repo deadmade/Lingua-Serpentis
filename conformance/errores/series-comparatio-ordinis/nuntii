@@ -1,2 +1,5 @@
 erratum: series ordine comparari non potest (par_est/par_non_est tantum)
   in 'principale.liss', linea II
+    |
+ II |   veritas b = [°I] maior_est [°II];
+    |               ^^^^^^^^^^^^^^^^^^^^

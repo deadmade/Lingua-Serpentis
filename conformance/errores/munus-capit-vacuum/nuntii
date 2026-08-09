@@ -1,2 +1,5 @@
 erratum: munus sine parametris 'capit' omittat
   in 'principale.liss', linea IV
+    |
+ IV | munus computa capit () reddit ni {
+    |                      ^

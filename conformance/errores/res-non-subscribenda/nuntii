@@ -1,2 +1,5 @@
 erratum: res typi 'ni' subscribi non potest (non est series)
   in 'principale.liss', linea III
+     |
+ III |   scribe(x[°I]);
+     |          ^^^^^

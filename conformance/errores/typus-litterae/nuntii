@@ -1,2 +1,5 @@
 erratum: 'c' typum 'lit' expectat, sed 'voc' datum est
   in 'principale.liss', linea II
+    |
+ II |   lit c = "ab";
+    |   ^^^^^^^^^^^^^

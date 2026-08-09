@@ -1,2 +1,5 @@
 erratum: typus elementorum seriei vacuae ignotus
   in 'principale.liss', linea II
+    |
+ II |   scribe(longitudo([]));
+    |                    ^^

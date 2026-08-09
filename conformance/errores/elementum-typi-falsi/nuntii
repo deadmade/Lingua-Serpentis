@@ -5,3 +5,6 @@ monitum: nomen 'xs' fortasse non Latinum est
     |            ^^
 erratum: elementum typum 'ni' expectat, sed 'voc' datum est
   in 'principale.liss', linea III
+     |
+ III |   xs[°I] = "a";
+     |   ^^^^^^^^^^^^^

@@ -6,6 +6,9 @@ use crate::pictura::{depinge, Genus};
 pub struct LinguaError {
     pub message: String,
     pub line: usize,
+    /// Where the diagnostic points. `None` where nothing in the source can be
+    /// underlined — a structural complaint about a program rather than a place.
+    pub spatium: Option<Spatium>,
 }
 
 pub type LResult<T> = Result<T, LinguaError>;
@@ -61,14 +64,16 @@ impl ProgramError {
             fragmentum: None,
         }
     }
-    pub fn in_file(file: &str, e: LinguaError) -> Self {
+    /// `src` is the file's text, so the line the error points at is taken here —
+    /// the last place that has both, since `strip` may clear the name downstream.
+    pub fn in_file(file: &str, src: &str, e: LinguaError) -> Self {
         ProgramError {
             file: Some(file.to_string()),
             line: Some(e.line),
             message: e.message,
             stdout: String::new(),
             warnings: Vec::new(),
-            fragmentum: None,
+            fragmentum: e.spatium.and_then(|s| crate::fragmentum::extract(src, s)),
         }
     }
 }
@@ -114,7 +119,7 @@ mod tests {
 
     #[test]
     fn formats_with_line_and_message() {
-        let e = LinguaError { message: "res mala".into(), line: 5 };
+        let e = LinguaError { message: "res mala".into(), line: 5, spatium: None, };
         assert_eq!(e.to_string(), "erratum: res mala\n  in linea V");
     }
 
@@ -128,7 +133,7 @@ mod tests {
             both.to_string(),
             "erratum: res mala\n  in 'mathematica/summa.liss', linea V"
         );
-        let line_only: ProgramError = LinguaError { message: "res mala".into(), line: 5 }.into();
+        let line_only: ProgramError = LinguaError { message: "res mala".into(), line: 5, spatium: None, }.into();
         assert_eq!(line_only.to_string(), "erratum: res mala\n  in linea V");
         // Structural: no file, no line, and so no location row at all.
         let structural = ProgramError::structural("munus 'initium' in programmate non inventum");
@@ -140,7 +145,7 @@ mod tests {
 
     #[test]
     fn in_file_attaches_the_path() {
-        let e = ProgramError::in_file("summa.liss", LinguaError { message: "x".into(), line: 3 });
+        let e = ProgramError::in_file("summa.liss", "", LinguaError { message: "x".into(), line: 3, spatium: None, });
         assert_eq!(e.file.as_deref(), Some("summa.liss"));
         assert_eq!(e.line, Some(3));
     }

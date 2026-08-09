@@ -41,8 +41,14 @@ impl<'a> Parser<'a> {
             Err(self.err(&format!("expectatum: '{}'", kind.name())))
         }
     }
+    /// Every parser diagnostic comes through here, so the offending token's span
+    /// reaches all of them at once.
     fn err(&self, msg: &str) -> LinguaError {
-        LinguaError { message: msg.to_string(), line: self.line() }
+        LinguaError {
+            message: msg.to_string(),
+            line: self.line(),
+            spatium: self.toks.get(self.pos).or_else(|| self.toks.last()).map(|t| t.spatium),
+        }
     }
 
     /// One level deeper, refusing rather than overflowing. `expr`, `unary` and
@@ -55,6 +61,12 @@ impl<'a> Parser<'a> {
         let r = f(self);
         self.depth -= 1;
         r
+    }
+
+    /// The span of the token about to be read, which is where a production begins.
+    fn spatium_hic(&self) -> Spatium {
+        self.toks.get(self.pos).or_else(|| self.toks.last()).map(|t| t.spatium)
+            .unwrap_or(Spatium::novum(0, 0, 0))
     }
 
     /// The span of the token just consumed, which is where a production ends.
@@ -273,6 +285,7 @@ impl<'a> Parser<'a> {
 
     fn if_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
         let cond = self.expr()?;
@@ -288,21 +301,23 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Stmt { kind: StmtKind::If { cond, then, else_ }, line })
+        Ok(Stmt { kind: StmtKind::If { cond, then, else_ }, line, spatium: initium.ad(self.ultimum()) })
     }
 
     fn while_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
         let cond = self.expr()?;
         self.eat(&TokenKind::RParen)?;
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::While { cond, body }, line })
+        Ok(Stmt { kind: StmtKind::While { cond, body }, line, spatium: initium.ad(self.ultimum()) })
     }
 
     fn for_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
         let init = Box::new(self.statement()?); // consumes its own ';'
@@ -311,19 +326,21 @@ impl<'a> Parser<'a> {
         let step = Box::new(self.assign_no_semi()?);
         self.eat(&TokenKind::RParen)?;
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, line })
+        Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, line, spatium: initium.ad(self.ultimum()) })
     }
 
     fn assign_no_semi(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         let (name, _) = self.ident()?;
         self.eat(&TokenKind::Assign)?;
         let value = self.expr()?;
-        Ok(Stmt { kind: StmtKind::Assign { name, value }, line })
+        Ok(Stmt { kind: StmtKind::Assign { name, value }, line, spatium: initium.ad(self.ultimum()) })
     }
 
     fn func_stmt(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         self.advance();
 
         // Old inline form `munus ni nomen(...)`, caught here for real advice.
@@ -371,11 +388,13 @@ impl<'a> Parser<'a> {
         Ok(Stmt {
             kind: StmtKind::Func(FuncDecl { name, name_span, params, ret, body }),
             line,
+            spatium: initium.ad(self.ultimum()),
         })
     }
 
     fn statement(&mut self) -> LResult<Stmt> {
         let line = self.line();
+        let initium = self.spatium_hic();
         match self.peek() {
             Some(TokenKind::If) => return self.if_stmt(),
             Some(TokenKind::While) => return self.while_stmt(),
@@ -385,17 +404,17 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let e = self.expr()?;
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Return(e), line });
+                return Ok(Stmt { kind: StmtKind::Return(e), line, spatium: initium.ad(self.ultimum()) });
             }
             Some(TokenKind::Break) => {
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Break, line });
+                return Ok(Stmt { kind: StmtKind::Break, line, spatium: initium.ad(self.ultimum()) });
             }
             Some(TokenKind::Continue) => {
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Continue, line });
+                return Ok(Stmt { kind: StmtKind::Continue, line, spatium: initium.ad(self.ultimum()) });
             }
             _ => {}
         }
@@ -404,7 +423,7 @@ impl<'a> Parser<'a> {
             self.eat(&TokenKind::Assign)?;
             let value = self.expr()?;
             self.eat(&TokenKind::Semicolon)?;
-            return Ok(Stmt { kind: StmtKind::Let { ty, name, name_span, value }, line });
+            return Ok(Stmt { kind: StmtKind::Let { ty, name, name_span, value }, line, spatium: initium.ad(self.ultimum()) });
         }
         match self.peek() {
             Some(TokenKind::Print) => {
@@ -413,7 +432,7 @@ impl<'a> Parser<'a> {
                 let e = self.expr()?;
                 self.eat(&TokenKind::RParen)?;
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::Print(e), line })
+                Ok(Stmt { kind: StmtKind::Print(e), line, spatium: initium.ad(self.ultimum()) })
             }
             // The lookahead is what distinguishes an assignment from a call.
             Some(TokenKind::Ident(_))
@@ -423,7 +442,7 @@ impl<'a> Parser<'a> {
                 self.eat(&TokenKind::Assign)?;
                 let value = self.expr()?;
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::Assign { name, value }, line })
+                Ok(Stmt { kind: StmtKind::Assign { name, value }, line, spatium: initium.ad(self.ultimum()) })
             }
             _ => {
                 let e = self.expr()?;
@@ -439,13 +458,13 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let value = self.expr()?;
                     self.eat(&TokenKind::Semicolon)?;
-                    return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line });
+                    return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line, spatium: initium.ad(self.ultimum()) });
                 }
                 if matches!(e.kind, ExprKind::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
                     return Err(self.err("munus ante definitionem expectatum"));
                 }
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::ExprStmt(e), line })
+                Ok(Stmt { kind: StmtKind::ExprStmt(e), line, spatium: initium.ad(self.ultimum()) })
             }
         }
     }
@@ -463,7 +482,7 @@ pub fn parse_file(tokens: &[Token]) -> LResult<FileAst> {
         if imports.iter().any(|i| i.package == package) {
             return Err(LinguaError {
                 message: format!("fasciculus '{}' bis allatus", package),
-                line,
+                line, spatium: None,
             });
         }
         imports.push(FileImport { package, line });

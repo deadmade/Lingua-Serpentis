@@ -1,2 +1,5 @@
 erratum: 'affer' ante omnia munera ponendum
   in 'principale.liss', linea IV
+    |
+ IV | affer mathematica;
+    | ^^^^^

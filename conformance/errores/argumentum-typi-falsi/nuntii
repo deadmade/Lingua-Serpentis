@@ -1,2 +1,5 @@
 erratum: argumentum typum 'ni' expectat, sed 'voc' datum est
   in 'principale.liss', linea II
+    |
+ II |   scribe(computa("a"));
+    |          ^^^^^^^^^^^^

@@ -1,2 +1,5 @@
 erratum: '}' expectatum
   in 'principale.liss', linea II
+    |
+ II |   scribe(°I);
+    |             ^

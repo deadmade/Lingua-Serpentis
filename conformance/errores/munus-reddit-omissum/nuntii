@@ -1,2 +1,5 @@
 erratum: 'reddit' et typus reditus expectati
   in 'principale.liss', linea IV
+    |
+ IV | munus computa {
+    |               ^
