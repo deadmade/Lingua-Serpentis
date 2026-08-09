@@ -3,7 +3,9 @@ mod support;
 
 use std::ffi::OsStr;
 use std::time::Duration;
-use support::diag::{judge, parse_diagnostic, Diagnostic, Verdict, RECORDED_RULES};
+use support::diag::{
+    judge, parse_diagnostic, parse_stderr, Diagnostic, Genus, Verdict, RECORDED_RULES,
+};
 use support::proc::{run_binary, temp_dir, Outcome};
 
 /// The wide deadline: the fuzzer's, and the one curated case whose cost is genuinely codegen's.
@@ -31,6 +33,118 @@ fn the_diagnostic_grammar_parses_all_three_shapes() {
     );
     assert_eq!(parse_diagnostic("Monitum in linea 2: nomen"), None);
     assert_eq!(parse_diagnostic("thread 'main' panicked"), None);
+}
+
+/// The block grammar, before anything emits it. Nothing else would catch a parser
+/// that quietly returned no diagnostics and no residue — which reads as "clean" to
+/// every rule `judge` has.
+#[test]
+fn the_block_grammar_parses_a_header_a_location_and_a_snippet() {
+    let stderr = "\
+erratum: variabilis ignota: 'y'
+  in 'principale.liss', linea III
+     |
+ III | ni x = y + °I;
+     |        ^
+";
+    let (d, reliquum) = parse_stderr(stderr);
+    assert!(reliquum.is_empty(), "framing must not be residue: {reliquum:?}");
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].genus, Genus::Erratum);
+    assert_eq!(d[0].file.as_deref(), Some("principale.liss"));
+    assert_eq!(d[0].line, Some(3));
+    assert_eq!(d[0].message, "variabilis ignota: 'y'");
+    let p = d[0].pictura.as_ref().expect("a snippet");
+    assert_eq!(p.textus, "ni x = y + °I;");
+    assert_eq!(p.caret, 7);
+    assert_eq!(p.latitudo, 1);
+    assert_eq!(p.textus.chars().nth(p.caret), Some('y'));
+}
+
+#[test]
+fn the_block_grammar_parses_the_shapes_that_carry_less() {
+    let (d, reliquum) = parse_stderr(
+        "erratum: munus 'initium' in programmate non inventum\nmonitum: nomen fasciculi 'foobar' fortasse non Latinum est\n",
+    );
+    assert!(reliquum.is_empty());
+    assert_eq!(d.len(), 2);
+    assert_eq!(d[0].genus, Genus::Erratum);
+    assert_eq!((d[0].file.as_deref(), d[0].line), (None, None));
+    assert_eq!(d[1].genus, Genus::Monitum);
+    assert!(d[1].pictura.is_none());
+
+    let (d, _) = parse_stderr("erratum: chorda non clausa\n  in linea IV\n");
+    assert_eq!((d[0].file.as_deref(), d[0].line), (None, Some(4)));
+}
+
+#[test]
+fn three_blocks_in_a_row_are_three_diagnostics() {
+    // `monita/ordo-trans-scidas`, in the new grammar: nothing separates the blocks
+    // but the column-0 severity word, which is what the parser keys on.
+    let (d, reliquum) = parse_stderr(
+        "monitum: nomen fasciculi 'foobar' fortasse non Latinum est
+monitum: nomen 'result' fortasse non Latinum est
+  in 'principale.liss', linea III
+     |
+ III | ni result = °I;
+     |    ^^^^^^
+monitum: nomen 'answer' fortasse non Latinum est
+  in 'foobar/x.liss', linea II
+",
+    );
+    assert!(reliquum.is_empty(), "{reliquum:?}");
+    assert_eq!(d.len(), 3);
+    assert_eq!(d[1].pictura.as_ref().unwrap().latitudo, 6);
+    assert_eq!(d[2].line, Some(2));
+}
+
+#[test]
+fn a_line_belonging_to_no_block_is_residue_and_not_silence() {
+    let (d, reliquum) = parse_stderr("thread 'main' panicked at src/lib.rs:1\n");
+    assert!(d.is_empty());
+    assert_eq!(reliquum, vec!["thread 'main' panicked at src/lib.rs:1"]);
+}
+
+#[test]
+fn a_caret_past_the_end_of_its_line_is_a_violation() {
+    // The rule exists because nothing else notices a renderer counting columns in
+    // bytes: `°` is two bytes and one column, so a byte-counted caret drifts right.
+    let outcome = Outcome::Exited {
+        code: 1,
+        stdout: String::new(),
+        stderr: "\
+erratum: res mala
+  in 'fons.liss', linea I
+   |
+ I | °I;
+   |      ^
+"
+        .to_string(),
+    };
+    match judge(&outcome, &[("fons.liss".to_string(), "°I;".to_string())]) {
+        Verdict::Violation { rule: "caret aligns", .. } => {}
+        other => panic!("a caret past the line must be a violation, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_arabic_line_number_in_the_location_row_is_a_violation() {
+    let outcome = Outcome::Exited {
+        code: 1,
+        stdout: String::new(),
+        stderr: "erratum: res mala\n  in 'fons.liss', linea 3\n".to_string(),
+    };
+    match judge(&outcome, &[("fons.liss".to_string(), "a\nb\nc\n".to_string())]) {
+        // `3` is not a numeral, so it never becomes a line, and the row is framing
+        // no rule recognises — which is the residue finding, not a silent pass.
+        Verdict::Violation { rule, .. } => {
+            assert!(
+                rule == "numeral round-trips" || rule == "diagnostic grammar",
+                "got {rule:?}"
+            );
+        }
+        other => panic!("an Arabic linea must be a violation, got {other:?}"),
+    }
 }
 
 #[test]

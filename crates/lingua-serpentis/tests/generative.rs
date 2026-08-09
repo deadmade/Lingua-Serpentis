@@ -7,7 +7,7 @@ use proptest::strategy::ValueTree;
 use proptest::test_runner::TestRunner;
 use std::ffi::OsStr;
 use std::time::Duration;
-use support::diag::{judge, parse_diagnostic, Verdict, RECORDED_RULES};
+use support::diag::{judge, parse_stderr, Genus, Verdict, RECORDED_RULES};
 use support::proc::{run_binary, temp_dir, Outcome};
 
 const T: Duration = Duration::from_secs(10);
@@ -206,11 +206,14 @@ fn generation_reaches_the_runtime() {
             Outcome::Exited { code: 0, .. } => true,
             Outcome::Exited { code: 1, stderr, .. } => {
                 // Verbatim: `contains` would let a parse error that merely mentioned division count.
-                let msg = stderr
-                    .lines()
-                    .last()
-                    .and_then(parse_diagnostic)
-                    .map(|d| d.message().to_string());
+                // The last *block*, not the last line — under the block grammar the last
+                // line of a failing run is a caret row.
+                let msg = parse_stderr(stderr)
+                    .0
+                    .iter()
+                    .rev()
+                    .find(|d| d.genus == Genus::Erratum)
+                    .map(|d| d.message.clone());
                 matches!(msg.as_deref(), Some("divisio per nullum") | Some("modulus per nullum"))
             }
             _ => false,
