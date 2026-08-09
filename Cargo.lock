@@ -964,7 +964,11 @@ dependencies = [
  "liss-codegen",
  "liss-ir",
  "liss-runtime",
+ "proc-macro2",
  "proptest",
+ "quote",
+ "syn 2.0.119",
+ "tempfile",
 ]
 
 [[package]]
@@ -1021,6 +1025,7 @@ dependencies = [
  "liss-runtime",
  "object 0.40.0",
  "target-lexicon",
+ "tempfile",
 ]
 
 [[package]]
