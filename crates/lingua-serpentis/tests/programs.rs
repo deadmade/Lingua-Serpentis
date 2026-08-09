@@ -1,52 +1,18 @@
 //! Whole programs, compiled and run: the pipeline end to end.
-//!
-//! # These are the same tests, relocated rather than rewritten
-//!
-//! Every case here used to call `lingua_serpentis::run`, `run_with_warnings` or
-//! `run_program_with_warnings` — the library entry points the interpreter sat
-//! behind. Spec §3.1 removes the interpreter and Task 19 removes those entry
-//! points with it, so what these tests said ("run this program, check what it
-//! printed") now has exactly one spelling: `liss run`.
-//!
-//! **Not one expectation changed in the move.** Every string below is the one
-//! the interpreted pipeline was asserted against, and each reproduces byte for
-//! byte through the compiler. Where a test asserted something structural about
-//! a `ProgramError` or a `Vec<Warning>` — `err.line == 1`, `warnings.len() == 1`
-//! — the assertion is now made against the *rendered* form of the same fact,
-//! because a process has two streams and no return type. `lingua_serpentis::
-//! render` is what draws it, and it is unchanged: an error is
-//! `Error in linea N: …` on stderr with exit 1, a warning is `Monitum …` on
-//! stderr before it.
-//!
-//! That rendering is not this file's opinion. It is what `cli.rs` and the whole
-//! `conformance/` corpus already assert, and Task 17's differential proved the
-//! compiled path reproduces it for all 113 fixtures before any of this moved.
 
 mod support;
 
 use lingua_serpentis::Rendered;
 use support::proc::temp_dir;
 
-/// Run one **single-source** program: written to a `.liss` file and handed to
-/// `liss run`, which is the degenerate case of §4.1 — same rules, but errors
-/// and warnings keep the file-less phrasing (`Error in linea N:`).
-///
-/// The file is named `fons.liss` because that is the synthetic name the
-/// single-source path has always used, and because the name is then stripped
-/// from every diagnostic anyway.
+/// One single-source program; its diagnostics keep the file-less phrasing (`Error in linea N:`).
 fn curre(fons: &str) -> Rendered {
     let d = temp_dir("liss-programs");
     let p = d.write("fons.liss", fons);
     support::curre(&p).unwrap_or_else(|e| panic!("{e}"))
 }
 
-/// Run a **multi-file** program given as (program-relative path, source) pairs
-/// — the shape `run_program_with_warnings` took, written to disk so that
-/// `liss run` can be handed the folder.
-///
-/// The folder rule is unchanged and is what makes the two spellings equivalent:
-/// `"principale.liss"` is a root file and `"mathematica/summa.liss"` is in the
-/// `mathematica` package, exactly as `program::assemble` read them.
+/// A multi-file program given as (program-relative path, source) pairs.
 fn curre_fasciculos(scidae: &[(&str, &str)]) -> Rendered {
     let d = temp_dir("liss-programs");
     for (via, fons) in scidae {
@@ -55,35 +21,19 @@ fn curre_fasciculos(scidae: &[(&str, &str)]) -> Rendered {
     support::curre(d.path()).unwrap_or_else(|e| panic!("{e}"))
 }
 
-/// What a program printed, having required it to succeed in silence.
-///
-/// Most of this file asserted `run(src).unwrap()`, which discarded the exit
-/// status *and* the warnings. Both are checked here rather than dropped: a
-/// program that printed the right thing and then exited 3, or drew a Latinity
-/// warning nobody expected, was passing before and should not be.
-///
-/// Two sources here do legitimately warn, and they say so through
-/// [`emissio_cum_monitis`] rather than by weakening this.
+/// What a program printed, having required exit 0 and an empty stderr.
 fn emissio(r: &Rendered) -> &str {
     emissio_cum_monitis(r, "")
 }
 
-/// [`emissio`] for a program that succeeds but draws Latinity warnings.
-///
-/// **These are not new expectations and not a divergence.** `latinity::
-/// lint_program` runs in the front end, which both backends shared, so the
-/// interpreted pipeline produced exactly these lines too — the old assertions
-/// simply threw them away, because `run` returned only the output. They are
-/// written down here because the move made them visible, and because the corpus
-/// already records the same bytes: `conformance/currunt/exemplum-praecisio`'s
-/// blessed `nuntii`, recorded from the interpreter, is the two lines below.
+/// The expected lines are the same bytes `conformance/currunt/exemplum-praecisio` blesses.
 fn emissio_cum_monitis<'a>(r: &'a Rendered, monita: &str) -> &'a str {
     assert_eq!(r.code, 0, "expected a clean exit; stderr: {:?}", r.stderr);
     assert_eq!(r.stderr, monita, "the diagnostics are not the expected ones");
     &r.stdout
 }
 
-/// The diagnostic of a program that must fail: exit 1, nothing on stdout.
+/// Exit 1, nothing on stdout.
 fn erratum(r: &Rendered) -> &str {
     assert_eq!(r.code, 1, "expected a failure; stdout {:?}, stderr {:?}", r.stdout, r.stderr);
     assert_eq!(r.stdout, "", "a failing program printed something unexpected");
@@ -116,8 +66,6 @@ fn calc_example_still_runs() {
 
 #[test]
 fn praecisio_example_runs() {
-    // mnr grains at the uncia (1/12), nr at the scripulum (1/288); an
-    // unconstrained fractional literal defaults to nr.
     let src = include_str!("../../../examples/praecisio.liss");
     let r = curre(src);
     assert_eq!(
@@ -133,9 +81,6 @@ fn praecisio_example_runs() {
 #[test]
 fn type_error_reports_latin_and_line() {
     let src = "munus initium reddit ni { ni x = \"salve\"; redde nullus; }";
-    // Was `err.line == 1` plus a `starts_with` on the rendered error. The line
-    // number is now visible only in the rendering, which is where a user reads
-    // it, so the two assertions have become one.
     assert!(
         erratum(&curre(src)).starts_with("Error in linea 1:"),
         "got: {:?}",
@@ -161,11 +106,8 @@ fn char_and_text_comparison_end_to_end() {
 fn non_latin_name_warns_but_program_still_runs() {
     let src = "munus initium reddit ni { ni result = °V; scribe(result); redde nullus; }";
     let r = curre(src);
-    // The warning must not change the program's behaviour.
     assert_eq!(r.stdout, "V\n");
     assert_eq!(r.code, 0);
-    // Was: one warning, at line 1, naming `result`. Rendered, that is one line,
-    // and asserting it whole is strictly more than the three parts were.
     assert_eq!(r.stderr, "Monitum in linea 1: nomen 'result' fortasse non Latinum est\n");
 }
 
@@ -177,14 +119,7 @@ fn latin_program_produces_no_warnings() {
 
 #[test]
 fn type_errors_halt_but_their_warnings_survive() {
-    // A type error still halts the pipeline. What changed with D-09 is that
-    // the Latinity warnings computed along the way are no longer thrown away
-    // with it: a program with two problems reports both.
-    //
-    // The old name and comment here claimed "no warnings are produced at all",
-    // which the register read as this test pinning D-09's behaviour as
-    // correct. It never did — the assertion was only `is_err()`, and it passes
-    // unchanged. It was the prose that was wrong.
+    // D-09
     let r = curre("munus initium reddit ni { ni x = \"salve\"; redde nullus; }");
     assert_eq!(r.code, 1);
 
@@ -207,21 +142,18 @@ fn type_errors_halt_but_their_warnings_survive() {
 
 #[test]
 fn mnr_truncates_below_its_uncia_grain() {
-    // 1/24 is below mnr's uncia grid, so it is dropped — only the whole prints.
     let r = curre("munus initium reddit ni { mnr x = °I:I/XXIV; scribe(x); redde nullus; }");
     assert_eq!(emissio(&r), "I\n");
 }
 
 #[test]
 fn nr_keeps_the_sub_uncia_part() {
-    // nr's scripulum grid holds 1/24 exactly: it is a semuncia.
     let r = curre("munus initium reddit ni { nr y = °I:I/XXIV; scribe(y); redde nullus; }");
     assert_eq!(emissio(&r), "I et semuncia\n");
 }
 
 #[test]
 fn exact_third_prints_same_under_both() {
-    // 1/3 = 4/12 is exact on both grids, so mnr and nr agree here.
     let m = curre("munus initium reddit ni { mnr x = °I:I/III; scribe(x); redde nullus; }");
     assert_eq!(emissio(&m), "I et triens\n");
     let n = curre("munus initium reddit ni { nr y = °I:I/III; scribe(y); redde nullus; }");
@@ -254,14 +186,12 @@ fn nr_arithmetic_and_comparison_run() {
 
 #[test]
 fn unconstrained_fraction_defaults_to_nr() {
-    // A bare fractional literal in an untyped sink defaults to nr.
     let r = curre("munus initium reddit ni { scribe(°I:I/III); redde nullus; }");
     assert_eq!(emissio(&r), "I et triens\n");
 }
 
 #[test]
 fn fraction_divide_by_zero_errors() {
-    // (½) / (½ − ½): a runtime zero divisor is an error, not inf.
     let r = curre(
         "munus initium reddit ni { nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z); redde nullus; }",
     );
@@ -276,8 +206,6 @@ fn fraction_modulo_is_a_type_error() {
 
 #[test]
 fn negative_fractions_print_signed() {
-    // Unary minus on a fraction: mnr drops the 1/24 (truncation toward zero) and
-    // keeps the sign; nr keeps it as a semuncia. -(1 + 1/24).
     let m = curre("munus initium reddit ni { mnr n = -°I:I/XXIV; scribe(n); redde nullus; }");
     assert_eq!(emissio(&m), "-I\n");
     let n = curre("munus initium reddit ni { nr n = -°I:I/XXIV; scribe(n); redde nullus; }");
@@ -292,8 +220,6 @@ fn series_example_runs() {
 
 #[test]
 fn lists_have_value_semantics() {
-    // Passing a list to a function copies it: the caller's list is untouched
-    // even though the callee appends to its own copy.
     let src = "munus auctus capit (ni lista s) reddit ni { s = adde(s, °C); redde longitudo(s); } munus initium reddit ni { ni lista xs = [°I, °II]; ni n = auctus(xs); scribe(n); scribe(longitudo(xs)); redde nullus; }";
     let r = curre(src);
     assert_eq!(
@@ -404,10 +330,7 @@ fn single_file_program_still_needs_initium() {
 
 #[test]
 fn intra_package_unqualified_calls_run() {
-    // Two files in the same package call each other with bare (unqualified)
-    // names — the checker validates this against the package's own function
-    // table, and codegen must resolve it there too, not against the root
-    // namespace (regression test for the package bare-call bug).
+    // Codegen must resolve a bare call against the package's table, not the root namespace.
     let files = [
         ("principale.liss",
          "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.decem()); redde nullus; }"),

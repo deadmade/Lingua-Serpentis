@@ -1,6 +1,3 @@
-//! The conformance corpus: every case under `conformance/` becomes one named
-//! test. Cases run in-process — a subprocess is only needed for what the
-//! library cannot observe, which lives in `cli.rs` and `robustness.rs`.
 mod support;
 
 use libtest_mimic::{Arguments, Failed, Trial};

@@ -1,16 +1,15 @@
-//! The shape every diagnostic must have, and the rules it must satisfy. This
-//! is the specification the fuzzer checks against.
+//! The robustness invariant `robustness.rs` and `generative.rs` check against.
 #![allow(dead_code)]
 
 use super::proc::Outcome;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Diagnostic {
-    /// `Error: <message>` — structural, about the program's shape.
+    /// `Error: <message>`
     Structural { message: String },
-    /// `Error in linea N: <message>` — single-source mode.
+    /// `Error in linea N: <message>`
     Line { line: usize, message: String },
-    /// `Error in '<file>', linea N: <message>` — folder mode.
+    /// `Error in '<file>', linea N: <message>`
     FileLine { file: String, line: usize, message: String },
 }
 
@@ -30,8 +29,7 @@ impl Diagnostic {
     }
 }
 
-/// Parse one rendered diagnostic line. Returns `None` when the line does not
-/// match the grammar at all — which is itself a finding.
+/// `None` when the line does not match the grammar at all — itself a finding.
 pub fn parse_diagnostic(s: &str) -> Option<Diagnostic> {
     let rest = s.strip_prefix("Error")?;
     if let Some(m) = rest.strip_prefix(": ") {
@@ -42,7 +40,6 @@ pub fn parse_diagnostic(s: &str) -> Option<Diagnostic> {
         let (n, msg) = m.split_once(": ")?;
         return Some(Diagnostic::Line { line: n.parse().ok()?, message: msg.to_string() });
     }
-    // `'<file>', linea N: <message>`
     let rest = rest.strip_prefix('\'')?;
     let (file, rest) = rest.split_once("', linea ")?;
     let (n, msg) = rest.split_once(": ")?;
@@ -53,126 +50,34 @@ pub fn parse_diagnostic(s: &str) -> Option<Diagnostic> {
     })
 }
 
-/// Rust `TokenKind` variant names. None of these may ever reach a user.
 pub const RUST_TYPE_NAMES: [&str; 24] = [
     "Semicolon", "RParen", "LParen", "RBrace", "LBrace", "RBracket", "LBracket",
     "Assign", "Comma", "Dot", "Ident", "TyInt", "TyFloat", "TyDouble", "TyText",
     "TyChar", "TyBool", "Takes", "Yields", "Lista", "Import", "Percent", "Star", "Slash",
 ];
 
-/// Words that betray an untranslated English string.
 pub const ENGLISH_WORDS: [&str; 8] = [
     "file", "must", "have", "extension", "reading", "directory", "invalid", "expected",
 ];
 
-/// Rules whose violations are already in the defect register. A violation of
-/// any OTHER rule is a new finding and fails the test that saw it. Shrinking
-/// this array is how progress gets measured — never add to it without adding
-/// a register entry too.
+/// Violations the suite tolerates; never add one without a defect-register entry.
 pub const RECORDED_RULES: [&str; 1] = [
-    // The last one, and it is held open by a defect that is deferred rather
-    // than open: D-20's `x = x * x` does not terminate because `Roman` is
-    // arbitrary-precision, so bounding it is a language change with its own
-    // spec to write, not a bug fix.
     "terminates", // D-20
 ];
 
-// Five entries have been retired, and none by weakening its rule:
-//
-// `no panic` (D-06) — main.rs writes through explicit handles and treats a
-// closed pipe as an ordinary end of output, the way every Unix tool does,
-// instead of letting Rust's SIG_IGN'd SIGPIPE turn it into a panic.
-//
-// `Latin only` (D-11, D-22) — main.rs's two hand-written English strings are
-// Latin now, and the library classifies an io::Error into a Latin cause
-// instead of interpolating its English Display. Both had to go together: one
-// rule covered them both.
-//
-// `no abort` (D-04, D-05) — the parser and the interpreter each carry a depth
-// limit now, so neither unbounded recursion nor deep nesting can overflow the
-// stack. Both defects had to go together: one rule covered them both.
-//
-// `no Rust type names` (D-02) — `parser.rs`'s `eat` was the only site in the
-// workspace that formatted a `TokenKind` with `{:?}`, and it now names the
-// token through `TokenKind::name`.
-//
-// `no Arabic digits` (D-12) — `index extra fines` interpolated the list length
-// as a bare `usize`; it renders through `Roman::display` now, so no message in
-// the language carries an Arabic digit outside a quoted span.
-//
-// Both underlying checks stay in `judge`. They are what keep these fixed.
-
-/// The sentence `liss run` prints when the program it spawned was killed by a
-/// signal (spec §9.5), and the reason `judge` must treat it as an abort.
-///
-/// **Spec §9.5's justification for the mapping is wrong, and this constant is
-/// what makes it true instead.** §9.5 says a signalled child would otherwise
-/// "exit 139 and be silently accepted by the robustness harness". Both halves
-/// were accepted: a bare 139 takes `judge`'s `code != 1` arm and is
-/// `Acceptable`, and the mapped form parses as a well-formed structural
-/// diagnostic carrying no English, no Arabic digit and no Rust type name, so it
-/// was `Acceptable` too. The mapping closed no hole.
-///
-/// What it does do is move the evidence. `Outcome::Signalled` describes the
-/// process `judge` itself spawned, and under `liss run` that is the **parent**
-/// — the compiler, which is not what §8 makes promises about. The child's death
-/// reaches this harness only as this sentence. So with `BINARY` pointing at
-/// `liss`, §8's guarantee that no compiled program dies by signal has exactly
-/// one observable form here, and treating it as anything but a violation leaves
-/// that guarantee with zero fuzzed enforcement.
 const ABRUPTE_CESSAVIT: &str = "programma abrupte cessavit";
 
-/// The prefix on every sentence the compiler says about **itself** — spec
-/// §10.3's `Defectus::novus(` sites, and `liss-abi`'s `memoria violata est`.
-///
-/// **This is the compiler admitting to a bug, and it must never be
-/// `Acceptable`.** With `BINARY` pointing at `liss`, `generative.rs` and
-/// `robustness.rs` fuzz the *compiler*, and a compiler defect is precisely what
-/// they exist to find. Without this rule the admission is invisible to them:
-/// `Error: defectus internus: munus componi non potuit` parses as a structural
-/// diagnostic, carries no file and no line, no English word, no Arabic digit
-/// and no Rust type name — so every lexical rule passes and the verdict is
-/// `Acceptable`.
-///
-/// That is not hypothetical. **Task 12's Critical had exactly this shape**: the
-/// legal program `redde nullus; scribe("numquam");` made release codegen emit
-/// this sentence. Had the generator drawn it, the property test whose entire
-/// purpose is finding compiler bugs would have shrugged.
-///
-/// A prefix rather than a list, because the list is spec §10.3's to grow: a new
-/// `Defectus::novus("defectus internus: …")` must be caught the day it is
-/// written, not the day somebody remembers to copy it here.
 const DEFECTUS_INTERNUS: &str = "defectus internus: ";
 
-/// Spec §7.5's leak report: the live-allocation count was nonzero at exit.
-///
-/// **§7.5's stated rationale for exit 1 does not hold on its own.** It argues
-/// against a distinctive code such as 70 because "a leak reported as 70 would be
-/// silently accepted by the robustness harness" — true, since `judge` treats any
-/// status outside {0, 1, 101} as `initium`'s own choice. But exit 1 with a
-/// well-formed Latin sentence was *also* accepted: like [`ABRUPTE_CESSAVIT`],
-/// this message passes every lexical rule there is. The exit code alone bought
-/// nothing; this constant is what makes §7.5's argument true.
 const MEMORIA_NON_LIBERATA: &str = "memoria non liberata est";
 
-/// A run either satisfies the invariant or names the rule it broke. The
-/// mapping from rule to recorded defect lives in
-/// `docs/defectus/2026-08-03-index.md`, not here, so this file stays a
-/// specification rather than a bug list — and so one rule can cover several
-/// defects (both stack overflows break `no abort`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Verdict {
-    /// Ran to completion, or failed with a well-formed Latin diagnostic.
     Acceptable,
     Violation { rule: &'static str, detail: String },
 }
 
-/// Strip quoted spans. They are user input echoed back — an identifier, a
-/// numeral, a character — and the lexical rules below are about text the
-/// *language* wrote. Without this, `signum ignotum: '5'` would trip the
-/// no-Arabic-digits rule for quoting the user's own `5` back at them, and
-/// `variabilis ignota: 'Semicolon'` would trip the Rust-type-name rule for a
-/// user who named a variable `Semicolon`.
+/// Quoted spans are user input echoed back; the lexical rules are about text the language wrote.
 fn without_quoted(msg: &str) -> String {
     let mut out = String::new();
     let mut quote: Option<char> = None;
@@ -187,8 +92,7 @@ fn without_quoted(msg: &str) -> String {
     out
 }
 
-/// Judge one run against the invariant. `sources` maps program-relative path
-/// to source text, so line numbers can be range-checked.
+/// `sources` maps program-relative path to source text, so line numbers can be range-checked.
 pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
     let violation = |rule: &'static str, detail: String| Verdict::Violation { rule, detail };
 
@@ -224,16 +128,10 @@ pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
         return violation("diagnostic grammar", format!("unparseable: {last:?}"));
     };
 
-    // Before any of the lexical rules: this sentence is *well-formed* Latin and
-    // would pass every one of them. It is a violation for what it reports, not
-    // for how it reads — the child died by a signal, and §8 says none may.
+    // These three are well-formed Latin, and violations for what they report.
     if d.message() == ABRUPTE_CESSAVIT {
         return violation("no abort", format!("the child was killed by a signal: {last:?}"));
     }
-    // Two more of the same kind, and for the same reason: well-formed Latin
-    // reporting something no input may provoke. Neither adds a
-    // `RECORDED_RULES` entry — that array is violations the suite *tolerates*,
-    // and these are violations it now refuses.
     if d.message().starts_with(DEFECTUS_INTERNUS) {
         return violation("no internal defect", format!("the compiler reported a bug: {last:?}"));
     }
@@ -269,8 +167,6 @@ pub fn judge(outcome: &Outcome, sources: &[(String, String)]) -> Verdict {
         return violation("message non-empty", format!("{last:?}"));
     }
     let bare = without_quoted(msg);
-    // English before digits: `Error: file must have .liss extension` should be
-    // reported as an untranslated string, not as a stray numeral.
     let lower = bare.to_lowercase();
     if let Some(w) = ENGLISH_WORDS
         .iter()

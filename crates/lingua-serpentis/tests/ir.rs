@@ -1,11 +1,4 @@
-//! The typed IR the checker emits (spec §4). These snapshots are the contract
-//! codegen is written against: every expression node's `Ty`, every block's
-//! `declares`, and every place lowering does — or deliberately does not —
-//! desugar.
-//!
-//! The snapshots are rendered by `dump` below rather than by `Debug`, because
-//! a `Roman` prints as its little-endian digit bag and a reviewer needs to see
-//! `V`. A snapshot nobody can read is a snapshot nobody checks.
+//! The typed IR the checker emits (spec §4): the contract codegen is written against.
 
 use lingua_serpentis::ast::{ParsedFile, ParsedProgram};
 use lingua_serpentis::checker::check_program_typed;
@@ -362,9 +355,6 @@ fn ir_fractions_and_fallthrough() {
 
 #[test]
 fn every_expression_node_carries_a_type() {
-    // The whole point of the IR (§4.1, property 1): a `Load` reports the slot's
-    // declared type, a comparison reports `veritas` while its operands do not,
-    // and no node is left with a placeholder.
     for src in [BASICS, CONDITIONALS, LOOPS, LISTS, FRACTIONS] {
         let p = lower1(src);
         for f in &p.funcs {
@@ -411,9 +401,7 @@ fn every_expression_node_carries_a_type() {
 fn a_block_declares_exactly_its_own_slots() {
     let p = lower1(BASICS);
     let f = func(&p, "initium");
-    // The function body is the parameter frame: no parameters here, so it
-    // declares exactly the three top-level locals — and NOT the shadowing `x`
-    // inside the `si`.
+    // The function body is the parameter frame; the shadowing `x` inside the `si` is not here.
     assert_eq!(f.body.declares, vec![ir::SlotId(0), ir::SlotId(1)]);
     let ir::StmtKind::If { then, .. } = &f.body.stmts[4].kind else {
         panic!("statement 5 is the `si`, got {:?}", f.body.stmts[4].kind);
@@ -425,13 +413,10 @@ fn a_block_declares_exactly_its_own_slots() {
 fn a_shadowing_declaration_gets_a_fresh_slot_and_the_outer_name_comes_back() {
     let p = lower1(BASICS);
     let f = func(&p, "initium");
-    // `ni x`, `voc s`, then the inner `ni x`: three slots, never reused.
     assert_eq!(f.slots, vec![ir::Ty::Int, ir::Ty::Text, ir::Ty::Int]);
     let ir::StmtKind::If { then, .. } = &f.body.stmts[4].kind else { unreachable!() };
-    // Inside the block, `scribe(x)` reads the inner slot ...
     let ir::StmtKind::Print(inner) = &then.stmts[1].kind else { panic!("inner scribe") };
     assert_eq!(inner.kind, ir::ExprKind::Load(ir::SlotId(2)));
-    // ... and after it, the outer one, which the pop restored.
     let ir::StmtKind::Print(outer) = &f.body.stmts[5].kind else { panic!("outer scribe") };
     assert_eq!(outer.kind, ir::ExprKind::Load(ir::SlotId(0)));
 }
@@ -450,9 +435,7 @@ fn parameters_are_the_first_slots() {
 
 #[test]
 fn aut_si_arrives_already_nested() {
-    // The parser flattens `aut si` into a one-statement else block
-    // (`parser.rs:288-291`), so lowering has nothing to do and the IR carries
-    // no separate else-if arm.
+    // The parser flattens `aut si` into a one-statement else block, so lowering has nothing to do.
     let p = lower1(CONDITIONALS);
     let f = func(&p, "classifica");
     let ir::StmtKind::If { else_: Some(outer_else), .. } = &f.body.stmts[0].kind else {
@@ -464,8 +447,7 @@ fn aut_si_arrives_already_nested() {
 
 #[test]
 fn dum_is_not_desugared_into_indem() {
-    // `continua` must still run the step, so the correct desugaring is a CFG
-    // and codegen builds it (§4.4). The IR keeps `For` as its own variant.
+    // `continua` must still run the step, so codegen builds the CFG (§4.4).
     let p = lower1(LOOPS);
     let f = func(&p, "initium");
     assert!(matches!(f.body.stmts[1].kind, ir::StmtKind::While { .. }), "the `indem`");
@@ -481,10 +463,6 @@ fn dum_is_not_desugared_into_indem() {
 
 #[test]
 fn a_dum_header_declares_its_own_slot() {
-    // The header is a scope, so it is a `Block`, so its slot is in a
-    // `declares` — which is the only reason a `redde` inside the loop frees
-    // the `dum` variable at all. §7.3.5 emits the header teardown after the
-    // exit block, and a `redde` never reaches it.
     let p = lower1(LOOPS);
     let f = func(&p, "initium");
     let ir::StmtKind::For { header, body, .. } = &f.body.stmts[2].kind else {
@@ -494,9 +472,7 @@ fn a_dum_header_declares_its_own_slot() {
     assert_eq!(header.declares, vec![slot], "the header declares exactly `j`");
     assert!(!body.declares.contains(&slot), "and the body does not");
     assert!(!f.body.declares.contains(&slot), "nor does the function body");
-    // Every owned slot of the function is in exactly one `declares`. That is
-    // the invariant a codegen walking blocks relies on, and the one a header
-    // outside the `Block` tree used to break.
+    // Every owned slot is in exactly one `declares`: the invariant codegen relies on.
     let mut seen: Vec<ir::SlotId> = Vec::new();
     collect_declares(&f.body, &mut seen);
     seen.sort_by_key(|s| s.0);
@@ -505,13 +481,7 @@ fn a_dum_header_declares_its_own_slot() {
 
 #[test]
 fn a_redde_out_of_a_dum_still_reaches_the_header_slot() {
-    // The regression in the shape it was found: a heap `voc` declared in a
-    // `dum` header, and the only exit is a `redde` from the body. §7.3.5's
-    // "the header teardown is emitted after the exit block" never fires, so
-    // the slot is freed only if `redde`'s walk of every enclosing *block*
-    // finds it. Before the header became a `Block`, it found nothing, and
-    // §7.5's live-allocation counter turned this legal program into
-    // `Error: memoria non liberata est`.
+    // The regression in the shape it was found: §7.3.5's post-exit teardown never fires here.
     let p = lower1(
         "munus initium reddit ni {\n  dum (voc s = \"salve\"; verus; s = s) {\n    redde nullus;\n  }\n}",
     );
@@ -526,7 +496,7 @@ fn a_redde_out_of_a_dum_still_reaches_the_header_slot() {
     assert_eq!(seen, vec![slot], "the header is where the only slot lives");
 }
 
-/// Every slot declared anywhere under `b`, including loop headers.
+/// Includes loop headers.
 fn collect_declares(b: &ir::Block, out: &mut Vec<ir::SlotId>) {
     out.extend(b.declares.iter().copied());
     for s in &b.stmts {
@@ -549,9 +519,7 @@ fn collect_declares(b: &ir::Block, out: &mut Vec<ir::SlotId>) {
 
 #[test]
 fn an_expression_statement_keeps_the_value_nothing_consumed() {
-    // §7.3.1: the statement root is freed if nothing consumed it, and an
-    // `ExprStmt` is the only form where that is the whole rule. Its `voc`
-    // result is the thing codegen must not drop on the floor.
+    // §7.3.1: the statement root is freed if nothing consumed it.
     let p = lower1(CONDITIONALS);
     let f = func(&p, "initium");
     let ir::StmtKind::ExprStmt(e) = &f.body.stmts[1].kind else {
@@ -588,8 +556,6 @@ fn only_the_root_initium_is_the_entry_point() {
     );
     let entries: Vec<_> = p.funcs.iter().filter(|f| f.is_entry).map(|f| &f.symbol).collect();
     assert_eq!(entries, vec![&liss_ir::symbol(None, "initium")]);
-    // The package's own `initium` is an ordinary function with an ordinary
-    // mangled symbol, and it takes a parameter.
     let pkg = p
         .funcs
         .iter()
@@ -636,10 +602,7 @@ fn longitudo_and_adde_are_not_calls() {
 
 #[test]
 fn a_fraction_literal_narrows_onto_the_grain_the_context_demands() {
-    // `°I:I/VII` is one and a seventh, 8/7: thirteen unciae as `mnr`
-    // (trunc(8·12/7)), three hundred twenty-nine scripula as `nr`
-    // (trunc(8·288/7)). The IR must carry that constant on both grains and
-    // through negation and arithmetic.
+    // `°I:I/VII` is 8/7: thirteen unciae as `mnr`, three hundred twenty-nine scripula as `nr`.
     use lingua_serpentis::roman::Roman;
     let p = lower1(FRACTIONS);
     let f = func(&p, "initium");
@@ -668,11 +631,6 @@ fn a_fraction_literal_narrows_onto_the_grain_the_context_demands() {
 
 #[test]
 fn the_ir_mirror_narrows_exactly_as_the_ast_does() {
-    // `resolve_floatlit` narrows the exact rational straight onto the demanded
-    // grain; `resolve_floatlit_ir` narrows a node already sitting on `nr`'s.
-    // Those agree only because truncation composes, and this is the proof: the
-    // constant the IR ends up with is the one `from_rational` computes in one
-    // step, for both grains.
     use lingua_serpentis::fraction;
     use lingua_serpentis::roman::Roman;
     // `°A:B/C` is A + B/C, so the exact rational is (A·C + B)/C.
@@ -703,8 +661,6 @@ fn the_ir_mirror_narrows_exactly_as_the_ast_does() {
 
 #[test]
 fn checking_and_lowering_are_one_walk() {
-    // `check_program` is `check_program_typed` with the IR dropped, so a
-    // program the one accepts the other accepts, with the identical error.
     let bad = "munus initium reddit ni { ni x = \"salve\"; redde nullus; }";
     let mut a = ParsedProgram {
         root: vec![pfile("principale.liss", bad)],

@@ -1,8 +1,5 @@
-//! Deterministic source mutation. A fixed seed means a failure reproduces
-//! exactly; `LISS_FUZZ_SEED` varies it for a soak run.
 #![allow(dead_code)]
 
-/// SplitMix64 — small, fast, and good enough to shuffle bytes with.
 pub struct Rng(u64);
 
 impl Rng {
@@ -21,12 +18,9 @@ impl Rng {
     }
 }
 
-/// Characters worth injecting: the ones the lexer treats specially.
 const INTERESTING: [char; 16] =
     ['°', '"', '\'', '{', '}', '(', ')', '[', ']', ';', ',', '.', '/', ':', '\n', '5'];
 
-/// Produce one mutation of `src`. Operating on `char`s rather than bytes keeps
-/// the output valid UTF-8, so we test the language rather than `read_to_string`.
 pub fn mutate(src: &str, rng: &mut Rng) -> String {
     let mut cs: Vec<char> = src.chars().collect();
     if cs.is_empty() {
@@ -58,7 +52,6 @@ pub fn mutate(src: &str, rng: &mut Rng) -> String {
             cs.insert(i, INTERESTING[rng.below(INTERESTING.len())]);
         }
         _ => {
-            // Duplicate a whole span — good at producing unbalanced brackets.
             let i = rng.below(cs.len());
             let len = 1 + rng.below(16.min(cs.len() - i));
             let span: Vec<char> = cs[i..i + len].to_vec();
@@ -71,7 +64,6 @@ pub fn mutate(src: &str, rng: &mut Rng) -> String {
     cs.into_iter().collect()
 }
 
-/// Every `.liss` source in the repo, as (label, text) — the mutation seed corpus.
 pub fn seed_corpus(repo_root: &std::path::Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for base in ["examples", "conformance"] {

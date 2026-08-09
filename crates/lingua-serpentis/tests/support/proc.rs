@@ -1,6 +1,3 @@
-//! Spawning the real binary. Needed for everything the library cannot
-//! observe: aborts, broken pipes, real process exit status, stream routing
-//! and argv handling.
 #![allow(dead_code)]
 
 use std::io::Write;
@@ -8,33 +5,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// The binary every subprocess test drives.
-///
-/// **`liss`, as of Task 19**, and that is what gives spec §8 its teeth. The
-/// robustness and generative harnesses judge whatever this spawns, so pointing
-/// it at the compiler is what makes "no compiled program dies by signal" a
-/// fuzzed claim rather than a written one — a mutation or a generated program
-/// that faults now reaches `judge` instead of reaching a tree-walker that could
-/// not fault in the same way.
-///
-/// It costs a Cranelift pass, a link and a second `execve` per case, which is
-/// why `generative.rs` carries an explicit case budget (spec §10.2).
-///
-/// The signal never arrives as `Outcome::Signalled`, though: the process spawned
-/// here is the compiling **parent**, and `liss` maps a signalled child to
-/// `Error: programma abrupte cessavit` and exit 1 (§9.5). `diag::judge` has a
-/// rule for exactly that sentence, and without it §8 would have no enforcement
-/// at all — see the note there.
+/// The compiling parent: a signalled child arrives at `diag::judge` as a sentence, not a signal.
 pub const BINARY: &str = env!("CARGO_BIN_EXE_liss");
 
-/// How a run of the binary ended.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
-    /// Exited normally with this status.
     Exited { code: i32, stdout: String, stderr: String },
-    /// Killed by a signal — SIGABRT from a stack overflow, SIGSEGV, ...
     Signalled { signal: i32, stdout: String, stderr: String },
-    /// Still running when the deadline passed.
     TimedOut,
 }
 
@@ -53,9 +30,7 @@ impl Outcome {
     }
 }
 
-/// Run the binary with `args`, capturing both streams to temp files rather
-/// than pipes — a pipe would deadlock as soon as the child fills the buffer,
-/// which some of these inputs do on purpose.
+/// Captures both streams to files rather than pipes; some of these inputs would deadlock a pipe.
 pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
     let dir = temp_dir("liss-proc");
     let out_path = dir.path().join("stdout");
@@ -97,9 +72,6 @@ pub fn run_binary(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
     Outcome::Exited { code: status.code().unwrap_or(-1), stdout, stderr }
 }
 
-/// Like `run_binary`, but reads a little of the child's stdout and then closes
-/// the pipe while the child is still writing. This is the only way to provoke
-/// a broken pipe, which is not observable through a file redirect.
 pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) -> Outcome {
     use std::io::Read;
 
@@ -146,16 +118,14 @@ pub fn run_closing_stdout_early(args: &[&std::ffi::OsStr], timeout: Duration) ->
     Outcome::Exited { code: status.code().unwrap_or(-1), stdout: String::new(), stderr }
 }
 
-/// A directory removed on drop. Hand-rolled because runtime deps stay at zero
-/// and `tempfile` is not worth a dev-dep for twenty lines.
+/// A directory removed on drop.
 pub struct TempDir(PathBuf);
 
 impl TempDir {
     pub fn path(&self) -> &Path {
         &self.0
     }
-    /// Write a file, creating parent directories. Path is `/`-separated and
-    /// relative to the temp root.
+    /// `rel` is `/`-separated and relative to the temp root; parents are created.
     pub fn write(&self, rel: &str, content: &str) -> PathBuf {
         let p = self.0.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();

@@ -7,49 +7,14 @@ pub mod diag;
 pub mod mutate;
 pub mod proc;
 
-/// The compiling driver, built by cargo because these targets name it.
 pub const LISS: &str = env!("CARGO_BIN_EXE_liss");
 
-/// How long one program may take under `liss run` before it is called a hang
-/// rather than waited on.
-///
-/// Generous, because it is a backstop and not a performance budget: `liss run`
-/// on the slowest thing in the corpus is two orders of magnitude inside it.
-/// Without a deadline a program that does not terminate hangs the whole suite
-/// instead, on a machine where nobody can see which one did it.
+/// A backstop rather than a performance budget.
 const MORA: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// How often the deadline is checked. Short enough to add nothing measurable to
-/// a run that takes tens of milliseconds.
 const PAUSA: std::time::Duration = std::time::Duration::from_millis(2);
 
-/// **Compile and run one program through `liss run`, and render its two streams
-/// and status the way a caller sees them.**
-///
-/// `target` is a path exactly as a user would type it: a `.liss` file is a
-/// single-source program and a directory is a program folder, and `liss`
-/// chooses between them on the same evidence. That distinction is load-bearing
-/// rather than incidental — the two modes render diagnostics differently
-/// (`Error in linea N:` against `Error in 'f.liss', linea N:`), so a harness
-/// that decided for `liss` would be able to hide the difference.
-///
-/// # Why `liss run` and not the image
-///
-/// **Latinity warnings are a front-end product.** The parent writes them and
-/// *then* spawns the child (spec §9.5), so the bytes a caller sees are the
-/// parent's warnings followed by the child's own diagnostics — which is exactly
-/// what the blessed `nuntii` files record, the interpreter having had only one
-/// process to write from. A harness that ran the bare image would see none of
-/// them and would have to re-bless three `nuntii` files empty, deleting the
-/// corpus's only coverage of Latinity warnings in the name of a harness detail.
-///
-/// # Why the two processes' streams stay in order
-///
-/// The parent's stderr and the child's are the *same open file description* —
-/// `Stdio::from(File)` hands the child a dup of the handle, so the two share one
-/// offset — and the parent flushes before it spawns. Captured to files rather
-/// than pipes because a program that outruns a pipe buffer would deadlock a
-/// harness that waits before it reads, and some of these do so on purpose.
+/// `target` is the path a user would type; `liss`, not the harness, chooses single-source or folder.
 pub fn curre(target: &Path) -> Result<Rendered, String> {
     use std::process::{Command, Stdio};
 
@@ -96,11 +61,7 @@ pub fn curre(target: &Path) -> Result<Rendered, String> {
     let stdout = lege(&emissio)?;
     let stderr = lege(&nuntii)?;
 
-    // `code()` is `None` exactly when a signal ended the process, and the
-    // process here is the compiling **parent**: `liss` maps a signalled child to
-    // `Error: programma abrupte cessavit` and exit 1 (§9.5), so this arm means
-    // the compiler itself was killed. Reported rather than unwrapped, because a
-    // panic here would name the harness instead of the failure.
+    // This arm means the compiling parent was killed; `liss` maps a signalled child to exit 1.
     let code = status.code().ok_or_else(|| {
         format!(
             "`liss run {}` was killed by a signal; stdout {stdout:?}, stderr {stderr:?}",
@@ -111,7 +72,6 @@ pub fn curre(target: &Path) -> Result<Rendered, String> {
     Ok(Rendered { stdout, stderr, code })
 }
 
-/// The four corpus categories, in the order they are reported.
 pub const CATEGORIES: [&str; 4] = ["currunt", "errores", "monita", "defectus"];
 
 pub fn repo_root() -> PathBuf {
@@ -124,8 +84,7 @@ pub fn corpus_root() -> PathBuf {
     p.canonicalize().unwrap_or_else(|e| panic!("corpus {}: {e}", p.display()))
 }
 
-/// One case directory. `name` is `<categoria>::<casus>`, which is what
-/// libtest-mimic reports and what `cargo test` filters on.
+/// One case directory; `name` is `<categoria>::<casus>`, what `cargo test` filters on.
 #[derive(Debug, Clone)]
 pub struct Fixture {
     pub name: String,
@@ -173,7 +132,6 @@ impl Fixture {
     }
 }
 
-/// Every case directory under every category, sorted, so the report is stable.
 pub fn discover() -> Vec<Fixture> {
     let root = corpus_root();
     let mut out = Vec::new();
@@ -196,19 +154,6 @@ pub fn discover() -> Vec<Fixture> {
     out
 }
 
-/// Run a fixture the way a user would: `liss run` on the path the corpus names,
-/// a directory being a program folder and a `.liss` file a single-source
-/// program. The two modes render warnings and diagnostics differently — folder
-/// mode attributes them to a file, single-source mode does not — so both must
-/// be exercised, and `liss` must be the one to choose between them.
-///
-/// **This is the whole of the backend swap.** Until Task 19 this called
-/// `run_dir_with_warnings` / `run_file_with_warnings` and walked the tree in
-/// process; `conformance.rs`, `catalogus.rs` and the corpus tooling around them
-/// are unchanged, because the one function that decides how a fixture runs is
-/// this one. `tests/compilata.rs` spent the milestone proving the two agree —
-/// 112 of 113 byte-identical, the 113th the re-blessing this task performs —
-/// and is deleted now that there is nothing to differentiate against.
 pub fn run_fixture(f: &Fixture) -> Rendered {
     let target = f.target();
     curre(&target).unwrap_or_else(|e| panic!("{}: {e}", f.name))
@@ -218,8 +163,7 @@ pub fn blessing() -> bool {
     std::env::var_os("LISS_BLESS").is_some_and(|v| v != "0")
 }
 
-/// Rewrite the expectation files from actual output. An empty stream removes
-/// its file rather than leaving an empty one, so `git status` shows intent.
+/// An empty stream removes its file rather than leaving an empty one, so `git status` shows intent.
 pub fn bless(f: &Fixture, got: &Rendered) {
     write_or_remove(&f.dir.join("emissio"), &got.stdout);
     write_or_remove(&f.dir.join("nuntii"), &got.stderr);
@@ -258,14 +202,6 @@ pub fn compare(f: &Fixture, got: &Rendered) -> Result<(), String> {
     }
 }
 
-/// One stream's difference, with the first line that differs called out.
-///
-/// Was `pub` for `compilata.rs`, whose "expected" column was the interpreter
-/// rather than a blessing; sharing this rather than re-spelling it kept the two
-/// targets from drifting into different ideas of what a first difference is.
-/// That file is deleted and [`compare`] is the only caller left, so this is
-/// private again — a `pub` with no reader outside its module is an invitation to
-/// grow one.
 fn diff(label: &str, want: &str, got: &str) -> Option<String> {
     if want == got {
         return None;

@@ -1,12 +1,4 @@
 //! End-to-end behaviour of the `liss` binary — the compiling surface.
-//!
-//! Everything here needs a real process, and most of it needs *two*: `liss run`
-//! compiles, links, and then execs a child whose stdio it inherits. That
-//! inheritance is why several of these tests merge the two streams into one
-//! file rather than capturing them separately — the parent's Latinity warnings
-//! and the child's output land on different file descriptors, and the only way
-//! to observe that the first come *before* the second is to give both
-//! descriptors the same open file description.
 mod support;
 
 use std::io::Read;
@@ -17,8 +9,7 @@ use support::proc::{temp_dir, TempDir};
 
 const LISS: &str = env!("CARGO_BIN_EXE_liss");
 
-/// The three usage lines, and the sentence that disambiguates a folder named
-/// `run`. Byte for byte what the binary must print.
+/// Transcribed independently of `cli.rs`'s `USUS`, deliberately.
 const USUS: &str = "\
 Usus: liss run <via.liss | directorium>
       liss build <via.liss | directorium> [--exi <via>] [--ad <machina>]
@@ -34,18 +25,15 @@ struct Res {
     stderr: String,
 }
 
-/// Run `liss` with both streams captured separately.
 fn liss(args: &[&str]) -> Res {
     liss_full(args, None, None)
 }
 
-/// Run `liss` from `cwd`.
 fn liss_at(cwd: &Path, args: &[&str]) -> Res {
     liss_full(args, Some(cwd), None)
 }
 
-/// Run `liss` with `TMPDIR` pointed at `tmp`, so the temporary image — if one
-/// survives — is somewhere this test can see it.
+/// `TMPDIR` points at `tmp`, so a surviving temporary image is somewhere this test can see it.
 fn liss_tmp(tmp: &Path, args: &[&str]) -> Res {
     liss_full(args, None, Some(tmp))
 }
@@ -67,8 +55,7 @@ fn liss_full(args: &[&str], cwd: Option<&Path>, tmp: Option<&Path>) -> Res {
     }
 }
 
-/// Run `liss` with stdout and stderr sharing **one** open file description, so
-/// the order the two processes wrote in is recoverable.
+/// stdout and stderr share one open file description, so the write order is recoverable.
 fn liss_merged(args: &[&str]) -> (Option<i32>, String) {
     let d = temp_dir("liss-merged");
     let p = d.path().join("ambo");
@@ -85,20 +72,17 @@ fn liss_merged(args: &[&str]) -> (Option<i32>, String) {
     (status.code(), text)
 }
 
-/// A single-source program on disk.
 fn source(d: &TempDir, name: &str, src: &str) -> PathBuf {
     d.write(name, src)
 }
 
-/// A program *folder* with one root file.
 fn folder(d: &TempDir, name: &str, src: &str) -> PathBuf {
     d.write(&format!("{name}/principale.liss"), src);
     d.path().join(name)
 }
 
 const SALVE: &str = "munus initium reddit ni {\n  scribe(\"salve\");\n  redde nullus;\n}";
-/// Line 2 names a variable no Latin dictionary knows, which is one Latinity
-/// warning from the *parent* and one line of output from the child.
+/// One Latinity warning from the parent, one line of output from the child.
 const MONITUM: &str =
     "munus initium reddit ni {\n  ni counter = \u{b0}I;\n  scribe(counter);\n  redde nullus;\n}";
 /// Fails at run time, on line 3.
@@ -157,18 +141,15 @@ fn a_folder_named_run_must_be_given_as_dot_slash_run() {
     let d = temp_dir("liss-run-folder");
     d.write("run/principale.liss", SALVE);
 
-    // Bare `run` is the subcommand, always — so this is `liss run` with no
-    // path at all, and the answer is the usage string.
+    // Bare `run` is the subcommand, always.
     let bare = liss_at(d.path(), &["run"]);
     assert_eq!(bare.code, Some(1));
     assert_eq!(bare.stderr, USUS);
 
-    // `./run` is a path, and names the folder.
     let dotted = liss_at(d.path(), &["./run"]);
     assert_eq!(dotted.code, Some(0), "stderr: {}", dotted.stderr);
     assert_eq!(dotted.stdout, "salve\n");
 
-    // And so does `run ./run`.
     let both = liss_at(d.path(), &["run", "./run"]);
     assert_eq!(both.code, Some(0), "stderr: {}", both.stderr);
     assert_eq!(both.stdout, "salve\n");
@@ -214,9 +195,7 @@ fn run_propagates_the_programs_exit_status() {
     assert_eq!(r.code, Some(3));
 }
 
-/// **The `Func::file` proof.** A single-source program's diagnostics carry no
-/// file name, and the name is baked into the image at codegen time — the parent
-/// inherits the child's stderr and cannot rewrite it afterwards (spec §4.1).
+/// The name is baked into the image at codegen time; the parent cannot rewrite the child's stderr.
 #[test]
 fn a_single_file_diagnostic_names_no_file() {
     let d = temp_dir("liss-solum");
@@ -237,11 +216,7 @@ fn a_folder_diagnostic_names_its_file() {
 
 // ------------------------------------------------ the parent's warnings
 
-/// **The only test of parent-side Latinity warnings anywhere.** Task 15's
-/// codegen helper subtracts the checker's warnings from every expectation,
-/// because a bare image has no parent to emit them; once that is the only
-/// place they were asserted, this is what keeps `liss run` emitting them at
-/// all — and emitting them *before* the child writes.
+/// The only test of parent-side Latinity warnings anywhere.
 #[test]
 fn run_emits_the_parents_latinity_warnings_before_the_childs_output() {
     let d = temp_dir("liss-monitum");
@@ -300,16 +275,13 @@ fn run_leaves_nothing_behind() {
     assert_eq!(entries(tmp.path()), Vec::<String>::new());
 }
 
-/// The unlink is the *whole* cleanup story, and this is the case no `Drop`
-/// guard and no signal handler could cover: the parent is `SIGKILL`ed while
-/// the child is still running, and there is still no name in `TMPDIR` —
-/// because there has been none since before the exec.
+/// No `Drop` guard or signal handler could cover this: the image has had no name since
+/// before the exec.
 #[test]
 fn run_leaves_nothing_behind_when_the_parent_is_killed() {
     let d = temp_dir("liss-occisus");
     let tmp = temp_dir("liss-occisus-tmp");
-    // Prints far more than a pipe buffer holds, so the child blocks on a
-    // stdout nobody is draining and stays alive as long as we need it.
+    // Prints more than a pipe buffer holds, so the child blocks and stays alive.
     let src = "munus initium reddit ni {\n  \
                dum (ni i = nullus; i minor_est \u{b0}M; i = i + \u{b0}I) {\n    \
                scribe(\"vox in deserto clamantis parate viam domini rectas\");\n  }\n  \
@@ -325,8 +297,7 @@ fn run_leaves_nothing_behind_when_the_parent_is_killed() {
         .spawn()
         .expect("spawn liss");
 
-    // One byte on stdout can only have come from the child, and the child only
-    // exists once the image has been written, unlinked and exec'd.
+    // One byte on stdout can only have come from the child, hence after the unlink and exec.
     let mut out = parent.stdout.take().expect("piped stdout");
     let mut byte = [0u8; 1];
     out.read_exact(&mut byte).expect("the child writes");
@@ -340,8 +311,7 @@ fn run_leaves_nothing_behind_when_the_parent_is_killed() {
         "a SIGKILLed parent left a temporary image behind"
     );
 
-    // Closing the pipe ends the orphan: its runtime treats EPIPE as an
-    // ordinary end of output (spec §6).
+    // Closing the pipe ends the orphan: its runtime treats EPIPE as an ordinary end of output.
     drop(out);
 }
 
@@ -356,7 +326,6 @@ fn build_writes_an_executable_next_to_nothing_and_it_runs() {
     assert_eq!(r.stdout, "");
     assert_eq!(r.stderr, "");
 
-    // The `.liss` stem, in the current directory.
     let imago = d.path().join("salve");
     let meta = std::fs::metadata(&imago).expect("the image exists");
     assert_eq!(meta.permissions().mode() & 0o7777, 0o755);
@@ -388,9 +357,6 @@ fn build_honours_exi() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), "salve\n");
 }
 
-/// `liss build ./computatrum` run from the parent of a program folder resolves
-/// its default output to the input directory itself. Writing a file there
-/// cannot work, and silently doing something else would be worse.
 #[test]
 fn build_refuses_a_directory_as_its_output() {
     let d = temp_dir("liss-exitus-directorium");
@@ -457,29 +423,17 @@ fn build_cross_compiles_for_the_other_machine() {
 
 #[test]
 fn a_build_that_cannot_write_its_output_says_so() {
-    // `/dev/full` opens and then refuses every write with ENOSPC, which is the
-    // disk-filling-up shape reached end to end.
+    // `/dev/full` opens and then refuses every write with ENOSPC.
     let d = temp_dir("liss-plenum");
     let p = source(&d, "salve.liss", SALVE);
     let r = liss(&["build", p.to_str().unwrap(), "--exi", "/dev/full"]);
     assert_eq!(r.code, Some(1));
     assert_eq!(r.stderr, "Error: scida '/dev/full' scribi non potest\n");
-    // **And the device is still there.** `build` removes a destination it
-    // truncated, and `O_TRUNC` truncates nothing on a device node — so there
-    // is nothing here to clean up. Reported as `Err(true)` instead, this line
-    // is what fails: as an ordinary user the unlink is refused silently, but
-    // run as root in a container it deletes `/dev/full` from a devtmpfs that
-    // will not put it back.
     assert!(Path::new("/dev/full").exists(), "the build removed /dev/full");
 }
 
-/// The same hazard, on an object this test **owns** — so the deletion the
-/// device case can only threaten actually happens here, and is caught without
-/// root and without touching anything outside a temporary directory.
-///
-/// `open` follows the symlink to `/dev/full`, so nothing is truncated and every
-/// write fails; `remove_file` on the other hand acts on the **link**, which is
-/// ours. Classify the failure as destructive and the link is gone.
+/// `open` follows the link to `/dev/full`, but `remove_file` acts on the link, which is ours —
+/// so the deletion the `/dev/full` case can only threaten actually happens here.
 #[test]
 fn a_failed_write_through_a_symlink_removes_neither_end() {
     let d = temp_dir("liss-nexus");
@@ -498,9 +452,7 @@ fn a_failed_write_through_a_symlink_removes_neither_end() {
     assert!(Path::new("/dev/full").exists());
 }
 
-/// `--exi /dev/null` is the ordinary "compile it but keep nothing" idiom every
-/// other compiler accepts, and the device must come back out exactly as it went
-/// in — not mode 0755, which means nothing on something that is not a program.
+/// The device must come back out with its mode unchanged, not 0755.
 #[test]
 fn building_to_dev_null_succeeds_and_changes_nothing_about_it() {
     let ante = std::fs::metadata("/dev/null").expect("stat /dev/null").permissions().mode();
@@ -517,7 +469,7 @@ fn building_to_dev_null_succeeds_and_changes_nothing_about_it() {
 
 // ------------------------------------------------- the signalled child
 
-/// The first child of `pid`, read off `/proc`. `None` until one exists.
+/// `None` until a child exists.
 fn child_of(pid: u32) -> Option<u32> {
     for task in std::fs::read_dir(format!("/proc/{pid}/task")).ok()?.flatten() {
         let Ok(s) = std::fs::read_to_string(task.path().join("children")) else { continue };
@@ -528,15 +480,11 @@ fn child_of(pid: u32) -> Option<u32> {
     None
 }
 
-/// **The signalled child, end to end.** Nothing an ordinary program does
-/// reaches this branch — §8's handler and an ignored `SIGPIPE` see to that —
-/// so the only way to provoke the sentence is to kill the child from outside,
-/// which is exactly the case the branch exists for.
+/// Nothing an ordinary program does reaches this branch, so the child is killed from outside.
 #[test]
 fn a_child_killed_by_a_signal_is_reported_in_latin() {
     let d = temp_dir("liss-signum");
-    // Several seconds of arithmetic and no output, so the child is reliably
-    // still alive when the signal arrives.
+    // Several seconds of arithmetic and no output, so the child is still alive to be signalled.
     let src = "munus initium reddit ni {\n  ni s = nullus;\n  \
                dum (ni i = nullus; i minor_est \u{b0}MM; i = i + \u{b0}I) {\n    \
                dum (ni j = nullus; j minor_est \u{b0}M; j = j + \u{b0}I) {\n      \
@@ -560,7 +508,6 @@ fn a_child_killed_by_a_signal_is_reported_in_latin() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
 
-    // `kill` is a POSIX shell builtin, so this needs no binary beyond /bin/sh.
     let killed = Command::new("sh")
         .arg("-c")
         .arg(format!("kill -9 {kid}"))
