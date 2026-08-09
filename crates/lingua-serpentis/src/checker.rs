@@ -240,10 +240,10 @@ impl Checker {
     }
 
     fn check_expr(&self, e: &mut Expr, line: usize) -> LResult<(InferTy, ir::Expr)> {
-        match e {
-            Expr::Int(r) => Ok((InferTy::Known(Type::Int),
+        match &mut e.kind {
+            ExprKind::Int(r) => Ok((InferTy::Known(Type::Int),
                 konst(ir::Ty::Int, ir::Const::Int(r.clone())))),
-            Expr::FloatLit { numer, den } => {
+            ExprKind::FloatLit { numer, den } => {
                 // Still abstract, so the IR takes `nr`'s grain; `resolve_pair`
                 // re-narrows onto `mnr`'s grid exactly, because truncation composes.
                 let count = crate::fraction::from_rational(
@@ -252,24 +252,24 @@ impl Checker {
                     ir::Ty::Frac(ir::Grain::Scripulum),
                     ir::Const::Frac(ir::Grain::Scripulum, count))))
             }
-            Expr::Float(c) => Ok((InferTy::Known(Type::Float), konst(
+            ExprKind::Float(c) => Ok((InferTy::Known(Type::Float), konst(
                 ir::Ty::Frac(ir::Grain::Uncia),
                 ir::Const::Frac(ir::Grain::Uncia, c.clone())))),
-            Expr::Double(c) => Ok((InferTy::Known(Type::Double), konst(
+            ExprKind::Double(c) => Ok((InferTy::Known(Type::Double), konst(
                 ir::Ty::Frac(ir::Grain::Scripulum),
                 ir::Const::Frac(ir::Grain::Scripulum, c.clone())))),
-            Expr::Text(s) => Ok((InferTy::Known(Type::Text),
+            ExprKind::Text(s) => Ok((InferTy::Known(Type::Text),
                 konst(ir::Ty::Text, ir::Const::Text(s.clone())))),
-            Expr::Char(c) => Ok((InferTy::Known(Type::Char),
+            ExprKind::Char(c) => Ok((InferTy::Known(Type::Char),
                 konst(ir::Ty::Char, ir::Const::Char(*c)))),
-            Expr::Bool(b) => Ok((InferTy::Known(Type::Bool),
+            ExprKind::Bool(b) => Ok((InferTy::Known(Type::Bool),
                 konst(ir::Ty::Bool, ir::Const::Bool(*b)))),
-            Expr::Ident(name) => {
+            ExprKind::Ident(name) => {
                 let (t, slot) = self.lookup_or_err(name, line)?;
                 let ty = ty_of(&t);
                 Ok((InferTy::Known(t), ir::Expr { ty, kind: ir::ExprKind::Load(slot) }))
             }
-            Expr::Unary { op, expr } => {
+            ExprKind::Unary { op, expr } => {
                 let (t, arg) = self.check_expr(expr, line)?;
                 let res = match op {
                     UnOp::Not if t == InferTy::Known(Type::Bool) => InferTy::Known(Type::Bool),
@@ -285,12 +285,12 @@ impl Checker {
                 let ty = infer_ir_ty(&res);
                 Ok((res, ir::Expr { ty, kind: ir::ExprKind::Unary { op: *op, arg: Box::new(arg) } }))
             }
-            Expr::Binary { op, left, right } => {
+            ExprKind::Binary { op, left, right } => {
                 let (lt, lir) = self.check_expr(left, line)?;
                 let (rt, rir) = self.check_expr(right, line)?;
                 self.check_binary(*op, lt, rt, left, right, lir, rir, line)
             }
-            Expr::Call { package: Some(p), name, args } => {
+            ExprKind::Call { package: Some(p), name, args } => {
                 if !self.imports.contains(p) {
                     return Err(LinguaError {
                         message: format!("fasciculus '{}' non allatus est", p),
@@ -313,7 +313,7 @@ impl Checker {
                 Ok((InferTy::Known(ret),
                     ir::Expr { ty, kind: ir::ExprKind::Call { func, args: lowered } }))
             }
-            Expr::Call { package: None, name, args } => {
+            ExprKind::Call { package: None, name, args } => {
                 if name.as_str() == "longitudo" {
                     if args.len() != 1 {
                         return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line });
@@ -333,7 +333,7 @@ impl Checker {
                         return Err(LinguaError { message: "'adde' duo argumenta accipit".into(), line });
                     }
                     // A bare empty list literal takes its element type from the value.
-                    let empty_list_arg = matches!(&args[0], Expr::ListLit(v) if v.is_empty());
+                    let empty_list_arg = matches!(&args[0].kind, ExprKind::ListLit(v) if v.is_empty());
                     if empty_list_arg {
                         let (vt, item) = self.resolve_expr(&mut args[1], None, line)?;
                         let (_, list) = self.resolve_expr(
@@ -373,13 +373,13 @@ impl Checker {
                 Ok((InferTy::Known(ret),
                     ir::Expr { ty, kind: ir::ExprKind::Call { func, args: lowered } }))
             }
-            Expr::ListLit(elems) => {
+            ExprKind::ListLit(elems) => {
                 let (elem, items) = self.check_list_elems(elems, None, line)?;
                 let ty = ir::Ty::List(Box::new(ty_of(&elem)));
                 Ok((InferTy::Known(Type::List(Box::new(elem))),
                     ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
             }
-            Expr::Index { base, index } => {
+            ExprKind::Index { base, index } => {
                 let (base_ty, base_ir) = self.resolve_expr(base, None, line)?;
                 let elem = match base_ty {
                     Type::List(inner) => *inner,
@@ -439,8 +439,8 @@ impl Checker {
             Some(Type::List(inner)) => Some((**inner).clone()),
             _ => None,
         };
-        let elems = match e {
-            Expr::ListLit(v) => v,
+        let elems = match &mut e.kind {
+            ExprKind::ListLit(v) => v,
             _ => unreachable!("resolve_list called on non-list"),
         };
         let (elem, items) = self.check_list_elems(elems, elem_expected, line)?;
@@ -453,7 +453,7 @@ impl Checker {
     fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>, line: usize)
         -> LResult<(Type, ir::Expr)>
     {
-        if matches!(e, Expr::ListLit(_)) {
+        if matches!(e.kind, ExprKind::ListLit(_)) {
             return self.resolve_list(e, expected, line);
         }
         match self.check_expr(e, line)? {
@@ -776,19 +776,21 @@ impl Checker {
 /// Narrow every still-abstract fractional literal onto the type's grain grid by
 /// truncation. Only ever called where the synthesized type was `FloatLit`.
 fn resolve_floatlit(e: &mut Expr, ty: Type) {
-    match e {
-        Expr::FloatLit { numer, den } => {
+    match &mut e.kind {
+        ExprKind::FloatLit { numer, den } => {
             let (numer, den) = (numer.clone(), den.clone());
-            *e = match ty {
-                Type::Float => Expr::Float(
+            // The literal narrows in place; its span is unchanged, because it is
+            // still written where it was written.
+            e.kind = match ty {
+                Type::Float => ExprKind::Float(
                     crate::fraction::from_rational(&numer, &den, &crate::fraction::uncia_grain())),
-                Type::Double => Expr::Double(
+                Type::Double => ExprKind::Double(
                     crate::fraction::from_rational(&numer, &den, &crate::fraction::scripulum_grain())),
                 _ => return,
             };
         }
-        Expr::Unary { expr, .. } => resolve_floatlit(expr, ty),
-        Expr::Binary { left, right, .. } => {
+        ExprKind::Unary { expr, .. } => resolve_floatlit(expr, ty),
+        ExprKind::Binary { left, right, .. } => {
             resolve_floatlit(left, ty.clone());
             resolve_floatlit(right, ty);
         }

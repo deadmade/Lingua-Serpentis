@@ -6,8 +6,55 @@ pub use liss_runtime::{BinOp, UnOp};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type { Int, Float, Double, Text, Char, Bool, List(Box<Type>) }
 
+/// An expression and where it is written. The span is what a caret underlines, so
+/// every expression carries one — a diagnostic about a subexpression names *it*,
+/// not the statement enclosing it.
+#[derive(Debug, Clone)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub spatium: Spatium,
+}
+
+impl Expr {
+    pub fn novum(kind: ExprKind, spatium: Spatium) -> Expr {
+        Expr { kind, spatium }
+    }
+}
+
+/// **Structural, and deliberately blind to the span.** Two expressions are equal
+/// when they say the same thing, whatever line they say it on — which is what
+/// every comparison in the tree wants, and what keeps a position from changing
+/// the meaning of `==`. Where a span is the subject, it is asserted directly:
+/// `lexer.rs` for the tokens, `fragmentum.rs` for the extraction, and the corpus
+/// for the caret that results.
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+/// So an expected shape can be written as the bare `ExprKind` it is about.
+impl PartialEq<ExprKind> for Expr {
+    fn eq(&self, other: &ExprKind) -> bool {
+        self.kind == *other
+    }
+}
+
+/// A span for an expression built without a source to place it in — tests, and the
+/// `ExprKind` half of a comparison. `linea` is 0, so `fragmentum::extract` declines
+/// to draw a snippet for it rather than inventing one.
+pub const NUSQUAM: Spatium = Spatium { principium: 0, finis: 0, linea: 0 };
+
+pub fn ex(kind: ExprKind) -> Expr {
+    Expr::novum(kind, NUSQUAM)
+}
+
+pub fn bx(kind: ExprKind) -> Box<Expr> {
+    Box::new(ex(kind))
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub enum ExprKind {
     Int(Roman),
     FloatLit { numer: Roman, den: Roman }, // abstract, unresolved
     Float(Roman),  // mnr: unciae (1/12)

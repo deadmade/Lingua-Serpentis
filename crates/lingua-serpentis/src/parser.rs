@@ -3,6 +3,13 @@ use crate::error::{LinguaError, LResult};
 use crate::spatium::Spatium;
 use crate::token::{Token, TokenKind};
 
+/// A binary node spans its two operands, from the start of the left to the end
+/// of the right.
+fn binaria(op: BinOp, left: Expr, right: Expr) -> Expr {
+    let spatium = left.spatium.ad(right.spatium);
+    Expr::novum(ExprKind::Binary { op, left: Box::new(left), right: Box::new(right) }, spatium)
+}
+
 /// Half the measured ceiling on a spawned 2 MiB thread, which is 128 (D-05).
 const ALTITUDO_MAXIMA: usize = 64;
 
@@ -50,6 +57,15 @@ impl<'a> Parser<'a> {
         r
     }
 
+    /// The span of the token just consumed, which is where a production ends.
+    fn ultimum(&self) -> Spatium {
+        self.toks
+            .get(self.pos.wrapping_sub(1))
+            .or_else(|| self.toks.last())
+            .map(|t| t.spatium)
+            .unwrap_or(Spatium::novum(0, 0, 0))
+    }
+
     fn expr(&mut self) -> LResult<Expr> { self.descend(|p| p.or_expr()) }
 
     fn or_expr(&mut self) -> LResult<Expr> {
@@ -57,7 +73,7 @@ impl<'a> Parser<'a> {
         while self.peek() == Some(&TokenKind::Or) {
             self.advance();
             let right = self.and_expr()?;
-            left = Expr::Binary { op: BinOp::Or, left: Box::new(left), right: Box::new(right) };
+            left = binaria(BinOp::Or, left, right);
         }
         Ok(left)
     }
@@ -66,7 +82,7 @@ impl<'a> Parser<'a> {
         while self.peek() == Some(&TokenKind::And) {
             self.advance();
             let right = self.cmp_expr()?;
-            left = Expr::Binary { op: BinOp::And, left: Box::new(left), right: Box::new(right) };
+            left = binaria(BinOp::And, left, right);
         }
         Ok(left)
     }
@@ -82,7 +98,7 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             let right = self.add_expr()?;
-            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+            left = binaria(op, left, right);
         }
         Ok(left)
     }
@@ -96,7 +112,7 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             let right = self.mul_expr()?;
-            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+            left = binaria(op, left, right);
         }
         Ok(left)
     }
@@ -111,22 +127,21 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             let right = self.unary()?;
-            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+            left = binaria(op, left, right);
         }
         Ok(left)
     }
     fn unary(&mut self) -> LResult<Expr> {
-        match self.peek() {
-            Some(TokenKind::Not) => {
-                self.advance();
-                Ok(Expr::Unary { op: UnOp::Not, expr: Box::new(self.descend(|p| p.unary())?) })
-            }
-            Some(TokenKind::Minus) => {
-                self.advance();
-                Ok(Expr::Unary { op: UnOp::Neg, expr: Box::new(self.descend(|p| p.unary())?) })
-            }
-            _ => self.postfix(),
-        }
+        let op = match self.peek() {
+            Some(TokenKind::Not) => UnOp::Not,
+            Some(TokenKind::Minus) => UnOp::Neg,
+            _ => return self.postfix(),
+        };
+        // From the operator through the operand: `-x` is underlined whole.
+        let signum = self.advance().spatium;
+        let expr = self.descend(|p| p.unary())?;
+        let spatium = signum.ad(expr.spatium);
+        Ok(Expr::novum(ExprKind::Unary { op, expr: Box::new(expr) }, spatium))
     }
     fn postfix(&mut self) -> LResult<Expr> {
         let mut e = self.primary()?;
@@ -134,7 +149,8 @@ impl<'a> Parser<'a> {
             self.advance();
             let index = self.expr()?;
             self.eat(&TokenKind::RBracket)?;
-            e = Expr::Index { base: Box::new(e), index: Box::new(index) };
+            let spatium = e.spatium.ad(self.ultimum());
+            e = Expr::novum(ExprKind::Index { base: Box::new(e), index: Box::new(index) }, spatium);
         }
         Ok(e)
     }
@@ -153,21 +169,29 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> LResult<Expr> {
+        // A literal or a name spans exactly its own token; the composite forms
+        // below close from that token through the one that ends them.
+        let unum = |p: &mut Self, kind: ExprKind| {
+            let spatium = p.advance().spatium;
+            Ok(Expr::novum(kind, spatium))
+        };
         match self.peek().cloned() {
-            Some(TokenKind::Int(i)) => { self.advance(); Ok(Expr::Int(i)) }
-            Some(TokenKind::Frac { numer, den }) => { self.advance(); Ok(Expr::FloatLit { numer, den }) }
-            Some(TokenKind::Text(s)) => { self.advance(); Ok(Expr::Text(s)) }
-            Some(TokenKind::Char(c)) => { self.advance(); Ok(Expr::Char(c)) }
-            Some(TokenKind::True) => { self.advance(); Ok(Expr::Bool(true)) }
-            Some(TokenKind::False) => { self.advance(); Ok(Expr::Bool(false)) }
+            Some(TokenKind::Int(i)) => unum(self, ExprKind::Int(i)),
+            Some(TokenKind::Frac { numer, den }) => unum(self, ExprKind::FloatLit { numer, den }),
+            Some(TokenKind::Text(s)) => unum(self, ExprKind::Text(s)),
+            Some(TokenKind::Char(c)) => unum(self, ExprKind::Char(c)),
+            Some(TokenKind::True) => unum(self, ExprKind::Bool(true)),
+            Some(TokenKind::False) => unum(self, ExprKind::Bool(false)),
             Some(TokenKind::LParen) => {
                 self.advance();
                 let e = self.expr()?;
                 self.eat(&TokenKind::RParen)?;
+                // The parenthesised expression keeps its own span: a caret should
+                // point at the expression, not at the punctuation around it.
                 Ok(e)
             }
             Some(TokenKind::Ident(name)) => {
-                self.advance();
+                let nomen = self.advance().spatium;
                 if self.peek() == Some(&TokenKind::Dot) {
                     self.advance();
                     let (fname, _) = self.ident()?;
@@ -175,17 +199,22 @@ impl<'a> Parser<'a> {
                         return Err(self.err("vocatio functionis post nomen fasciculi expectata"));
                     }
                     let args = self.call_args()?;
-                    return Ok(Expr::Call { package: Some(name), name: fname, args });
+                    let spatium = nomen.ad(self.ultimum());
+                    return Ok(Expr::novum(
+                        ExprKind::Call { package: Some(name), name: fname, args },
+                        spatium,
+                    ));
                 }
                 if self.peek() == Some(&TokenKind::LParen) {
                     let args = self.call_args()?;
-                    Ok(Expr::Call { package: None, name, args })
+                    let spatium = nomen.ad(self.ultimum());
+                    Ok(Expr::novum(ExprKind::Call { package: None, name, args }, spatium))
                 } else {
-                    Ok(Expr::Ident(name))
+                    Ok(Expr::novum(ExprKind::Ident(name), nomen))
                 }
             }
             Some(TokenKind::LBracket) => {
-                self.advance();
+                let aperit = self.advance().spatium;
                 let mut elems = Vec::new();
                 if self.peek() != Some(&TokenKind::RBracket) {
                     elems.push(self.expr()?);
@@ -195,7 +224,8 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.eat(&TokenKind::RBracket)?;
-                Ok(Expr::ListLit(elems))
+                let spatium = aperit.ad(self.ultimum());
+                Ok(Expr::novum(ExprKind::ListLit(elems), spatium))
             }
             _ => Err(self.err("expressio expectata")),
         }
@@ -397,13 +427,13 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let e = self.expr()?;
-                if matches!(e, Expr::Index { .. }) && self.peek() == Some(&TokenKind::Assign) {
-                    let (base, index) = match e {
-                        Expr::Index { base, index } => (base, index),
+                if matches!(e.kind, ExprKind::Index { .. }) && self.peek() == Some(&TokenKind::Assign) {
+                    let (base, index) = match e.kind {
+                        ExprKind::Index { base, index } => (base, index),
                         _ => unreachable!(),
                     };
-                    let name = match *base {
-                        Expr::Ident(n) => n,
+                    let name = match base.kind {
+                        ExprKind::Ident(n) => n,
                         _ => return Err(self.err("sinistra subscriptionis variabilis esse debet")),
                     };
                     self.advance();
@@ -411,7 +441,7 @@ impl<'a> Parser<'a> {
                     self.eat(&TokenKind::Semicolon)?;
                     return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line });
                 }
-                if matches!(e, Expr::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
+                if matches!(e.kind, ExprKind::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
                     return Err(self.err("munus ante definitionem expectatum"));
                 }
                 self.eat(&TokenKind::Semicolon)?;
@@ -512,7 +542,7 @@ mod tests {
         assert_eq!(s.len(), 1);
         assert!(matches!(
             &s[0].kind,
-            StmtKind::Let { ty: Type::Int, name, value: Expr::Int(v), .. }
+            StmtKind::Let { ty: Type::Int, name, value: Expr { kind: ExprKind::Int(v), .. }, .. }
                 if name == "x" && *v == ri(5)
         ));
     }
@@ -520,20 +550,20 @@ mod tests {
     #[test]
     fn assignment_and_print() {
         let s = parse_all("x = °I; scribe(x);");
-        assert_eq!(s[0].kind, StmtKind::Assign { name: "x".into(), value: Expr::Int(ri(1)) });
-        assert_eq!(s[1].kind, StmtKind::Print(Expr::Ident("x".into())));
+        assert_eq!(s[0].kind, StmtKind::Assign { name: "x".into(), value: ex(ExprKind::Int(ri(1))) });
+        assert_eq!(s[1].kind, StmtKind::Print(ex(ExprKind::Ident("x".into()))));
     }
 
     #[test]
     fn arithmetic_precedence() {
         let e = parse_first_expr("°II + °III * °IV;");
-        assert_eq!(e, Expr::Binary {
+        assert_eq!(e, ExprKind::Binary {
             op: BinOp::Add,
-            left: Box::new(Expr::Int(ri(2))),
-            right: Box::new(Expr::Binary {
+            left: bx(ExprKind::Int(ri(2))),
+            right: bx(ExprKind::Binary {
                 op: BinOp::Mul,
-                left: Box::new(Expr::Int(ri(3))),
-                right: Box::new(Expr::Int(ri(4))),
+                left: bx(ExprKind::Int(ri(3))),
+                right: bx(ExprKind::Int(ri(4))),
             }),
         });
     }
@@ -541,9 +571,9 @@ mod tests {
     #[test]
     fn comparison_and_call() {
         let e = parse_first_expr("summa maior_est adde(a, °I);");
-        match e {
-            Expr::Binary { op: BinOp::Gt, right, .. } => match *right {
-                Expr::Call { name, args, .. } => {
+        match e.kind {
+            ExprKind::Binary { op: BinOp::Gt, right, .. } => match right.kind {
+                ExprKind::Call { name, args, .. } => {
                     assert_eq!(name, "adde");
                     assert_eq!(args.len(), 2);
                 }
@@ -556,45 +586,45 @@ mod tests {
     #[test]
     fn boolean_and_binds_tighter_than_or() {
         let e = parse_first_expr("a et b vel c;");
-        assert_eq!(e, Expr::Binary {
+        assert_eq!(e, ExprKind::Binary {
             op: BinOp::Or,
-            left: Box::new(Expr::Binary {
+            left: bx(ExprKind::Binary {
                 op: BinOp::And,
-                left: Box::new(Expr::Ident("a".into())),
-                right: Box::new(Expr::Ident("b".into())),
+                left: bx(ExprKind::Ident("a".into())),
+                right: bx(ExprKind::Ident("b".into())),
             }),
-            right: Box::new(Expr::Ident("c".into())),
+            right: bx(ExprKind::Ident("c".into())),
         });
     }
 
     #[test]
     fn not_binds_tighter_than_and() {
         let e = parse_first_expr("non a et b;");
-        assert_eq!(e, Expr::Binary {
+        assert_eq!(e, ExprKind::Binary {
             op: BinOp::And,
-            left: Box::new(Expr::Unary { op: UnOp::Not, expr: Box::new(Expr::Ident("a".into())) }),
-            right: Box::new(Expr::Ident("b".into())),
+            left: bx(ExprKind::Unary { op: UnOp::Not, expr: bx(ExprKind::Ident("a".into())) }),
+            right: bx(ExprKind::Ident("b".into())),
         });
     }
 
     #[test]
     fn subtraction_is_left_associative() {
         let e = parse_first_expr("°X - °III - °I;");
-        assert_eq!(e, Expr::Binary {
+        assert_eq!(e, ExprKind::Binary {
             op: BinOp::Sub,
-            left: Box::new(Expr::Binary {
+            left: bx(ExprKind::Binary {
                 op: BinOp::Sub,
-                left: Box::new(Expr::Int(ri(10))),
-                right: Box::new(Expr::Int(ri(3))),
+                left: bx(ExprKind::Int(ri(10))),
+                right: bx(ExprKind::Int(ri(3))),
             }),
-            right: Box::new(Expr::Int(ri(1))),
+            right: bx(ExprKind::Int(ri(1))),
         });
     }
 
     #[test]
     fn zero_arg_call() {
         let e = parse_first_expr("adde();");
-        assert_eq!(e, Expr::Call { package: None, name: "adde".into(), args: vec![] });
+        assert_eq!(e, ExprKind::Call { package: None, name: "adde".into(), args: vec![] });
     }
 
     #[test]
@@ -706,8 +736,8 @@ mod tests {
     #[test]
     fn list_literal_parses() {
         let e = parse_first_expr("[°I, °II, °III];");
-        assert_eq!(e, Expr::ListLit(vec![Expr::Int(ri(1)), Expr::Int(ri(2)), Expr::Int(ri(3))]));
-        assert_eq!(parse_first_expr("[];"), Expr::ListLit(vec![]));
+        assert_eq!(e, ExprKind::ListLit(vec![ex(ExprKind::Int(ri(1))), ex(ExprKind::Int(ri(2))), ex(ExprKind::Int(ri(3)))]));
+        assert_eq!(parse_first_expr("[];"), ExprKind::ListLit(vec![]));
     }
 
     #[test]
@@ -715,22 +745,22 @@ mod tests {
         let s = parse_all("ni lista xs = [°I];");
         assert!(matches!(
             &s[0].kind,
-            StmtKind::Let { ty, name, value: Expr::ListLit(xs), .. }
+            StmtKind::Let { ty, name, value: Expr { kind: ExprKind::ListLit(xs), .. }, .. }
                 if *ty == Type::List(Box::new(Type::Int))
                     && name == "xs"
-                    && *xs == vec![Expr::Int(ri(1))]
+                    && *xs == vec![ExprKind::Int(ri(1))]
         ));
     }
 
     #[test]
     fn index_expression_parses() {
         let e = parse_first_expr("xs[°I];");
-        assert_eq!(e, Expr::Index {
-            base: Box::new(Expr::Ident("xs".into())),
-            index: Box::new(Expr::Int(ri(1))),
+        assert_eq!(e, ExprKind::Index {
+            base: bx(ExprKind::Ident("xs".into())),
+            index: bx(ExprKind::Int(ri(1))),
         });
         let e2 = parse_first_expr("xs[°I][°II];");
-        assert!(matches!(e2, Expr::Index { base, .. } if matches!(*base, Expr::Index { .. })));
+        assert!(matches!(e2.kind, ExprKind::Index { base, .. } if matches!(base.kind, ExprKind::Index { .. })));
     }
 
     #[test]
@@ -738,15 +768,15 @@ mod tests {
         let s = parse_all("xs[°II] = °X;");
         assert_eq!(s[0].kind, StmtKind::IndexAssign {
             name: "xs".into(),
-            index: Expr::Int(ri(2)),
-            value: Expr::Int(ri(10)),
+            index: ex(ExprKind::Int(ri(2))),
+            value: ex(ExprKind::Int(ri(10))),
         });
     }
 
     #[test]
     fn bare_index_is_still_an_expr_statement() {
         let s = parse_all("xs[°I];");
-        assert!(matches!(s[0].kind, StmtKind::ExprStmt(Expr::Index { .. })));
+        assert!(matches!(s[0].kind, StmtKind::ExprStmt(Expr { kind: ExprKind::Index { .. }, .. })));
     }
 
     fn parse_file_ok(src: &str) -> FileAst {
@@ -800,10 +830,10 @@ mod tests {
     #[test]
     fn qualified_call_parses() {
         let e = parse_first_expr("mathematica.summa(°I, °II);");
-        assert_eq!(e, Expr::Call {
+        assert_eq!(e, ExprKind::Call {
             package: Some("mathematica".into()),
             name: "summa".into(),
-            args: vec![Expr::Int(ri(1)), Expr::Int(ri(2))],
+            args: vec![ex(ExprKind::Int(ri(1))), ex(ExprKind::Int(ri(2)))],
         });
     }
 
