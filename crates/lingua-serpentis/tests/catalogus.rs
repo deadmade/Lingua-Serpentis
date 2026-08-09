@@ -2,156 +2,12 @@
 //! produces it. The rules it imposes on source are in docs/internals/testing.md.
 mod support;
 
-use std::path::Path;
-
-/// Markers that introduce a user-facing message.
-const MARKERS: [&str; 11] = [
-    "LinguaError {",
-    ".err(",
-    "ProgramError::structural(",
-    "Warning {",
-    "eprintln!(",
-    "Err(\"",
-    ".ok_or(\"",
-    "ok_or_else(|| format!(",
-    "liss_panic(",
-    "Defectus::novus(",
-    "NUNTIUS_",
-];
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Site {
     file: String,
     line: usize,
     /// The format string as written, e.g. `variabilis ignota: '{}'`.
     pattern: String,
-}
-
-/// Source truncated at its unit-test module, which must therefore run to EOF.
-fn production_source(path: &Path) -> String {
-    let text = std::fs::read_to_string(path).unwrap();
-    match text.find("\n#[cfg(test)]\n") {
-        Some(i) => text[..i + 1].to_string(),
-        None => text,
-    }
-}
-
-/// Byte offset of the first `"` in `hay` that opens a string literal; one written as the char
-/// literal `'"'` is skipped.
-fn opening_quote(hay: &str) -> Option<usize> {
-    let b = hay.as_bytes();
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'"' {
-            let char_literal = i >= 1 && b[i - 1] == b'\'' && b.get(i + 1) == Some(&b'\'');
-            if !char_literal {
-                return Some(i);
-            }
-            i += 2;
-            continue;
-        }
-        i += 1;
-    }
-    None
-}
-
-/// The first string literal after `from`, within `window` bytes and before the next marker;
-/// `None` when the site has no literal of its own. Read docs/internals/testing.md before
-/// changing this: the 300-byte window is why a comment may never sit between a marker and
-/// its message.
-fn literal_after(src: &str, from: usize, window: usize) -> Option<String> {
-    // A byte count can land inside a multi-byte character; grow to the next boundary.
-    let mut end = src.len().min(from + window);
-    while !src.is_char_boundary(end) {
-        end += 1;
-    }
-    let hay = &src[from..end];
-    let stop = MARKERS.iter().filter_map(|m| hay.find(m)).min().unwrap_or(hay.len());
-    let hay = &hay[..stop];
-    let start = opening_quote(hay)? + 1;
-    let rest = &hay[start..];
-    let mut out = String::new();
-    let mut chars = rest.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => return Some(out),
-            '\\' => {
-                if let Some(n) = chars.next() {
-                    out.push(match n {
-                        'n' => '\n',
-                        't' => '\t',
-                        other => other,
-                    });
-                }
-            }
-            _ => out.push(c),
-        }
-    }
-    None
-}
-
-fn extract_sites() -> Vec<Site> {
-    let root = support::repo_root();
-    // Non-recursive, so nothing under `src/bin/` is visible here.
-    let mut files: Vec<_> =
-        ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
-            .iter()
-        .flat_map(|c| {
-            std::fs::read_dir(root.join("crates").join(c).join("src"))
-                .unwrap()
-                .map(|e| e.unwrap().path())
-        })
-        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
-        .collect();
-    files.sort();
-
-    let mut sites = Vec::new();
-    for path in files {
-        let src = production_source(&path);
-        let rel = path.strip_prefix(&root).unwrap().display().to_string();
-        for marker in MARKERS {
-            let mut at = 0;
-            while let Some(i) = src[at..].find(marker) {
-                let abs = at + i;
-                // A declaration is not a raise.
-                let ante = src[..abs].trim_end();
-                if ante.ends_with("->") || ante.ends_with("fn") {
-                    at = abs + marker.len();
-                    continue;
-                }
-                // Prose about a diagnostic is not a diagnostic. Read docs/internals/testing.md
-                // before touching this: it looks left from the marker, and it assumes no block
-                // comment exists anywhere in a scanned `src` tree.
-                let linea = src[..abs].rfind('\n').map_or(0, |i| i + 1);
-                if src[linea..abs].contains("//") {
-                    at = abs + marker.len();
-                    continue;
-                }
-                // A `NUNTIUS_*` constant is a site where it is declared, and nowhere else.
-                if marker == "NUNTIUS_"
-                    && !(ante.ends_with("const") || ante.ends_with("static"))
-                {
-                    at = abs + marker.len();
-                    continue;
-                }
-                let line = src[..abs].lines().count();
-                // A marker ending in the literal's own opening quote must not consume it.
-                let skip = marker.len() - usize::from(marker.ends_with('"'));
-                let pattern = literal_after(&src, abs + skip, 300)
-                    .unwrap_or_else(|| "UNPARSED".to_string());
-                // A pattern that is nothing but holes identifies nothing.
-                if pattern.replace("{}", "").trim().is_empty() && pattern != "UNPARSED" {
-                    at = abs + marker.len();
-                    continue;
-                }
-                sites.push(Site { file: rel.clone(), line, pattern });
-                at = abs + marker.len();
-            }
-        }
-    }
-    sites.sort();
-    sites.dedup();
-    sites
 }
 
 /// Compares the literal segments between `{...}` holes, in order, anchored at both ends unless
@@ -224,26 +80,26 @@ fn pattern_counts(sites: &[Site]) -> std::collections::HashMap<&str, usize> {
 #[test]
 fn byte_and_c_string_literals_are_extracted_like_any_other() {
     let cases = [
-        ("NUNTIUS_", r#"const NUNTIUS_X: &[u8] = b"acervus exhaustus";"#, "acervus exhaustus"),
-        ("NUNTIUS_", r#"const NUNTIUS_Y: &CStr = c"memoria violata est";"#, "memoria violata est"),
-        ("NUNTIUS_", r#"const NUNTIUS_Z: &str = "planus";"#, "planus"),
-        ("liss_panic(", r#"liss_panic(c"divisio per nullum".as_ptr(), locus);"#, "divisio per nullum"),
-        ("liss_panic(", r#"liss_panic(c"nomen \"x\" ignotum".as_ptr());"#, "nomen \"x\" ignotum"),
+        (r#"const NUNTIUS_X: &[u8] = b"acervus exhaustus";"#, "acervus exhaustus"),
+        (r#"const NUNTIUS_Y: &CStr = c"memoria violata est";"#, "memoria violata est"),
+        (r#"const NUNTIUS_Z: &str = "planus";"#, "planus"),
+        (r#"liss_panic(c"divisio per nullum".as_ptr(), locus);"#, "divisio per nullum"),
+        (r#"liss_panic(c"nomen \"x\" ignotum".as_ptr());"#, "nomen \"x\" ignotum"),
+        // A char literal before the message is not a message; `Lit::Char` is not one of the
+        // three arms `primum_literale` accepts.
+        (
+            r#"self.err(if c == '"' { "chorda non clausa" } else { "aliud" });"#,
+            "chorda non clausa",
+        ),
     ];
-    for (marker, src, want) in cases {
-        // Start where `extract_sites` starts: just past the marker.
-        let from = src.find(marker).expect("the fragment contains its marker") + marker.len();
+    for (src, want) in cases {
+        let sites = sites_of(src);
         assert_eq!(
-            literal_after(src, from, 300).as_deref(),
-            Some(want),
+            sites.iter().map(|s| s.pattern.as_str()).collect::<Vec<_>>(),
+            [want],
             "failed to extract from {src:?}",
         );
     }
-
-    // A char literal between the marker and the message is still skipped.
-    let src = r#"self.err(if c == '"' { "chorda non clausa" } else { "aliud" })"#;
-    let from = src.find(".err(").expect("marker") + ".err(".len();
-    assert_eq!(literal_after(src, from, 300).as_deref(), Some("chorda non clausa"));
 }
 
 #[test]
@@ -282,12 +138,14 @@ fn a_marker_in_a_comment_is_prose_and_a_marker_in_code_is_not() {
         );
     }
 
-    // Keyed on `//` before the marker: a trailing note after a real site must not erase it.
-    let src = "    eprintln!(\"Error: machina ignota est\"); // and exit\n";
+    // Comments are not tokens, so neither direction can go wrong any more. A trailing note
+    // after a real site does not erase it, and a block comment quoting a marker in prose —
+    // which the scanner could not survive at all — invents nothing.
+    let src = "eprintln!(\"Error: machina ignota est\"); // and exit\n\
+               /* prose: NUNTIUS_ and Defectus::novus( and Error: */\n";
     assert_eq!(
-        literal_after(src, src.find("eprintln!(").expect("marker") + "eprintln!(".len(), 300)
-            .as_deref(),
-        Some("Error: machina ignota est"),
+        sites_of(src).iter().map(|s| s.pattern.as_str()).collect::<Vec<_>>(),
+        ["Error: machina ignota est"],
     );
 }
 
@@ -507,7 +365,7 @@ impl<'ast> syn::visit::Visit<'ast> for Lector {
 
 /// The same six crates, the same non-recursive `read_dir`, the same sorted `.rs` files —
 /// parsed rather than scanned.
-fn extract_sites_ast() -> Vec<Site> {
+fn extract_sites() -> Vec<Site> {
     let root = support::repo_root();
     let mut files: Vec<_> =
         ["lingua-serpentis", "latinitas", "liss-runtime", "liss-ir", "liss-codegen", "liss-abi"]
@@ -535,44 +393,16 @@ fn extract_sites_ast() -> Vec<Site> {
     sites
 }
 
-/// The two extractors must agree, or every difference must be written into
-/// `docs/superpowers/specs/2026-08-09-test-harness-libraries-design.md` §8 before the
-/// scanner goes.
-/// The five rows the scanner reports and the parser does not, each a scanner artifact:
-/// three type *definitions* matched by the struct-expression markers `LinguaError {` and
-/// `Warning {`, and two `impl Display for X {` headers matched the same way, whose patterns
-/// were then lifted out of the `write!` on the following line. None is `fixtured`: the three
-/// are `UNPARSED` and the two are `UNCOVERED` — and permanently so, because
-/// `observed_messages` strips the envelope before matching, so an envelope pattern has
-/// nothing to match against. Recorded in §8 of the design document.
-const ARTIFICIA_SCRUTATORIS: [(&str, usize); 5] = [
-    ("crates/lingua-serpentis/src/error.rs", 2),
-    ("crates/lingua-serpentis/src/error.rs", 11),
-    ("crates/lingua-serpentis/src/error.rs", 17),
-    ("crates/lingua-serpentis/src/error.rs", 83),
-    ("crates/liss-runtime/src/exitus.rs", 8),
-];
-
-#[test]
-fn the_ast_extractor_agrees_with_the_scanner() {
-    let scanned = extract_sites();
-    let parsed = extract_sites_ast();
-    let artificium =
-        |s: &Site| ARTIFICIA_SCRUTATORIS.iter().any(|&(f, l)| s.file == f && s.line == l);
-    let solum_scanned: Vec<_> =
-        scanned.iter().filter(|s| !parsed.contains(s) && !artificium(s)).collect();
-    let solum_parsed: Vec<_> = parsed.iter().filter(|s| !scanned.contains(s)).collect();
-    assert!(
-        solum_scanned.is_empty() && solum_parsed.is_empty(),
-        "scanner only ({}): {solum_scanned:#?}\nparser only ({}): {solum_parsed:#?}",
-        solum_scanned.len(),
-        solum_parsed.len(),
-    );
-    // The allowlist is exact: every row in it must really be one the parser drops.
-    for &(f, l) in &ARTIFICIA_SCRUTATORIS {
-        assert!(
-            !parsed.iter().any(|s| s.file == f && s.line == l),
-            "{f}:{l} is no longer dropped by the parser; take it out of the allowlist",
-        );
-    }
+/// The sites in one source fragment, for the tests that assert on a fragment rather than on
+/// the tree. **Wrapped in a function first**, which is where these constructs really live: at
+/// file level `eprintln!(…);` is an `Item::Macro` and no visitor here looks at those, so a
+/// bare `parse_file` would silently find nothing. The fallback is for a fragment that is only
+/// valid at file level.
+fn sites_of(src: &str) -> Vec<Site> {
+    let ast = syn::parse_file(&format!("fn probatio() {{ {src} }}"))
+        .or_else(|_| syn::parse_file(src))
+        .unwrap_or_else(|e| panic!("fragment does not parse: {e}\n{src}"));
+    let mut lector = Lector { file: "probatio.rs".to_string(), sites: Vec::new() };
+    syn::visit::Visit::visit_file(&mut lector, &ast);
+    lector.sites
 }

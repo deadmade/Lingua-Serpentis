@@ -1,9 +1,8 @@
 ---
 source: crates/lingua-serpentis/tests/catalogus.rs
-assertion_line: 348
 expression: report
 ---
-123 sites · 70 fixtured · 0 ambiguous · 48 uncovered · 5 unparsed
+118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
 crates/lingua-serpentis/src/checker.rs:176  variabilis ignota: '{}'  → fixtured
 crates/lingua-serpentis/src/checker.rs:206  functio '{}' numerum argumentorum falsum accepit  → fixtured
@@ -57,10 +56,6 @@ crates/lingua-serpentis/src/cli.rs:303  Error: scida '{}' scribi non potest  →
 crates/lingua-serpentis/src/cli.rs:404  Error: scida temporaria creari non potest  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:419  Error: programma incipi non potest  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:425  Error: programma abrupte cessavit  → UNCOVERED
-crates/lingua-serpentis/src/error.rs:2  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/error.rs:11  UNPARSED  → UNPARSED
-crates/lingua-serpentis/src/error.rs:17  Monitum in '{}', linea {}: {}  → UNCOVERED
-crates/lingua-serpentis/src/error.rs:83  Error in linea {}: {}  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:19  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/latinity.rs:40  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:45  UNPARSED  → UNPARSED
@@ -125,7 +120,6 @@ crates/liss-codegen/src/nexus.rs:175  defectus internus: artefactum non est ELF 
 crates/liss-codegen/src/nexus.rs:182  defectus internus: artefacta machinis diversis composita sunt  → UNCOVERED
 crates/liss-codegen/src/nexus.rs:193  defectus internus: machina ignota est  → UNCOVERED
 crates/liss-codegen/src/nexus.rs:194  defectus internus: nihil coniungendum est  → UNCOVERED
-crates/liss-runtime/src/exitus.rs:8  UNPARSED  → UNPARSED
 crates/liss-runtime/src/exitus.rs:21  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
 crates/liss-runtime/src/roman.rs:191  numerus Romanus vacuus  → fixtured
 crates/liss-runtime/src/roman.rs:203  numerus Romanus invalidus: '{}'  → fixtured
