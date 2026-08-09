@@ -1,3 +1,5 @@
-Monitum: nomen fasciculi 'foobar' fortasse non Latinum est
-Monitum in 'principale.liss', linea 3: nomen 'result' fortasse non Latinum est
-Monitum in 'foobar/x.liss', linea 2: nomen 'answer' fortasse non Latinum est
+monitum: nomen fasciculi 'foobar' fortasse non Latinum est
+monitum: nomen 'result' fortasse non Latinum est
+  in 'principale.liss', linea III
+monitum: nomen 'answer' fortasse non Latinum est
+  in 'foobar/x.liss', linea II

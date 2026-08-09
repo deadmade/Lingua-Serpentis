@@ -55,11 +55,28 @@ fn observed_messages() -> Vec<String> {
     for f in support::discover() {
         let r = support::run_fixture(&f);
         for line in r.stderr.lines() {
-            let msg = line
-                .split_once(": ")
-                .map(|(_, m)| m.to_string())
-                .unwrap_or_else(|| line.to_string());
-            out.push(msg);
+            // Only a line that *opens* a diagnostic is a sentence the language
+            // wrote. The rest of a block is a location row, a gutter, and echoed
+            // source — and echoed source is the dangerous one: a program line
+            // that happened to read like a diagnostic would mark its pattern
+            // `fixtured` when no fixture provokes it, which is a false green in
+            // the one test that guards every user-facing sentence.
+            //
+            // Both grammars, because the compiled image has not adopted the block
+            // form yet and its thirteen sentences would otherwise all go
+            // `UNCOVERED` at once.
+            let msg = match line.strip_prefix("erratum: ").or_else(|| line.strip_prefix("monitum: "))
+            {
+                Some(m) => m,
+                None if line.starts_with("Error") || line.starts_with("Monitum") => {
+                    match line.split_once(": ") {
+                        Some((_, m)) => m,
+                        None => continue,
+                    }
+                }
+                None => continue,
+            };
+            out.push(msg.to_string());
         }
     }
     out.sort();

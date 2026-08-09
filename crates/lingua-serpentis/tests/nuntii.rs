@@ -6,73 +6,15 @@
 //! the framing normalised away, so a change of *shape* leaves it untouched and a change
 //! of *sentence* does not.
 //!
+//! The reader is `support::diag::parse_stderr`, the same one `judge` uses, which makes
+//! this a second check on it: a parser that quietly returned nothing would empty the
+//! snapshot rather than pass.
+//!
 //! `docs/superpowers/specs/2026-08-09-caret-diagnostics-design.md` §10.
 
 mod support;
 
-/// Error or warning. The two are `Error`/`Monitum` in the old grammar and
-/// `erratum`/`monitum` in the new; this collapses them so one snapshot spans both.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Genus {
-    Erratum,
-    Monitum,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Sententia {
-    genus: Genus,
-    scida: Option<String>,
-    linea: Option<usize>,
-    nuntius: String,
-}
-
-/// `Error in 'x.liss', linea 3: …` and its three siblings, for each of the two words.
-fn vetus(linea: &str) -> Option<Sententia> {
-    let (genus, reliquum) = match linea.strip_prefix("Error") {
-        Some(r) => (Genus::Erratum, r),
-        None => (Genus::Monitum, linea.strip_prefix("Monitum")?),
-    };
-    if let Some(m) = reliquum.strip_prefix(": ") {
-        return Some(Sententia { genus, scida: None, linea: None, nuntius: m.to_string() });
-    }
-    let reliquum = reliquum.strip_prefix(" in ")?;
-    if let Some(m) = reliquum.strip_prefix("linea ") {
-        let (n, nuntius) = m.split_once(": ")?;
-        return Some(Sententia {
-            genus,
-            scida: None,
-            linea: Some(n.parse().ok()?),
-            nuntius: nuntius.to_string(),
-        });
-    }
-    let reliquum = reliquum.strip_prefix('\'')?;
-    if let Some((scida, m)) = reliquum.split_once("', linea ") {
-        let (n, nuntius) = m.split_once(": ")?;
-        return Some(Sententia {
-            genus,
-            scida: Some(scida.to_string()),
-            linea: Some(n.parse().ok()?),
-            nuntius: nuntius.to_string(),
-        });
-    }
-    let (scida, nuntius) = reliquum.split_once("': ")?;
-    Some(Sententia {
-        genus,
-        scida: Some(scida.to_string()),
-        linea: None,
-        nuntius: nuntius.to_string(),
-    })
-}
-
-/// Every diagnostic in one fixture's stderr, framing discarded.
-///
-/// Only lines that open a diagnostic are read. Under the block grammar the rest of a
-/// diagnostic is a location row, a gutter row and echoed source, none of which is a
-/// sentence the language wrote — and echoed source is the one place a line of a *program*
-/// could otherwise be mistaken for one.
-fn sententiae(stderr: &str) -> Vec<Sententia> {
-    stderr.lines().filter_map(vetus).collect()
-}
+use support::diag::{parse_stderr, Genus};
 
 /// Read from the committed `nuntii` files rather than by running the corpus: this test
 /// is about what blessing wrote down, and must not re-derive it from the compiler it is
@@ -90,19 +32,19 @@ fn corpus_diagnostics() {
         }
         fixtures += 1;
         report.push_str(&format!("{}\n", f.name));
-        for s in sententiae(&stderr) {
+        for d in parse_stderr(&stderr).0 {
             total += 1;
-            let genus = match s.genus {
+            let genus = match d.genus {
                 Genus::Erratum => "erratum",
                 Genus::Monitum => "monitum",
             };
-            let locus = match (&s.scida, s.linea) {
+            let locus = match (&d.file, d.line) {
                 (Some(p), Some(l)) => format!("{p}:{l}"),
                 (Some(p), None) => p.clone(),
                 (None, Some(l)) => format!("linea {l}"),
                 (None, None) => "-".to_string(),
             };
-            report.push_str(&format!("  {genus}  {locus}  {}\n", s.nuntius));
+            report.push_str(&format!("  {genus}  {locus}  {}\n", d.message));
         }
     }
 
@@ -110,20 +52,41 @@ fn corpus_diagnostics() {
     insta::assert_snapshot!("nuntii", report);
 }
 
-/// Every non-empty `nuntii` line must parse. A line that does not is either a diagnostic
-/// in a shape nothing here knows, or framing that `sententiae` should have skipped — and
-/// silently dropping either is how this net would stop catching anything.
+/// Every non-empty `nuntii` line must be accounted for — a diagnostic, or framing
+/// belonging to one. A line that is neither is either a shape nothing here knows or
+/// framing the reader should have consumed, and silently dropping either is how this
+/// net would stop catching anything.
 #[test]
 fn every_line_of_every_nuntii_is_accounted_for() {
     let mut orphans = Vec::new();
     for f in support::discover() {
-        for linea in f.expected().stderr.lines() {
+        let stderr = f.expected().stderr;
+        for linea in stderr.lines() {
             if linea.is_empty() {
                 orphans.push(format!("{}: an empty line", f.name));
-            } else if vetus(linea).is_none() {
-                orphans.push(format!("{}: {linea:?}", f.name));
+            }
+        }
+        for linea in parse_stderr(&stderr).1 {
+            orphans.push(format!("{}: {linea:?}", f.name));
+        }
+    }
+    assert!(orphans.is_empty(), "unaccounted nuntii lines:\n{}", orphans.join("\n"));
+}
+
+/// Every diagnostic in the corpus names its line as a Roman numeral, written the way
+/// the language writes it. The corpus is the widest sample of rendered numerals there
+/// is, so this is where an off-by-one or a bad glyph would show up first.
+#[test]
+fn every_line_number_in_the_corpus_is_a_roman_numeral() {
+    let mut mala = Vec::new();
+    for f in support::discover() {
+        for d in parse_stderr(&f.expected().stderr).0 {
+            let (Some(numeralis), Some(line)) = (&d.numeralis, d.line) else { continue };
+            let expected = lingua_serpentis::roman::Roman::from_usize(line).display();
+            if *numeralis != expected {
+                mala.push(format!("{}: {numeralis:?} is not {expected:?}", f.name));
             }
         }
     }
-    assert!(orphans.is_empty(), "unparsed nuntii lines:\n{}", orphans.join("\n"));
+    assert!(mala.is_empty(), "{}", mala.join("\n"));
 }

@@ -5,6 +5,7 @@ pub mod error;
 pub use liss_runtime::roman;
 pub use liss_runtime::fraction;
 pub mod fragmentum;
+pub mod pictura;
 pub mod spatium;
 pub mod token;
 pub mod lexer;
@@ -78,27 +79,31 @@ mod tests {
     use super::*;
     use error::ProgramError;
 
+    fn monitum(message: &str, line: Option<usize>) -> Warning {
+        Warning { message: message.into(), file: None, line, fragmentum: None }
+    }
+
     #[test]
     fn warnings_go_to_stderr_and_output_to_stdout() {
         let r = render(Ok::<_, ProgramError>((
             "V\n".to_string(),
             0,
-            vec![Warning { message: "res".into(), file: None, line: Some(2) }],
+            vec![monitum("res", Some(2))],
         )));
         assert_eq!(r.stdout, "V\n");
-        assert_eq!(r.stderr, "Monitum in linea 2: res\n");
+        assert_eq!(r.stderr, "monitum: res\n  in linea II\n");
         assert_eq!(r.code, 0);
     }
 
     #[test]
-    fn every_warning_gets_its_own_line_in_order() {
-        let w = |m: &str| Warning { message: m.into(), file: None, line: None };
+    fn every_warning_gets_its_own_block_in_order() {
+        // Nothing separates two blocks but the column-0 severity word.
         let r = render(Ok::<_, ProgramError>((
             String::new(),
             0,
-            vec![w("prima"), w("secunda")],
+            vec![monitum("prima", None), monitum("secunda", None)],
         )));
-        assert_eq!(r.stderr, "Monitum: prima\nMonitum: secunda\n");
+        assert_eq!(r.stderr, "monitum: prima\nmonitum: secunda\n");
     }
 
     #[test]
@@ -113,7 +118,7 @@ mod tests {
             ProgramError::structural("munus 'initium' in programmate non inventum"),
         ));
         assert_eq!(r.stdout, "");
-        assert_eq!(r.stderr, "Error: munus 'initium' in programmate non inventum\n");
+        assert_eq!(r.stderr, "erratum: munus 'initium' in programmate non inventum\n");
         assert_eq!(r.code, 1);
     }
 

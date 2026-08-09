@@ -1,2 +1,4 @@
-Monitum in 'principale.liss', linea 2: nomen 'xs' fortasse non Latinum est
-Error in 'principale.liss', linea 3: index assignationis 'ni' esse debet
+monitum: nomen 'xs' fortasse non Latinum est
+  in 'principale.liss', linea II
+erratum: index assignationis 'ni' esse debet
+  in 'principale.liss', linea III

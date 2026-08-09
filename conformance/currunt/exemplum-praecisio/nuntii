@@ -1,2 +1,4 @@
-Monitum in linea 11: nomen 'tertia_brevis' fortasse non Latinum est
-Monitum in linea 12: nomen 'tertia_longa' fortasse non Latinum est
+monitum: nomen 'tertia_brevis' fortasse non Latinum est
+  in linea XI
+monitum: nomen 'tertia_longa' fortasse non Latinum est
+  in linea XII

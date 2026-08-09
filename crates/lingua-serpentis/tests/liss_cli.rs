@@ -163,7 +163,7 @@ fn a_missing_path_is_reported_in_latin() {
     let p = d.path().join("nusquam.liss");
     let r = liss(&["run", p.to_str().unwrap()]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, format!("Error: via '{}' non inventa est\n", p.display()));
+    assert_eq!(r.stderr, format!("erratum: via '{}' non inventa est\n", p.display()));
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn a_non_liss_extension_is_refused_in_latin() {
     let p = source(&d, "notae.txt", SALVE);
     let r = liss(&[p.to_str().unwrap()]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, "Error: nomen scidae in '.liss' desinere debet\n");
+    assert_eq!(r.stderr, "erratum: nomen scidae in '.liss' desinere debet\n");
 }
 
 // -------------------------------------------------------------- run
@@ -225,7 +225,7 @@ fn run_emits_the_parents_latinity_warnings_before_the_childs_output() {
     assert_eq!(code, Some(0));
     assert_eq!(
         merged,
-        "Monitum in linea 2: nomen 'counter' fortasse non Latinum est\nI\n"
+        "monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\nI\n"
     );
 }
 
@@ -237,8 +237,8 @@ fn a_folder_programs_warnings_name_their_file() {
     assert_eq!(code, Some(0));
     assert_eq!(
         merged,
-        "Monitum in 'principale.liss', linea 2: nomen 'counter' fortasse non \
-         Latinum est\nI\n"
+        "monitum: nomen 'counter' fortasse non Latinum est\n  \
+         in 'principale.liss', linea II\nI\n"
     );
 }
 
@@ -250,7 +250,7 @@ fn build_emits_the_parents_latinity_warnings_too() {
     assert_eq!(r.code, Some(0), "stderr: {}", r.stderr);
     assert_eq!(
         r.stderr,
-        "Monitum in linea 2: nomen 'counter' fortasse non Latinum est\n"
+        "monitum: nomen 'counter' fortasse non Latinum est\n  in linea II\n"
     );
 }
 
@@ -365,7 +365,7 @@ fn build_refuses_a_directory_as_its_output() {
     assert_eq!(r.code, Some(1));
     assert_eq!(
         r.stderr,
-        "Error: exitus 'programma' directorium est; aliam viam per '--exi' da\n"
+        "erratum: exitus 'programma' directorium est; aliam viam per '--exi' da\n"
     );
 }
 
@@ -387,7 +387,7 @@ fn build_into_an_unwritable_place_is_a_latin_error() {
     assert_eq!(r.code, Some(1));
     assert_eq!(
         r.stderr,
-        format!("Error: scida '{}' scribi non potest\n", target.display())
+        format!("erratum: scida '{}' scribi non potest\n", target.display())
     );
 }
 
@@ -398,7 +398,7 @@ fn build_on_a_program_that_fails_to_check_writes_nothing() {
     let r = liss_at(d.path(), &["build", p.to_str().unwrap()]);
     assert_eq!(r.code, Some(1));
     assert_eq!(r.stdout, "");
-    assert!(r.stderr.starts_with("Error in linea 2: "), "stderr: {}", r.stderr);
+    assert!(r.stderr.starts_with("erratum: ") && r.stderr.contains("\n  in linea II\n"), "stderr: {}", r.stderr);
     assert!(!d.path().join("malus").exists(), "an image was written anyway");
 }
 
@@ -428,7 +428,7 @@ fn a_build_that_cannot_write_its_output_says_so() {
     let p = source(&d, "salve.liss", SALVE);
     let r = liss(&["build", p.to_str().unwrap(), "--exi", "/dev/full"]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, "Error: scida '/dev/full' scribi non potest\n");
+    assert_eq!(r.stderr, "erratum: scida '/dev/full' scribi non potest\n");
     assert!(Path::new("/dev/full").exists(), "the build removed /dev/full");
 }
 
@@ -444,7 +444,7 @@ fn a_failed_write_through_a_symlink_removes_neither_end() {
     let r = liss(&["build", p.to_str().unwrap(), "--exi", nexus.to_str().unwrap()]);
 
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, format!("Error: scida '{}' scribi non potest\n", nexus.display()));
+    assert_eq!(r.stderr, format!("erratum: scida '{}' scribi non potest\n", nexus.display()));
     assert!(
         nexus.symlink_metadata().is_ok(),
         "the build removed the symlink it wrote through"
@@ -519,7 +519,7 @@ fn a_child_killed_by_a_signal_is_reported_in_latin() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "Error: programma abrupte cessavit\n"
+        "erratum: programma abrupte cessavit\n"
     );
 }
 
@@ -529,5 +529,5 @@ fn an_unknown_machine_is_refused_in_latin() {
     let p = source(&d, "salve.liss", SALVE);
     let r = liss(&["build", p.to_str().unwrap(), "--ad", "sparc"]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, "Error: machina 'sparc' ignota est\n");
+    assert_eq!(r.stderr, "erratum: machina 'sparc' ignota est\n");
 }

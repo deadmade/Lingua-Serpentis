@@ -1,1 +1,2 @@
-Error in 'principale.liss', linea 2: functio 'interior' intra corpus definiri non potest; functiones nidificatae non sustinentur
+erratum: functio 'interior' intra corpus definiri non potest; functiones nidificatae non sustinentur
+  in 'principale.liss', linea II

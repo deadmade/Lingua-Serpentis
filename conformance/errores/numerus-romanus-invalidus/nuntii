@@ -1,1 +1,2 @@
-Error in 'principale.liss', linea 2: numerus Romanus invalidus: 'II/III'
+erratum: numerus Romanus invalidus: 'II/III'
+  in 'principale.liss', linea II

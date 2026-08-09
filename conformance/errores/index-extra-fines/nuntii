@@ -1,2 +1,3 @@
-Monitum in 'principale.liss', linea 2: nomen 'xs' fortasse non Latinum est
+monitum: nomen 'xs' fortasse non Latinum est
+  in 'principale.liss', linea II
 Error in 'principale.liss', linea 3: index extra fines: X (longitudo II)

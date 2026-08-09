@@ -53,7 +53,7 @@ fn a_missing_file_is_reported_in_latin() {
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
     // D-11
-    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
+    assert_eq!(err, format!("erratum: via '{}' non inventa est\n", missing.display()));
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn a_non_liss_extension_is_refused_in_latin() {
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: nomen scidae in '.liss' desinere debet\n");
+    assert_eq!(err, "erratum: nomen scidae in '.liss' desinere debet\n");
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn a_nonexistent_path_is_reported_as_missing_not_as_a_bad_extension() {
     let o = run(&[missing.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
+    assert_eq!(err, format!("erratum: via '{}' non inventa est\n", missing.display()));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn a_nonexistent_dot_liss_directory_is_also_reported_as_missing() {
     let o = run(&[missing.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, format!("Error: via '{}' non inventa est\n", missing.display()));
+    assert_eq!(err, format!("erratum: via '{}' non inventa est\n", missing.display()));
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn warnings_go_to_stderr_and_output_to_stdout_separately() {
     let (code, out, err) = exited(&o);
     assert_eq!(code, 0);
     assert_eq!(out, "V\n");
-    assert_eq!(err, "Monitum in linea 2: nomen 'result' fortasse non Latinum est\n");
+    assert_eq!(err, "monitum: nomen 'result' fortasse non Latinum est\n  in linea II\n");
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn an_unreadable_file_inside_a_program_folder_is_reported_in_latin() {
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
     // Relative to the program root, not an absolute path.
-    assert_eq!(err, "Error: scida 'principale.liss' legi non potest\n");
+    assert_eq!(err, "erratum: scida 'principale.liss' legi non potest\n");
     std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
 }
 
@@ -198,7 +198,7 @@ fn an_unreadable_subdirectory_is_reported_by_its_relative_name() {
     let o = run(&[d.path().join("prog").to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: directorium 'mathematica' legi non potest\n");
+    assert_eq!(err, "erratum: directorium 'mathematica' legi non potest\n");
     std::fs::set_permissions(&subdir, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
@@ -211,7 +211,7 @@ fn a_non_utf8_file_inside_a_program_folder_is_reported_in_latin() {
     let o = run(&[d.path().join("prog").to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: scida 'alia.liss' signis incognitis scripta est\n");
+    assert_eq!(err, "erratum: scida 'alia.liss' signis incognitis scripta est\n");
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn an_unreadable_file_is_reported_not_panicked() {
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
     // D-22
-    assert_eq!(err, format!("Error: scida '{}' legi non potest\n", p.display()));
+    assert_eq!(err, format!("erratum: scida '{}' legi non potest\n", p.display()));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -257,7 +257,7 @@ fn a_non_utf8_source_file_is_reported_not_panicked() {
     assert_eq!(code, 1);
     assert_eq!(
         err,
-        format!("Error: scida '{}' signis incognitis scripta est\n", p.display())
+        format!("erratum: scida '{}' signis incognitis scripta est\n", p.display())
     );
 }
 
@@ -310,7 +310,7 @@ fn deep_expression_nesting_is_a_clean_latin_error() {
     let o = run(&[p.to_str().unwrap()]);
     let (code, _, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error in linea 1: expressio nimis alte implicata\n");
+    assert_eq!(err, "erratum: expressio nimis alte implicata\n  in linea I\n");
 }
 
 /// The guard on §8's guard; `conformance/currunt/recursio-profunda` makes the same point at 5,000.

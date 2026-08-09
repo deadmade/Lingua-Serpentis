@@ -20,6 +20,7 @@ pub fn lint_program(prog: &ParsedProgram) -> Vec<Warning> {
                 message: format!("nomen fasciculi '{name}' fortasse non Latinum est"),
                 file: None,
                 line: None,
+                fragmentum: None,
             });
         }
     }
@@ -41,6 +42,7 @@ fn check_name(name: &str, line: usize, out: &mut Vec<Warning>) {
             message: format!("nomen '{name}' fortasse non Latinum est"),
             file: None,
             line: Some(line),
+            fragmentum: None,
         });
     }
 }

@@ -1,1 +1,2 @@
-Error in 'principale.liss', linea 2: numerus fractus typum 'mnr' vel 'nr' requirit, non 'ni'
+erratum: numerus fractus typum 'mnr' vel 'nr' requirit, non 'ni'
+  in 'principale.liss', linea II

@@ -5,7 +5,7 @@ mod support;
 use lingua_serpentis::Rendered;
 use support::proc::temp_dir;
 
-/// One single-source program; its diagnostics keep the file-less phrasing (`Error in linea N:`).
+/// One single-source program; its diagnostics name no file (`in linea N`).
 fn curre(fons: &str) -> Rendered {
     let d = temp_dir("liss-programs");
     let p = d.write("fons.liss", fons);
@@ -40,6 +40,13 @@ fn erratum(r: &Rendered) -> &str {
     &r.stderr
 }
 
+/// An error block whose location row names `locus` — the block grammar's replacement
+/// for `starts_with("Error in linea N:")`, now that the location is its own row and
+/// the line is a Roman numeral.
+fn erratum_apud(stderr: &str, locus: &str) -> bool {
+    stderr.starts_with("erratum: ") && stderr.contains(&format!("\n  in {locus}\n"))
+}
+
 #[test]
 fn full_program_with_function_and_if() {
     let src = r#"
@@ -71,8 +78,8 @@ fn praecisio_example_runs() {
     assert_eq!(
         emissio_cum_monitis(
             &r,
-            "Monitum in linea 11: nomen 'tertia_brevis' fortasse non Latinum est\n\
-             Monitum in linea 12: nomen 'tertia_longa' fortasse non Latinum est\n",
+            "monitum: nomen 'tertia_brevis' fortasse non Latinum est\n  in linea XI\n\
+             monitum: nomen 'tertia_longa' fortasse non Latinum est\n  in linea XII\n",
         ),
         "I et triens\nI et triens\nI\nI et semuncia\nII et semis\nI et triens\n"
     );
@@ -82,7 +89,7 @@ fn praecisio_example_runs() {
 fn type_error_reports_latin_and_line() {
     let src = "munus initium reddit ni { ni x = \"salve\"; redde nullus; }";
     assert!(
-        erratum(&curre(src)).starts_with("Error in linea 1:"),
+        erratum_apud(erratum(&curre(src)), "linea I"),
         "got: {:?}",
         curre(src).stderr
     );
@@ -108,7 +115,7 @@ fn non_latin_name_warns_but_program_still_runs() {
     let r = curre(src);
     assert_eq!(r.stdout, "V\n");
     assert_eq!(r.code, 0);
-    assert_eq!(r.stderr, "Monitum in linea 1: nomen 'result' fortasse non Latinum est\n");
+    assert_eq!(r.stderr, "monitum: nomen 'result' fortasse non Latinum est\n  in linea I\n");
 }
 
 #[test]
@@ -128,14 +135,24 @@ fn type_errors_halt_but_their_warnings_survive() {
         "munus initium reddit ni { ni counter = \"salve\"; redde nullus; }",
     )]);
     assert_eq!(r.code, 1);
-    let mut lineae = r.stderr.lines();
-    assert_eq!(
-        lineae.next(),
-        Some("Monitum in 'principale.liss', linea 1: nomen 'counter' fortasse non Latinum est"),
+    // Ordering, not adjacency: each diagnostic is a block now, so the error's header
+    // is two rows below the warning's rather than one.
+    let monitum = r
+        .stderr
+        .find("monitum: nomen 'counter' fortasse non Latinum est")
+        .unwrap_or_else(|| panic!("no warning in {:?}", r.stderr));
+    let erratum = r
+        .stderr
+        .find("erratum: ")
+        .unwrap_or_else(|| panic!("no error in {:?}", r.stderr));
+    assert!(
+        monitum < erratum,
+        "the warning must come before the error it survived: {:?}",
+        r.stderr,
     );
     assert!(
-        lineae.next().is_some_and(|l| l.starts_with("Error in 'principale.liss', linea 1:")),
-        "the warning must be followed by the error it survived: {:?}",
+        r.stderr[erratum..].contains("\n  in 'principale.liss', linea I\n"),
+        "the error must name the file and line: {:?}",
         r.stderr,
     );
 }
@@ -173,7 +190,7 @@ fn mixing_float_types_is_a_type_error() {
     let r = curre(
         "munus initium reddit ni { mnr a = °I:I/II; nr b = °I:I/IV; scribe(a + b); redde nullus; }",
     );
-    assert!(erratum(&r).starts_with("Error in linea 1:"), "got: {:?}", r.stderr);
+    assert!(erratum_apud(erratum(&r), "linea I"), "got: {:?}", r.stderr);
 }
 
 #[test]
@@ -195,7 +212,9 @@ fn fraction_divide_by_zero_errors() {
     let r = curre(
         "munus initium reddit ni { nr z = °I:I/II - °I:I/II; scribe(°I:I/II / z); redde nullus; }",
     );
-    assert!(erratum(&r).starts_with("Error in linea 1:"), "got: {:?}", r.stderr);
+    // Raised by the compiled image, not the compiler, so it keeps the one-line
+    // grammar until `liss-abi` adopts the block form.
+    assert_eq!(erratum(&r), "Error in linea 1: divisio per nullum\n");
 }
 
 #[test]
@@ -225,7 +244,7 @@ fn lists_have_value_semantics() {
     assert_eq!(
         emissio_cum_monitis(
             &r,
-            "Monitum in linea 1: nomen 'xs' fortasse non Latinum est\n",
+            "monitum: nomen 'xs' fortasse non Latinum est\n  in linea I\n",
         ),
         "III\nII\n"
     );
@@ -256,7 +275,7 @@ fn program_without_initium_is_a_bare_error() {
     let files = [("a.liss", "munus f reddit ni { redde nullus; }")];
     assert_eq!(
         erratum(&curre_fasciculos(&files)),
-        "Error: munus 'initium' in programmate non inventum\n"
+        "erratum: munus 'initium' in programmate non inventum\n"
     );
 }
 
@@ -270,7 +289,7 @@ fn multi_file_error_names_file_and_line() {
     ];
     let r = curre_fasciculos(&files);
     assert!(
-        erratum(&r).starts_with("Error in 'mathematica/summa.liss', linea 2:"),
+        erratum_apud(erratum(&r), "'mathematica/summa.liss', linea II"),
         "got: {:?}",
         r.stderr,
     );
@@ -319,7 +338,7 @@ fn top_level_statement_is_now_an_error() {
     let r = curre("scribe(°I);");
     let e = erratum(&r);
     assert!(e.contains("nihil nisi declarationes"), "got: {e:?}");
-    assert!(e.starts_with("Error in linea 1:"), "got: {e:?}");
+    assert!(erratum_apud(e, "linea I"), "got: {e:?}");
 }
 
 #[test]

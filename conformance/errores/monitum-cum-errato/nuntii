@@ -1,2 +1,3 @@
-Monitum in 'principale.liss', linea 2: nomen 'counter' fortasse non Latinum est
+monitum: nomen 'counter' fortasse non Latinum est
+  in 'principale.liss', linea II
 Error in 'principale.liss', linea 4: divisio per nullum

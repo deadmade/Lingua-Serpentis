@@ -20,7 +20,7 @@ impl Defectus {
 
 impl std::fmt::Display for Defectus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error: {}", self.nuntius)
+        write!(f, "erratum: {}", self.nuntius)
     }
 }
 
@@ -33,6 +33,6 @@ mod tests {
     #[test]
     fn a_defect_formats_as_a_structural_error() {
         let d = Defectus::novus("imago non coniuncta est: nexus");
-        assert_eq!(d.to_string(), "Error: imago non coniuncta est: nexus");
+        assert_eq!(d.to_string(), "erratum: imago non coniuncta est: nexus");
     }
 }

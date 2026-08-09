@@ -110,11 +110,11 @@ fn load(arg: &str) -> Result<(Program, bool), ProgramError> {
         return crate::program::load_dir(path).map(|p| (p, false));
     }
     if !path.exists() {
-        eprintln!("Error: via '{}' non inventa est", arg);
+        eprintln!("erratum: via '{}' non inventa est", arg);
         exit(1);
     }
     if !arg.ends_with(".liss") {
-        eprintln!("Error: nomen scidae in '.liss' desinere debet");
+        eprintln!("erratum: nomen scidae in '.liss' desinere debet");
         exit(1);
     }
     let src = std::fs::read_to_string(path)
@@ -188,14 +188,14 @@ pub fn liss(args: &[String]) -> ! {
         Some(n) => match Target::ex_nomine(n) {
             Some(m) => m,
             None => {
-                eprintln!("Error: machina '{}' ignota est", n);
+                eprintln!("erratum: machina '{}' ignota est", n);
                 exit(1);
             }
         },
         None => match Target::hospes() {
             Some(m) => m,
             None => {
-                eprintln!("Error: machina huius computatri ignota est");
+                eprintln!("erratum: machina huius computatri ignota est");
                 exit(1);
             }
         },
@@ -249,14 +249,14 @@ fn destination(inv: &Invocation, single: bool) -> PathBuf {
     let via = match base {
         Some(b) => PathBuf::from(b),
         None => {
-            eprintln!("Error: nomen exitus statui non potest; viam per '--exi' da");
+            eprintln!("erratum: nomen exitus statui non potest; viam per '--exi' da");
             exit(1);
         }
     };
     // Refused here rather than several seconds of codegen and linking later.
     if via.is_dir() {
         eprintln!(
-            "Error: exitus '{}' directorium est; aliam viam per '--exi' da",
+            "erratum: exitus '{}' directorium est; aliam viam per '--exi' da",
             via.display()
         );
         exit(1);
@@ -300,7 +300,7 @@ fn build(via: &Path, imago: &[u8]) -> ! {
             if truncata {
                 let _ = std::fs::remove_file(via);
             }
-            eprintln!("Error: scida '{}' scribi non potest", via.display());
+            eprintln!("erratum: scida '{}' scribi non potest", via.display());
             exit(1);
         }
     }
@@ -401,7 +401,7 @@ fn run(imago: &[u8]) -> ! {
     let statio = match stage(imago) {
         Ok(s) => s,
         Err(_) => {
-            eprintln!("Error: scida temporaria creari non potest");
+            eprintln!("erratum: scida temporaria creari non potest");
             exit(1);
         }
     };
@@ -416,13 +416,13 @@ fn run(imago: &[u8]) -> ! {
 
     match effectus {
         Err(_) => {
-            eprintln!("Error: programma incipi non potest");
+            eprintln!("erratum: programma incipi non potest");
             exit(1);
         }
         Ok(s) => match finis(s) {
             Finis::Status(c) => exit(c),
             Finis::Signum => {
-                eprintln!("Error: programma abrupte cessavit");
+                eprintln!("erratum: programma abrupte cessavit");
                 exit(1);
             }
         },

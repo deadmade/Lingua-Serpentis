@@ -1,1 +1,2 @@
-Error in 'principale.liss', linea 3: 'x' iam typum 'ni' habet, sed 'voc' datum est
+erratum: 'x' iam typum 'ni' habet, sed 'voc' datum est
+  in 'principale.liss', linea III

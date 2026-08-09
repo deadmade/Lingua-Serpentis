@@ -1,1 +1,2 @@
-Error in 'principale.liss', linea 2: series ordine comparari non potest (par_est/par_non_est tantum)
+erratum: series ordine comparari non potest (par_est/par_non_est tantum)
+  in 'principale.liss', linea II

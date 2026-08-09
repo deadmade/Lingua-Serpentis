@@ -46,18 +46,18 @@ crates/lingua-serpentis/src/cli.rs:52  Usus: liss run <via.liss | directorium>
       liss <via.liss | directorium>  → UNCOVERED
 crates/lingua-serpentis/src/cli.rs:57  Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
 directorium ita nominatum per './run' dandum est.  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:113  Error: via '{}' non inventa est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:117  Error: nomen scidae in '.liss' desinere debet  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:191  Error: machina '{}' ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:198  Error: machina huius computatri ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:252  Error: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:258  Error: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:303  Error: scida '{}' scribi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:404  Error: scida temporaria creari non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:419  Error: programma incipi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:425  Error: programma abrupte cessavit  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:113  erratum: via '{}' non inventa est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:117  erratum: nomen scidae in '.liss' desinere debet  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:191  erratum: machina '{}' ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:198  erratum: machina huius computatri ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:252  erratum: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:258  erratum: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:303  erratum: scida '{}' scribi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:404  erratum: scida temporaria creari non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:419  erratum: programma incipi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:425  erratum: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:19  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
-crates/lingua-serpentis/src/latinity.rs:40  nomen '{name}' fortasse non Latinum est  → fixtured
+crates/lingua-serpentis/src/latinity.rs:41  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED
 crates/lingua-serpentis/src/lexer.rs:77  chorda non clausa  → fixtured
 crates/lingua-serpentis/src/lexer.rs:92  littera invalida  → fixtured

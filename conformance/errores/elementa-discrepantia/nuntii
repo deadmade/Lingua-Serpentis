@@ -1,2 +1,4 @@
-Monitum in 'principale.liss', linea 2: nomen 'xs' fortasse non Latinum est
-Error in 'principale.liss', linea 2: elementa seriei discrepant: 'ni' et 'voc'
+monitum: nomen 'xs' fortasse non Latinum est
+  in 'principale.liss', linea II
+erratum: elementa seriei discrepant: 'ni' et 'voc'
+  in 'principale.liss', linea II
