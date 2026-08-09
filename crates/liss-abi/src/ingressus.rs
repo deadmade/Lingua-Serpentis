@@ -2,7 +2,7 @@ use core::ffi::{c_char, c_int};
 
 use crate::LissInt;
 
-const MONITUM_PRAEFIXUM: &[u8] = b"Monitum: ";
+const MONITUM_PRAEFIXUM: &[u8] = b"monitum: ";
 
 unsafe extern "C" {
     /// Compiled code's entry point: the lowering of the user's `munus initium

@@ -10,7 +10,7 @@ use support::{
 };
 
 /// The whole of what a stack-exhausted image puts on stderr (spec §8.2).
-const ACERVUS: &str = "Error: acervus vocationum exhaustus est\n";
+const ACERVUS: &str = "erratum: acervus vocationum exhaustus est\n";
 
 /// Three namespaces, every call crossing one, and `alpha` declaring an ordinary
 /// `initium` of its own (spec §4.3). `beta.triplum` is deliberately never called.
@@ -354,7 +354,7 @@ fn error_in_fasciculo_scidam_fasciculi_nominat() {
     par_est_fasciculorum_erroris(
         &DIVISIO,
         "divisio-in-fasciculo",
-        "Error in 'alpha/porta.liss', linea 2: divisio per nullum\n",
+        "erratum: divisio per nullum\n  in 'alpha/porta.liss', linea II\n",
     );
 }
 

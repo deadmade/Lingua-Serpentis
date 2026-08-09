@@ -217,7 +217,7 @@ fn deep_recursion_is_a_latin_exit_and_never_a_signal() {
     );
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "Error: acervus vocationum exhaustus est\n",
+        "erratum: acervus vocationum exhaustus est\n",
     );
     // D-08
     assert_eq!(String::from_utf8_lossy(&out.stdout), format!("{ANTE}\n"));
@@ -228,7 +228,7 @@ fn a_fault_away_from_the_stack_is_an_internal_defect() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "Error: defectus internus: memoria violata est: signum\n",
+        "erratum: defectus internus: memoria violata est: signum\n",
         "the discriminator's other branch. `: signum` is the handler's tail, and \
          it is what distinguishes this from `memoria_violata`'s `: verificatio` \
          — a fault the kernel reported, not a value a `verifica` rejected",
@@ -249,11 +249,11 @@ fn a_closed_pipe_never_decides_the_exit_status() {
     for (scaena, nuntius) in [
         (
             "fistula-abyssus",
-            "Error: acervus vocationum exhaustus est\n",
+            "erratum: acervus vocationum exhaustus est\n",
         ),
         (
             "fistula-violatio",
-            "Error: defectus internus: memoria violata est: signum\n",
+            "erratum: defectus internus: memoria violata est: signum\n",
         ),
     ] {
         let out = in_subprocesso(scaena);

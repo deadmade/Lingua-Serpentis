@@ -92,12 +92,12 @@ crates/lingua-serpentis/src/program.rs:80  directorium programmatis legi non pot
 crates/lingua-serpentis/src/program.rs:87  directorium percurri non potest  → UNCOVERED
 crates/liss-abi/src/custos.rs:25  acervus vocationum exhaustus est  → fixtured
 crates/liss-abi/src/custos.rs:31  defectus internus: memoria violata est: signum  → UNCOVERED
-crates/liss-abi/src/defectus.rs:134  memoria non liberata est  → UNCOVERED
-crates/liss-abi/src/defectus.rs:150  divisio per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:165  modulus per nullum  → fixtured
-crates/liss-abi/src/defectus.rs:186  index extra fines: {} (longitudo {})  → fixtured
-crates/liss-abi/src/defectus.rs:202  defectus internus: memoria violata est: verificatio  → UNCOVERED
-crates/liss-abi/src/defectus.rs:216  memoria exhausta est  → UNCOVERED
+crates/liss-abi/src/defectus.rs:123  memoria non liberata est  → UNCOVERED
+crates/liss-abi/src/defectus.rs:139  divisio per nullum  → fixtured
+crates/liss-abi/src/defectus.rs:154  modulus per nullum  → fixtured
+crates/liss-abi/src/defectus.rs:175  index extra fines: {} (longitudo {})  → fixtured
+crates/liss-abi/src/defectus.rs:191  defectus internus: memoria violata est: verificatio  → UNCOVERED
+crates/liss-abi/src/defectus.rs:205  memoria exhausta est  → UNCOVERED
 crates/liss-codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
 crates/liss-codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
 crates/liss-codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED

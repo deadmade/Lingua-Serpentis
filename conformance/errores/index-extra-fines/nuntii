@@ -3,4 +3,5 @@ monitum: nomen 'xs' fortasse non Latinum est
     |
  II |   ni lista xs = [°I, °II];
     |            ^^
-Error in 'principale.liss', linea 3: index extra fines: X (longitudo II)
+erratum: index extra fines: X (longitudo II)
+  in 'principale.liss', linea III

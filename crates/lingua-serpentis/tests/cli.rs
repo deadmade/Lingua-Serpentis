@@ -134,7 +134,7 @@ fn an_out_of_range_exit_status_is_truncated_and_says_so() {
     assert_eq!(code, 116);
     assert_eq!(
         err,
-        "Monitum: reditus 'initium' extra fines status exitus est; ad CXVI redactus\n"
+        "monitum: reditus 'initium' extra fines status exitus est; ad CXVI redactus\n"
     );
 }
 
@@ -147,7 +147,7 @@ fn a_negative_exit_status_is_wrapped_and_says_so() {
     assert_eq!(code, 255);
     assert_eq!(
         err,
-        "Monitum: reditus 'initium' extra fines status exitus est; ad CCLV redactus\n"
+        "monitum: reditus 'initium' extra fines status exitus est; ad CCLV redactus\n"
     );
 }
 
@@ -299,7 +299,7 @@ fn unbounded_recursion_is_a_clean_latin_error() {
     // and `liss` must turn that into a status.
     let (code, out, err) = exited(&o);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: acervus vocationum exhaustus est\n");
+    assert_eq!(err, "erratum: acervus vocationum exhaustus est\n");
     assert_eq!(out, "");
 }
 

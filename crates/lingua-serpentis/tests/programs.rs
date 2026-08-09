@@ -225,7 +225,7 @@ fn fraction_divide_by_zero_errors() {
     );
     // Raised by the compiled image, not the compiler, so it keeps the one-line
     // grammar until `liss-abi` adopts the block form.
-    assert_eq!(erratum(&r), "Error in linea 1: divisio per nullum\n");
+    assert_eq!(erratum(&r), "erratum: divisio per nullum\n  in linea I\n");
 }
 
 #[test]

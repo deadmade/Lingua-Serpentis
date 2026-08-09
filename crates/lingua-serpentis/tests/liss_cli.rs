@@ -206,7 +206,7 @@ fn a_single_file_diagnostic_names_no_file() {
     let p = source(&d, "fons.liss", DIVISIO);
     let r = liss(&["run", p.to_str().unwrap()]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, "Error in linea 3: divisio per nullum\n");
+    assert_eq!(r.stderr, "erratum: divisio per nullum\n  in linea III\n");
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn a_folder_diagnostic_names_its_file() {
     let p = folder(&d, "programma", DIVISIO);
     let r = liss(&["run", p.to_str().unwrap()]);
     assert_eq!(r.code, Some(1));
-    assert_eq!(r.stderr, "Error in 'principale.liss', linea 3: divisio per nullum\n");
+    assert_eq!(r.stderr, "erratum: divisio per nullum\n  in 'principale.liss', linea III\n");
 }
 
 // ------------------------------------------------ the parent's warnings

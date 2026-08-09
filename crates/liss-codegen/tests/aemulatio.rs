@@ -155,7 +155,7 @@ fn acervus_exhaustus_sub_aemulatore() {
     );
     let (status, stdout, stderr) = exsequere_aemulatum(&imago, "acervus");
     assert_eq!(
-        stderr, "Error: acervus vocationum exhaustus est\n",
+        stderr, "erratum: acervus vocationum exhaustus est\n",
         "the guard page fault must become a Latin diagnostic, not a signal",
     );
     assert_eq!(
@@ -179,7 +179,7 @@ fn acervus_displacitus_est_defectus_internus() {
     let (status, stdout, stderr) =
         exsequere_aemulatum_cum(&imago, "displacitus", &[("QEMU_STACK_SIZE", "1048576")]);
     assert_eq!(
-        stderr, "Error: defectus internus: memoria violata est: signum\n",
+        stderr, "erratum: defectus internus: memoria violata est: signum\n",
         "with the guest stack displaced from the derived bounds, the fault is \
          outside the band and must take the discriminator's other branch. The \
          same sentence as `acervus_exhaustus_sub_aemulatore` here would mean \

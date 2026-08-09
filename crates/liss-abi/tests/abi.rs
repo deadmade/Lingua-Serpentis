@@ -644,14 +644,14 @@ fn division_and_modulus_by_zero_raise() {
         erratum("divisio"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: divisio per nullum\n".to_string()
+            "erratum: divisio per nullum\n  in 'principale.liss', linea III\n".to_string()
         )
     );
     assert_eq!(
         erratum("modulus"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: modulus per nullum\n".to_string()
+            "erratum: modulus per nullum\n  in 'principale.liss', linea III\n".to_string()
         )
     );
     // The same sentence, one literal at one site, so the catalogue can attribute it.
@@ -659,7 +659,7 @@ fn division_and_modulus_by_zero_raise() {
         erratum("frac-divisio"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: divisio per nullum\n".to_string()
+            "erratum: divisio per nullum\n  in 'principale.liss', linea III\n".to_string()
         )
     );
 }
@@ -669,11 +669,11 @@ fn a_diagnostic_without_a_file_names_only_its_line() {
     // Spec §4.1 lowers `Func::file: None` to a zero-length name at the ABI.
     assert_eq!(
         erratum("divisio-sine-scida"),
-        (Some(1), "Error in linea 7: divisio per nullum\n".to_string())
+        (Some(1), "erratum: divisio per nullum\n  in linea VII\n".to_string())
     );
     assert_eq!(
         erratum("nuntius-nudus"),
-        (Some(1), "Error: res mala\n".to_string())
+        (Some(1), "erratum: res mala\n".to_string())
     );
 }
 
@@ -685,14 +685,14 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
         erratum("index-supra"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: index extra fines: X (longitudo II)\n".to_string()
+            "erratum: index extra fines: X (longitudo II)\n  in 'principale.liss', linea III\n".to_string()
         )
     );
     assert_eq!(
         erratum("index-infra"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: index extra fines: nullus (longitudo II)\n"
+            "erratum: index extra fines: nullus (longitudo II)\n  in 'principale.liss', linea III\n"
                 .to_string()
         )
     );
@@ -700,7 +700,7 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
         erratum("index-scriptio"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: index extra fines: II (longitudo I)\n".to_string()
+            "erratum: index extra fines: II (longitudo I)\n  in 'principale.liss', linea III\n".to_string()
         )
     );
     // D-12: an empty list reads `longitudo nullus`, never an Arabic number.
@@ -708,7 +708,7 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
         erratum("index-vacuus"),
         (
             Some(1),
-            "Error in 'principale.liss', linea 3: index extra fines: I (longitudo nullus)\n"
+            "erratum: index extra fines: I (longitudo nullus)\n  in 'principale.liss', linea III\n"
                 .to_string()
         )
     );
@@ -716,8 +716,8 @@ fn an_index_outside_the_bounds_raises_with_roman_numerals() {
     let (code, stderr) = erratum("index-immanis");
     assert_eq!(code, Some(1));
     assert!(
-        stderr.starts_with("Error in 'principale.liss', linea 3: index extra fines: ")
-            && stderr.ends_with(" (longitudo nullus)\n"),
+        stderr.starts_with("erratum: index extra fines: ")
+            && stderr.ends_with(" (longitudo nullus)\n  in 'principale.liss', linea III\n"),
         "got {stderr:?}",
     );
 }
@@ -735,7 +735,7 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
         let (code, stderr) = erratum(scaena);
         assert_eq!(code, Some(1), "{scaena} status");
         assert_eq!(
-            stderr, "Error: defectus internus: memoria violata est: verificatio\n",
+            stderr, "erratum: defectus internus: memoria violata est: verificatio\n",
             "{scaena} stderr",
         );
         // A Rust panic across an `extern "C"` boundary aborts: SIGABRT, exit 134, D-04's shape.
@@ -760,7 +760,7 @@ fn a_leak_is_exit_one_and_a_clean_exit_is_exit_zero() {
     // Exit 1 and not 70: `judge` treats any status outside {0, 1, 101} as legitimate.
     assert_eq!(
         erratum("memoria-non-liberata"),
-        (Some(1), "Error: memoria non liberata est\n".to_string())
+        (Some(1), "erratum: memoria non liberata est\n".to_string())
     );
 
     let out = in_subprocesso("exitus-mundus");

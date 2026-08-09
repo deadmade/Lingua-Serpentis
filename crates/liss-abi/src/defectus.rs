@@ -34,27 +34,11 @@ pub unsafe extern "C" fn liss_panic(
     // exits 0.
     let _ = unsafe { crate::scriptio::effunde() };
 
-    let mut cifrae = [0u8; 20];
-    erratum(b"Error");
-    match (nomen.is_empty(), line) {
-        (false, 0) => {
-            erratum(b" in '");
-            erratum(nomen);
-            erratum(b"'");
-        }
-        (false, n) => {
-            erratum(b" in '");
-            erratum(nomen);
-            erratum(b"', linea ");
-            erratum(decimales(n, &mut cifrae));
-        }
-        (true, 0) => {}
-        (true, n) => {
-            erratum(b" in linea ");
-            erratum(decimales(n, &mut cifrae));
-        }
-    }
-    erratum(b": ");
+    // The sentence first, then where it happened: the first two levels of the
+    // grammar in 2026-08-09-caret-diagnostics-design.md §3. The third — the source
+    // line under a caret — needs the source, which a running program does not have,
+    // and each level is independent of the one below precisely so this can stop here.
+    erratum(b"erratum: ");
 
     let mut argumenta = [arg0, arg1].into_iter().filter(|p| !p.is_null());
     let mut reliquum = forma;
@@ -68,6 +52,27 @@ pub unsafe extern "C" fn liss_panic(
     }
     erratum(reliquum);
     erratum(b"\n");
+
+    match (nomen.is_empty(), line) {
+        (false, 0) => {
+            erratum(b"  in '");
+            erratum(nomen);
+            erratum(b"'\n");
+        }
+        (false, n) => {
+            erratum(b"  in '");
+            erratum(nomen);
+            erratum(b"', linea ");
+            erratum(Roman::from_u64(n).display().as_bytes());
+            erratum(b"\n");
+        }
+        (true, 0) => {}
+        (true, n) => {
+            erratum(b"  in linea ");
+            erratum(Roman::from_u64(n).display().as_bytes());
+            erratum(b"\n");
+        }
+    }
 
     unsafe { libc::_exit(1) }
 }
@@ -102,22 +107,6 @@ fn lacunae(mut forma: &[u8]) -> usize {
         forma = &forma[i + 2..];
     }
     n
-}
-
-/// `n` in decimal, into a caller-supplied buffer — the one number this crate
-/// formats without going through `Roman`.
-fn decimales(mut n: u64, buf: &mut [u8; 20]) -> &[u8] {
-    if n == 0 {
-        buf[19] = b'0';
-        return &buf[19..];
-    }
-    let mut i = 20;
-    while n > 0 {
-        i -= 1;
-        buf[i] = b'0' + (n % 10) as u8;
-        n /= 10;
-    }
-    &buf[i..]
 }
 
 /// End the program: flush, check the live-allocation count, exit. A leak is

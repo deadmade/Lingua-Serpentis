@@ -178,7 +178,7 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-supra",
-        "Error in linea 3: index extra fines: X (longitudo II)\n",
+        "erratum: index extra fines: X (longitudo II)\n  in linea III\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -188,7 +188,7 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-infra",
-        "Error in linea 3: index extra fines: nullus (longitudo II)\n",
+        "erratum: index extra fines: nullus (longitudo II)\n  in linea III\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -198,7 +198,7 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-scriptio-supra",
-        "Error in linea 3: index extra fines: II (longitudo I)\n",
+        "erratum: index extra fines: II (longitudo I)\n  in linea III\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -208,7 +208,7 @@ fn index_extra_fines_utrimque_clamat() {
 }
 "#,
         "index-in-vacuum",
-        "Error in linea 3: index extra fines: I (longitudo nullus)\n",
+        "erratum: index extra fines: I (longitudo nullus)\n  in linea III\n",
     );
 }
 
@@ -224,7 +224,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-litteralis",
-        "Error in linea 2: divisio per nullum\n",
+        "erratum: divisio per nullum\n  in linea II\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -233,7 +233,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-lectionis",
-        "Error in linea 2: divisio per nullum\n",
+        "erratum: divisio per nullum\n  in linea II\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -242,7 +242,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-additionis",
-        "Error in linea 2: divisio per nullum\n",
+        "erratum: divisio per nullum\n  in linea II\n",
     );
     par_est_erroris(
         r#"munus initium reddit ni {
@@ -252,7 +252,7 @@ fn ordo_evaluationis_a_fonte_legitur() {
 }
 "#,
         "ordo-scriptionis",
-        "Error in linea 3: modulus per nullum\n",
+        "erratum: modulus per nullum\n  in linea III\n",
     );
 }
 
@@ -268,7 +268,7 @@ fn elementum_quod_clamat_seriem_non_aedificat() {
 }
 "#,
         "elementum-clamans",
-        "Error in linea 2: divisio per nullum\n",
+        "erratum: divisio per nullum\n  in linea II\n",
     );
 }
 

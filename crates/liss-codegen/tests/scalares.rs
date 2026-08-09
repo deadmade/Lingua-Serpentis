@@ -176,7 +176,7 @@ fn divisio_per_nullum_lineam_suam_nominat() {
         "divisio",
     );
     assert_eq!(stdout, "ante\n", "D-08: output before the failure still gets out");
-    assert_eq!(stderr, "Error in linea 3: divisio per nullum\n");
+    assert_eq!(stderr, "erratum: divisio per nullum\n  in linea III\n");
     assert_eq!(code, Some(1));
 }
 
@@ -192,7 +192,7 @@ fn modulus_per_nullum_suam_sententiam_habet() {
         "modulus",
     );
     assert_eq!(stdout, "");
-    assert_eq!(stderr, "Error in linea 2: modulus per nullum\n");
+    assert_eq!(stderr, "erratum: modulus per nullum\n  in linea II\n");
     assert_eq!(code, Some(1));
 }
 
@@ -209,7 +209,7 @@ fn fractio_per_nullum_quoque_prohibetur() {
 "#,
         "fractio-nulla",
     );
-    assert_eq!(stderr, "Error in linea 4: divisio per nullum\n");
+    assert_eq!(stderr, "erratum: divisio per nullum\n  in linea IV\n");
     assert_eq!(code, Some(1));
 }
 
@@ -228,7 +228,7 @@ fn vel_dextrum_latus_quoque_aestimat() {
         stdout, "verus\n",
         "`vel` short-circuited: the right operand was not evaluated (spec §3.5)",
     );
-    assert_eq!(stderr, "Error in linea 2: divisio per nullum\n");
+    assert_eq!(stderr, "erratum: divisio per nullum\n  in linea II\n");
     assert_eq!(code, Some(1));
 }
 
@@ -247,7 +247,7 @@ fn et_dextrum_latus_quoque_aestimat() {
         stdout, "falsus\n",
         "`et` short-circuited: the right operand was not evaluated (spec §3.5)",
     );
-    assert_eq!(stderr, "Error in linea 2: divisio per nullum\n");
+    assert_eq!(stderr, "erratum: divisio per nullum\n  in linea II\n");
     assert_eq!(code, Some(1));
 }
 
@@ -333,7 +333,7 @@ fn error_in_programmate_scidam_nominat() {
         "munus initium reddit ni {\n    scribe(°X / nullus);\n    redde nullus;\n}\n",
     );
     let (code, _, stderr) = support::exsequere(&support::imago(&prog, machina), "scida");
-    assert_eq!(stderr, "Error in 'principale.liss', linea 2: divisio per nullum\n");
+    assert_eq!(stderr, "erratum: divisio per nullum\n  in 'principale.liss', linea II\n");
     assert_eq!(code, Some(1));
 }
 

@@ -3,4 +3,5 @@ monitum: nomen 'counter' fortasse non Latinum est
     |
  II |   ni counter = °I;
     |      ^^^^^^^
-Error in 'principale.liss', linea 4: divisio per nullum
+erratum: divisio per nullum
+  in 'principale.liss', linea IV

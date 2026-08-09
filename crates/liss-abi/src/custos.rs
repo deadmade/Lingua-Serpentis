@@ -20,7 +20,7 @@ const VIA_MAPPARUM: &[u8] = b"/proc/self/maps\0";
 /// `Error: ` — the prefix `parse_diagnostic` looks for. Deliberately **not**
 /// named `NUNTIUS_*`: that name is a catalogue marker for a *message*, and this
 /// is a prefix.
-const PRAEFIXUM_ERRORIS: &[u8] = b"Error: ";
+const PRAEFIXUM_ERRORIS: &[u8] = b"erratum: ";
 
 const NUNTIUS_ACERVUS: &CStr = c"acervus vocationum exhaustus est";
 
