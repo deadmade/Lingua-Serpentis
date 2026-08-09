@@ -21,6 +21,7 @@ amended or superseded by a later document and the front matter alone does not te
 | What does a compiled program call, and what owns what | `internals/abi.md` |
 | Why is the front end shaped like this; what was tried and broke | `internals/rationale.md` |
 | How is any of this tested | `internals/testing.md` |
+| Why may I not write a block comment there | `superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6 |
 | Is this known to be wrong | `defectus/2026-08-03-index.md` |
 
 **An unqualified "spec §N" anywhere in this repository — in a comment, a doc, a commit message —
@@ -72,7 +73,7 @@ not the coverage: the corpus and the `catalogus` snapshot remain the authority o
 
 ## `superpowers/specs/` — one design per milestone
 
-Eleven documents, dated, each the design agreed before a milestone was implemented. Front matter
+Twelve documents, dated, each the design agreed before a milestone was implemented. Front matter
 carries **Date**, **Status**, **Author**, and — where one exists — a **Relationship**, **Amends** or
 **Supersedes** line naming the document it changes.
 
@@ -89,9 +90,10 @@ carries **Date**, **Status**, **Author**, and — where one exists — a **Relat
 | `2026-08-01-programs-and-packages-design.md` | 2026-08-01 | Approved — implemented | Program = folder, package = subfolder, entry at `munus initium reddit ni`, `affer` imports, declarations-only top level |
 | `2026-08-03-conformance-and-robustness-suite-design.md` | 2026-08-03 | Proposed | The conformance corpus, the robustness invariant, the diagnostic catalogue ratchet, and the defect register it opened |
 | `2026-08-07-compiler-backend-design.md` | 2026-08-07 | Proposed | **The canonical current spec.** The ahead-of-time compiler, the typed IR, the C ABI, ownership, stack exhaustion, linking — and the removal of the interpreter |
+| `2026-08-09-test-harness-libraries-design.md` | 2026-08-09 | Proposed | The diagnostic ratchet parses rather than scans, which lifts the block-comment rule from five crates; `tempfile` and one shared wait loop in the test support |
 
 The **Status** lines record the state at the moment each document was written and have not been
-maintained since. Every one of the eleven has an implementation plan in `superpowers/plans/`, so a
+maintained since. Every one of the twelve has an implementation plan in `superpowers/plans/`, so a
 status of "pending implementation plan" or "plan not yet written" should be read as history, not as
 the current state of the tree.
 
@@ -167,6 +169,11 @@ decision made by the one before:
 - **`2026-08-07-compiler-backend-design.md`** adds the ahead-of-time compiler, **removes the
   interpreter**, supersedes §3.2 of the conformance design, and closes deferred defect D-19. Nothing
   amends it. It is the spec an unqualified `§N` refers to.
+- **`2026-08-09-test-harness-libraries-design.md`** settles the conformance design's open question
+  §11.1 — *"whether the grep needs to become a real parse"* — in the affirmative: the diagnostic
+  ratchet reads a `syn` AST rather than source bytes. It amends nothing and supersedes nothing. It
+  changes only test machinery, but it is the reason `CLAUDE.md`'s block-comment prohibition applies
+  to `crates/liss-abi/src` alone and no longer to `crates/*/src`.
 
 ### There is no consolidated language reference
 
@@ -200,7 +207,7 @@ language spec.** Read its §5 for the language; do not read the rest as a descri
 
 ## `superpowers/plans/` — the implementation plans
 
-Twelve plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
+Thirteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
 its own — it works from the conformance design (§5, §7, §8.1) and the defect register. Each plan
 opens with a Goal, an Architecture paragraph, a Tech Stack line and, usually, a pointer to its spec,
 and is written as numbered tasks with checkbox steps. The house convention is that every code task
