@@ -25,9 +25,12 @@ fn exsequere_aemulatum_cum(
     nomen: &str,
     ambitus: &[(&str, &str)],
 ) -> (Option<i32>, String, String) {
-    let dir = std::env::temp_dir().join(format!("liss-a64-{}-{nomen}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    let via = dir.join("imago");
+    // A guard, not a bare path: the three `expect`s below leaked the directory on a panic.
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("liss-a64-{nomen}-"))
+        .tempdir()
+        .expect("a scratch directory");
+    let via = dir.path().join("imago");
     std::fs::write(&via, imago).expect("the image is written");
     #[cfg(unix)]
     {
@@ -37,13 +40,11 @@ fn exsequere_aemulatum_cum(
     }
     // `current_dir` is containment: an uncaught guest signal drops a 36 MB core here.
     let mut cmd = Command::new(AEMULATOR);
-    cmd.arg(&via).current_dir(&dir);
+    cmd.arg(&via).current_dir(dir.path());
     for (clavis, valor) in ambitus {
         cmd.env(clavis, valor);
     }
-    let exitus = cmd.output();
-    let _ = std::fs::remove_dir_all(&dir);
-    let exitus = exitus.unwrap_or_else(|e| {
+    let exitus = cmd.output().unwrap_or_else(|e| {
         panic!(
             "`{AEMULATOR}` did not run ({e}). It is in the dev shell (Task 1); \
              outside it, the second target can be built but never executed, and \
