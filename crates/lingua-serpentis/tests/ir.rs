@@ -19,9 +19,9 @@ fn lower(root: &[(&str, &str)], pkgs: &[(&str, &[(&str, &str)])]) -> ir::Program
     for (name, files) in pkgs {
         packages.insert(name.to_string(), files.iter().map(|(p, s)| pfile(p, s)).collect());
     }
-    let mut prog =
+    let prog =
         ParsedProgram { root: root.iter().map(|(p, s)| pfile(p, s)).collect(), packages };
-    check_program_typed(&mut prog).expect("the fixture must type-check")
+    check_program_typed(&prog).expect("the fixture must type-check")
 }
 
 fn lower1(src: &str) -> ir::Programma {
@@ -662,13 +662,13 @@ fn the_ir_mirror_narrows_exactly_as_the_ast_does() {
 #[test]
 fn checking_and_lowering_are_one_walk() {
     let bad = "munus initium reddit ni { ni x = \"salve\"; redde nullus; }";
-    let mut a = ParsedProgram {
+    let a = ParsedProgram {
         root: vec![pfile("principale.liss", bad)],
         packages: BTreeMap::new(),
     };
-    let mut b = a.clone();
-    let e1 = lingua_serpentis::checker::check_program(&mut a).unwrap_err();
-    let e2 = check_program_typed(&mut b).unwrap_err();
+    let b = a.clone();
+    let e1 = lingua_serpentis::checker::check_program(&a).unwrap_err();
+    let e2 = check_program_typed(&b).unwrap_err();
     assert_eq!(e1.message, e2.message);
     assert_eq!(e1.line, e2.line);
     assert_eq!(e1.file, e2.file);

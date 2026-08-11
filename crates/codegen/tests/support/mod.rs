@@ -26,11 +26,11 @@ pub fn radix() -> PathBuf {
 pub fn ir(via: &Path, fons: &str) -> ir::Programma {
     let tokens = tokenize(fons).expect("the fixture lexes");
     let ast = parse_file(&tokens).expect("the fixture parses");
-    let mut prog = ParsedProgram {
+    let prog = ParsedProgram {
         root: vec![ParsedFile { path: via.display().to_string(), src: fons.into(), ast }],
         packages: BTreeMap::new(),
     };
-    check_program_typed(&mut prog).expect("the fixture type-checks")
+    check_program_typed(&prog).expect("the fixture type-checks")
 }
 
 /// The same, in single-file mode: `Func::file` is cleared, so a diagnostic reads
@@ -63,8 +63,8 @@ pub fn ir_fasciculorum(scidae: &[(&str, &str)]) -> ir::Programma {
 
 /// Parse and check one already-loaded program, stopping at the typed IR.
 fn ir_programmatis(prog: lingua_serpentis::program::Program) -> ir::Programma {
-    let mut parsed = parsata(prog);
-    check_program_typed(&mut parsed).expect("the fixture type-checks")
+    let parsed = parsata(prog);
+    check_program_typed(&parsed).expect("the fixture type-checks")
 }
 
 /// Lex and parse every file of a loaded program, stopping short of the checker.

@@ -61,6 +61,13 @@ fn konst(ty: ir::Ty, c: ir::Const) -> ir::Expr {
     ir::Expr { ty, kind: ir::ExprKind::Const(c) }
 }
 
+/// A list literal's type and node from its element type and lowered items. Both
+/// places that build one share this, so neither can spell the `List` wrapper twice.
+fn list_node(elem: Type, items: Vec<ir::Expr>) -> (Type, ir::Expr) {
+    let ty = ir::Ty::List(Box::new(ty_of(&elem)));
+    (Type::List(Box::new(elem)), ir::Expr { ty, kind: ir::ExprKind::ListLit { items } })
+}
+
 struct Checker {
     // Slots are per function and never reused, so leaving a block pops the NAME
     // binding and keeps the number (spec §4.2).
@@ -151,7 +158,7 @@ impl Checker {
     }
 
     /// Check a loop body with `abrumpe`/`continua` enabled inside it.
-    fn check_loop_body(&mut self, body: &mut [Stmt]) -> LResult<ir::Block> {
+    fn check_loop_body(&mut self, body: &[Stmt]) -> LResult<ir::Block> {
         self.loop_depth += 1;
         let r = self.check_block(body);
         self.loop_depth -= 1;
@@ -191,7 +198,7 @@ impl Checker {
             .expect("every resolved call target was numbered by assign_func_ids")
     }
 
-    fn check_args(&self, fname: &str, params: &[Type], args: &mut [Expr], spatium: Spatium)
+    fn check_args(&self, fname: &str, params: &[Type], args: &[Expr], spatium: Spatium)
         -> LResult<Vec<ir::Expr>>
     {
         let line = spatium.linea();
@@ -202,7 +209,7 @@ impl Checker {
             });
         }
         let mut lowered = Vec::with_capacity(args.len());
-        for (want, arg) in params.iter().zip(args.iter_mut()) {
+        for (want, arg) in params.iter().zip(args.iter()) {
             let (got, node) = self.resolve_expr(arg, Some(want.clone()))?;
             if got != *want {
                 return Err(LinguaError {
@@ -232,16 +239,16 @@ impl Checker {
         }
     }
 
-    fn check_expr(&self, e: &mut Expr) -> LResult<(InferTy, ir::Expr)> {
+    fn check_expr(&self, e: &Expr) -> LResult<(InferTy, ir::Expr)> {
         // The expression's own span, not the statement's: this is what puts a
         // caret under the subexpression a diagnostic is actually about.
         let spatium = e.spatium;
         let line = spatium.linea();
-        match &mut e.kind {
+        match &e.kind {
             ExprKind::Int(r) => Ok((InferTy::Known(Type::Int),
                 konst(ir::Ty::Int, ir::Const::Int(r.clone())))),
             ExprKind::FloatLit { numer, den } => {
-                // Still abstract, so the IR takes `nr`'s grain; `resolve_pair`
+                // Still abstract, so the IR takes `nr`'s grain; `resolve_frac`
                 // re-narrows onto `mnr`'s grid exactly, because truncation composes.
                 let count = crate::fraction::from_rational(
                     numer, den, &crate::fraction::scripulum_grain());
@@ -249,12 +256,6 @@ impl Checker {
                     ir::Ty::Frac(ir::Grain::Scripulum),
                     ir::Const::Frac(ir::Grain::Scripulum, count))))
             }
-            ExprKind::Float(c) => Ok((InferTy::Known(Type::Float), konst(
-                ir::Ty::Frac(ir::Grain::Uncia),
-                ir::Const::Frac(ir::Grain::Uncia, c.clone())))),
-            ExprKind::Double(c) => Ok((InferTy::Known(Type::Double), konst(
-                ir::Ty::Frac(ir::Grain::Scripulum),
-                ir::Const::Frac(ir::Grain::Scripulum, c.clone())))),
             ExprKind::Text(s) => Ok((InferTy::Known(Type::Text),
                 konst(ir::Ty::Text, ir::Const::Text(s.clone())))),
             ExprKind::Char(c) => Ok((InferTy::Known(Type::Char),
@@ -285,7 +286,7 @@ impl Checker {
             ExprKind::Binary { op, left, right } => {
                 let (lt, lir) = self.check_expr(left)?;
                 let (rt, rir) = self.check_expr(right)?;
-                self.check_binary(*op, lt, rt, left, right, lir, rir, spatium)
+                self.check_binary(*op, lt, rt, lir, rir, spatium)
             }
             ExprKind::Call { package: Some(p), name, args } => {
                 if !self.imports.contains(p) {
@@ -315,7 +316,7 @@ impl Checker {
                     if args.len() != 1 {
                         return Err(LinguaError { message: "'longitudo' unum argumentum accipit".into(), line, spatium: Some(spatium), });
                     }
-                    let (t, arg) = self.resolve_expr(&mut args[0], None)?;
+                    let (t, arg) = self.resolve_expr(&args[0], None)?;
                     return match t {
                         Type::List(_) => Ok((InferTy::Known(Type::Int),
                             ir::Expr { ty: ir::Ty::Int, kind: ir::ExprKind::Len(Box::new(arg)) })),
@@ -332,14 +333,14 @@ impl Checker {
                     // A bare empty list literal takes its element type from the value.
                     let empty_list_arg = matches!(&args[0].kind, ExprKind::ListLit(v) if v.is_empty());
                     if empty_list_arg {
-                        let (vt, item) = self.resolve_expr(&mut args[1], None)?;
+                        let (vt, item) = self.resolve_expr(&args[1], None)?;
                         let (_, list) = self.resolve_expr(
-                            &mut args[0], Some(Type::List(Box::new(vt.clone()))))?;
+                            &args[0], Some(Type::List(Box::new(vt.clone()))))?;
                         let ty = ir::Ty::List(Box::new(ty_of(&vt)));
                         return Ok((InferTy::Known(Type::List(Box::new(vt))), ir::Expr { ty,
                             kind: ir::ExprKind::Append { list: Box::new(list), item: Box::new(item) } }));
                     }
-                    let (lt, list) = self.resolve_expr(&mut args[0], None)?;
+                    let (lt, list) = self.resolve_expr(&args[0], None)?;
                     let elem = match lt {
                         Type::List(inner) => *inner,
                         other => return Err(LinguaError {
@@ -347,7 +348,7 @@ impl Checker {
                             line, spatium: Some(spatium),
                         }),
                     };
-                    let (vt, item) = self.resolve_expr(&mut args[1], Some(elem.clone()))?;
+                    let (vt, item) = self.resolve_expr(&args[1], Some(elem.clone()))?;
                     if vt != elem {
                         return Err(LinguaError {
                             message: format!("'adde': series '{}' elementum '{}' non accipit",
@@ -372,9 +373,8 @@ impl Checker {
             }
             ExprKind::ListLit(elems) => {
                 let (elem, items) = self.check_list_elems(elems, None, spatium)?;
-                let ty = ir::Ty::List(Box::new(ty_of(&elem)));
-                Ok((InferTy::Known(Type::List(Box::new(elem))),
-                    ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
+                let (t, node) = list_node(elem, items);
+                Ok((InferTy::Known(t), node))
             }
             ExprKind::Index { base, index } => {
                 let (base_ty, base_ir) = self.resolve_expr(base, None)?;
@@ -400,7 +400,7 @@ impl Checker {
 
     /// `expected` fixes the element type; `None` infers it from the first element.
     /// Returns the ELEMENT type, which callers wrap in `Type::List`.
-    fn check_list_elems(&self, elems: &mut [Expr], expected: Option<Type>, spatium: Spatium)
+    fn check_list_elems(&self, elems: &[Expr], expected: Option<Type>, spatium: Spatium)
         -> LResult<(Type, Vec<ir::Expr>)>
     {
         let line = spatium.linea();
@@ -411,7 +411,7 @@ impl Checker {
                     message: "typus elementorum seriei vacuae ignotus".into(), line, spatium: Some(spatium), }),
             };
         }
-        let (first_el, rest) = elems.split_first_mut().unwrap();
+        let (first_el, rest) = elems.split_first().unwrap();
         let (first, first_ir) = self.resolve_expr(first_el, expected.clone())?;
         let mut items = vec![first_ir];
         for el in rest {
@@ -429,33 +429,22 @@ impl Checker {
         Ok((first, items))
     }
 
-    /// Type a list literal against an optional expected list type.
-    fn resolve_list(&self, e: &mut Expr, expected: Option<Type>)
-        -> LResult<(Type, ir::Expr)>
-    {
-        let spatium = e.spatium;
-        let elem_expected = match &expected {
-            Some(Type::List(inner)) => Some((**inner).clone()),
-            _ => None,
-        };
-        let elems = match &mut e.kind {
-            ExprKind::ListLit(v) => v,
-            _ => unreachable!("resolve_list called on non-list"),
-        };
-        let (elem, items) = self.check_list_elems(elems, elem_expected, spatium)?;
-        let ty = ir::Ty::List(Box::new(ty_of(&elem)));
-        Ok((Type::List(Box::new(elem)), ir::Expr { ty, kind: ir::ExprKind::ListLit { items } }))
-    }
-
     /// A `FloatLit` becomes the expected float type; with no float context it defaults
-    /// to `nr`; demanded as a non-float type it is an error.
-    fn resolve_expr(&self, e: &mut Expr, expected: Option<Type>)
+    /// to `nr`; demanded as a non-float type it is an error. A list literal is taken
+    /// here rather than through `check_expr`, which has no expected type to push down
+    /// into the elements.
+    fn resolve_expr(&self, e: &Expr, expected: Option<Type>)
         -> LResult<(Type, ir::Expr)>
     {
         let spatium = e.spatium;
         let line = spatium.linea();
-        if matches!(e.kind, ExprKind::ListLit(_)) {
-            return self.resolve_list(e, expected);
+        if let ExprKind::ListLit(elems) = &e.kind {
+            let elem_expected = match &expected {
+                Some(Type::List(inner)) => Some((**inner).clone()),
+                _ => None,
+            };
+            let (elem, items) = self.check_list_elems(elems, elem_expected, spatium)?;
+            return Ok(list_node(elem, items));
         }
         match self.check_expr(e)? {
             (InferTy::Known(t), node) => Ok((t, node)),
@@ -470,16 +459,15 @@ impl Checker {
                     }),
                     None => Type::Double,
                 };
-                resolve_pair(e, &mut node, ty.clone());
+                resolve_frac(&mut node, &ty);
                 Ok((ty, node))
             }
         }
     }
 
-    // Each operand arrives as three: synthesized type, AST node, IR node.
-    #[allow(clippy::too_many_arguments)]
+    // Each operand arrives as two: synthesized type and IR node. The AST nodes are
+    // not among them — nothing here rewrites the tree it was parsed from.
     fn check_binary(&self, op: BinOp, lt: InferTy, rt: InferTy,
-                    left: &mut Expr, right: &mut Expr,
                     mut lir: ir::Expr, mut rir: ir::Expr, spatium: Spatium)
         -> LResult<(InferTy, ir::Expr)>
     {
@@ -491,62 +479,44 @@ impl Checker {
             line, spatium: Some(spatium),
         };
         let res = match op {
-            BinOp::Add => match (&lt, &rt) {
-                (FloatLit, FloatLit) => Ok(FloatLit),
-                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Float)) }
-                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Float)) }
-                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
-                (Known(Type::Float), Known(Type::Float)) => Ok(Known(Type::Float)),
-                (Known(Type::Double), Known(Type::Double)) => Ok(Known(Type::Double)),
-                (Known(Type::Text), Known(Type::Text)) => Ok(Known(Type::Text)),
-                _ => Err(mismatch()),
+            BinOp::Add => match unify_operands(&lt, &rt, &mut lir, &mut rir, true) {
+                Some(t) => Ok(t),
+                None => match (&lt, &rt) {
+                    (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
+                    (Known(Type::Text), Known(Type::Text)) => Ok(Known(Type::Text)),
+                    _ => Err(mismatch()),
+                },
             },
-            BinOp::Sub | BinOp::Mul | BinOp::Div => match (&lt, &rt) {
-                (FloatLit, FloatLit) => Ok(FloatLit),
-                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Float)) }
-                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Float)) }
-                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Double)) }
-                (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
-                (Known(Type::Float), Known(Type::Float)) => Ok(Known(Type::Float)),
-                (Known(Type::Double), Known(Type::Double)) => Ok(Known(Type::Double)),
-                _ => Err(mismatch()),
-            },
+            BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                match unify_operands(&lt, &rt, &mut lir, &mut rir, true) {
+                    Some(t) => Ok(t),
+                    None => match (&lt, &rt) {
+                        (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
+                        _ => Err(mismatch()),
+                    },
+                }
+            }
             BinOp::Mod => match (&lt, &rt) {
                 (Known(Type::Int), Known(Type::Int)) => Ok(Known(Type::Int)),
                 _ => Err(mismatch()),
             },
-            BinOp::Eq | BinOp::Ne => match (&lt, &rt) {
-                (FloatLit, FloatLit) => {
-                    resolve_pair(left, &mut lir, Type::Double);
-                    resolve_pair(right, &mut rir, Type::Double);
-                    Ok(Known(Type::Bool))
-                }
-                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Bool)) }
-                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Bool)) }
-                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
-                _ => Err(mismatch()),
+            BinOp::Eq | BinOp::Ne => match unify_operands(&lt, &rt, &mut lir, &mut rir, false) {
+                Some(_) => Ok(Known(Type::Bool)),
+                None => match (&lt, &rt) {
+                    (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
+                    _ => Err(mismatch()),
+                },
             },
-            BinOp::Gt | BinOp::Lt => match (&lt, &rt) {
-                (FloatLit, FloatLit) => {
-                    resolve_pair(left, &mut lir, Type::Double);
-                    resolve_pair(right, &mut rir, Type::Double);
-                    Ok(Known(Type::Bool))
-                }
-                (FloatLit, Known(Type::Float)) => { resolve_pair(left, &mut lir, Type::Float); Ok(Known(Type::Bool)) }
-                (FloatLit, Known(Type::Double)) => { resolve_pair(left, &mut lir, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(Type::Float), FloatLit) => { resolve_pair(right, &mut rir, Type::Float); Ok(Known(Type::Bool)) }
-                (Known(Type::Double), FloatLit) => { resolve_pair(right, &mut rir, Type::Double); Ok(Known(Type::Bool)) }
-                (Known(Type::List(_)), Known(Type::List(_))) => Err(LinguaError {
-                    message: "series ordine comparari non potest (par_est/par_non_est tantum)".into(),
-                    line, spatium: Some(spatium),
-                }),
-                (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
-                _ => Err(mismatch()),
+            BinOp::Gt | BinOp::Lt => match unify_operands(&lt, &rt, &mut lir, &mut rir, false) {
+                Some(_) => Ok(Known(Type::Bool)),
+                None => match (&lt, &rt) {
+                    (Known(Type::List(_)), Known(Type::List(_))) => Err(LinguaError {
+                        message: "series ordine comparari non potest (par_est/par_non_est tantum)".into(),
+                        line, spatium: Some(spatium),
+                    }),
+                    (Known(a), Known(b)) if a == b => Ok(Known(Type::Bool)),
+                    _ => Err(mismatch()),
+                },
             },
             BinOp::And | BinOp::Or => match (&lt, &rt) {
                 // `et` and `vel` do NOT short-circuit and must not become a branch
@@ -565,10 +535,10 @@ impl Checker {
 
     /// Check one statement, lowering it. `None` is a statement that lowers to nothing,
     /// which only a `munus` declaration does.
-    fn check_stmt(&mut self, s: &mut Stmt) -> LResult<Option<ir::Stmt>> {
-        let line = s.line;
+    fn check_stmt(&mut self, s: &Stmt) -> LResult<Option<ir::Stmt>> {
+        let line = s.spatium.linea();
         let spatium = s.spatium;
-        match &mut s.kind {
+        match &s.kind {
             StmtKind::Let { ty, name, value, .. } => {
                 let (vt, value_ir) = self.resolve_expr(value, Some(ty.clone()))?;
                 if vt != *ty {
@@ -700,7 +670,7 @@ impl Checker {
 
     /// The scope it pushes is the parameter frame, so the body block's `declares`
     /// opens with slots `0..params` and every `redde` frees them too (§7.3.4).
-    fn check_func_decl(&mut self, f: &mut FuncDecl, spatium: Spatium) -> LResult<ir::Func> {
+    fn check_func_decl(&mut self, f: &FuncDecl, spatium: Spatium) -> LResult<ir::Func> {
         let line = spatium.linea();
         self.push_scope();
         // Slots are numbered per function, so a fresh table; restored below.
@@ -709,7 +679,7 @@ impl Checker {
         let saved = std::mem::replace(&mut self.current_ret, f.ret.clone());
         // A function body is not inside any loop, whatever encloses the declaration.
         let saved_depth = std::mem::take(&mut self.loop_depth);
-        let r = self.check_block_inner(&mut f.body);
+        let r = self.check_block_inner(&f.body);
         self.loop_depth = saved_depth;
         self.current_ret = saved;
         let declares = self.pop_scope();
@@ -745,7 +715,7 @@ impl Checker {
 
     /// A block that opens a scope of its own; the pop happens on every path, and
     /// there is one nested-function guard rather than two identical ones (D-24).
-    fn check_block(&mut self, body: &mut [Stmt]) -> LResult<ir::Block> {
+    fn check_block(&mut self, body: &[Stmt]) -> LResult<ir::Block> {
         self.push_scope();
         let r = self.check_block_inner(body);
         let declares = self.pop_scope();
@@ -753,13 +723,13 @@ impl Checker {
     }
 
     /// A block that runs in a scope the caller already pushed.
-    fn check_block_inner(&mut self, body: &mut [Stmt]) -> LResult<Vec<ir::Stmt>> {
+    fn check_block_inner(&mut self, body: &[Stmt]) -> LResult<Vec<ir::Stmt>> {
         let mut stmts = Vec::new();
-        for s in body.iter_mut() {
+        for s in body.iter() {
             if let StmtKind::Func(f) = &s.kind {
                 return Err(LinguaError {
                     message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
-                    line: s.line, spatium: Some(s.spatium),
+                    line: s.spatium.linea(), spatium: Some(s.spatium),
                 });
             }
             stmts.extend(self.check_stmt(s)?);
@@ -767,7 +737,7 @@ impl Checker {
         Ok(stmts)
     }
 
-    fn expect_bool(&self, cond: &mut Expr) -> LResult<ir::Expr> {
+    fn expect_bool(&self, cond: &Expr) -> LResult<ir::Expr> {
         let spatium = cond.spatium;
         let line = spatium.linea();
         let (t, node) = self.check_expr(cond)?;
@@ -779,38 +749,13 @@ impl Checker {
     }
 }
 
-/// Narrow every still-abstract fractional literal onto the type's grain grid by
-/// truncation. Only ever called where the synthesized type was `FloatLit`.
-fn resolve_floatlit(e: &mut Expr, ty: Type) {
-    match &mut e.kind {
-        ExprKind::FloatLit { numer, den } => {
-            let (numer, den) = (numer.clone(), den.clone());
-            // The literal narrows in place; its span is unchanged, because it is
-            // still written where it was written.
-            e.kind = match ty {
-                Type::Float => ExprKind::Float(
-                    crate::fraction::from_rational(&numer, &den, &crate::fraction::uncia_grain())),
-                Type::Double => ExprKind::Double(
-                    crate::fraction::from_rational(&numer, &den, &crate::fraction::scripulum_grain())),
-                _ => return,
-            };
-        }
-        ExprKind::Unary { expr, .. } => resolve_floatlit(expr, ty),
-        ExprKind::Binary { left, right, .. } => {
-            resolve_floatlit(left, ty.clone());
-            resolve_floatlit(right, ty);
-        }
-        _ => {}
-    }
-}
-
-/// `resolve_floatlit`'s mirror over the typed IR, deliberately adjacent to it: the
-/// same three arms in the same order, so the two cannot drift apart.
+/// Narrow every still-abstract fractional literal in the typed IR onto `g`'s grain
+/// grid by truncation. Only ever reached where the synthesized type was `FloatLit`.
 fn resolve_floatlit_ir(e: &mut ir::Expr, g: ir::Grain) {
     let narrowed = match &mut e.kind {
         ir::ExprKind::Const(ir::Const::Frac(had, count)) => {
             // The composition is exact in one direction only, and nothing textual
-            // protects it, because `resolve_floatlit` is direction-free.
+            // protects it: this rewrite is direction-free.
             debug_assert!(*had == ir::Grain::Scripulum || *had == g,
                 "resolve_floatlit_ir is exact only narrowing from nr's grain");
             *count = crate::fraction::from_rational(count, &grain_denom(*had), &grain_denom(g));
@@ -831,13 +776,43 @@ fn resolve_floatlit_ir(e: &mut ir::Expr, g: ir::Grain) {
     }
 }
 
-/// Narrow one operand in both trees at once; the only caller of either half, so
-/// neither rewrite can be written without the other.
-fn resolve_pair(ast: &mut Expr, node: &mut ir::Expr, ty: Type) {
-    if let Some(g) = grain_of(&ty) {
+/// Narrow one operand onto `ty`'s grid. A non-fractional `ty` has no grain and
+/// narrows nothing; `check_binary` and `resolve_expr` only reach here with one.
+fn resolve_frac(node: &mut ir::Expr, ty: &Type) {
+    if let Some(g) = grain_of(ty) {
         resolve_floatlit_ir(node, g);
     }
-    resolve_floatlit(ast, ty);
+}
+
+/// The fractional half of `check_binary`'s table, which is one table for all six
+/// arithmetic and comparison operators. Narrows whichever side is still abstract
+/// and answers with the operand type both now have; `None` means no float is
+/// involved and the operator's own table decides.
+///
+/// **`(FloatLit, FloatLit)` is the pair that is not uniform.** Arithmetic passes
+/// `abstractum` and keeps it abstract, so the sum of two literals is still free to
+/// become `mnr` from its context. A comparison cannot defer: it has to pick a grid
+/// to compare on, and picks `nr`, the default.
+fn unify_operands(lt: &InferTy, rt: &InferTy, lir: &mut ir::Expr, rir: &mut ir::Expr,
+                  abstractum: bool) -> Option<InferTy> {
+    use InferTy::*;
+    let ty = match (lt, rt) {
+        (FloatLit, FloatLit) if abstractum => return Some(FloatLit),
+        (FloatLit, FloatLit) => Type::Double,
+        (FloatLit, Known(t @ (Type::Float | Type::Double)))
+        | (Known(t @ (Type::Float | Type::Double)), FloatLit) => t.clone(),
+        (Known(a @ (Type::Float | Type::Double)), Known(b)) if a == b => {
+            return Some(Known(a.clone()));
+        }
+        _ => return None,
+    };
+    if *lt == FloatLit {
+        resolve_frac(lir, &ty);
+    }
+    if *rt == FloatLit {
+        resolve_frac(rir, &ty);
+    }
+    Some(Known(ty))
 }
 
 /// The names the language keeps for its own builtins. One copy, not two (D-24).
@@ -862,7 +837,7 @@ fn collect_sigs(files: &[ParsedFile]) -> Result<HashMap<String, Sig>, ProgramErr
             if sigs.contains_key(&f.name) {
                 return Err(ProgramError::in_file(&file.path, &file.src, LinguaError {
                     message: format!("functio '{}' bis definita", f.name),
-                    line: s.line, spatium: Some(s.spatium),
+                    line: s.spatium.linea(), spatium: Some(s.spatium),
                 }));
             }
             let ptypes = f.params.iter().map(|(t, _, _)| t.clone()).collect();
@@ -895,7 +870,7 @@ fn assign_func_ids(prog: &ParsedProgram) -> HashMap<FuncKey, ir::FuncId> {
 
 /// Check one file's bodies against its folder's namespace and its own imports.
 fn check_file(
-    file: &mut ParsedFile,
+    file: &ParsedFile,
     ns: Option<&str>,
     ns_sigs: &HashMap<String, Sig>,
     pkg_sigs: &HashMap<String, HashMap<String, Sig>>,
@@ -916,9 +891,9 @@ fn check_file(
     c.packages = pkg_sigs.clone();
     c.imports = file.ast.imports.iter().map(|i| i.package.clone()).collect();
     c.func_ids = func_ids.clone();
-    for s in file.ast.funcs.iter_mut() {
+    for s in file.ast.funcs.iter() {
         // Only `munus` declarations reach here, and `parse_file` is what guarantees it.
-        let StmtKind::Func(f) = &mut s.kind else { continue };
+        let StmtKind::Func(f) = &s.kind else { continue };
         debug_assert_eq!(
             func_ids.get(&(ns.map(str::to_string), f.name.clone())),
             Some(&ir::FuncId(out.len() as u32)),
@@ -932,13 +907,13 @@ fn check_file(
 
 /// Check a whole parsed program, discarding the IR it built: the checking-only form,
 /// so a checker test need not care about IR it is not asserting.
-pub fn check_program(prog: &mut ParsedProgram) -> Result<(), ProgramError> {
+pub fn check_program(prog: &ParsedProgram) -> Result<(), ProgramError> {
     check_program_typed(prog).map(|_| ())
 }
 
 /// Per-namespace signatures, the `initium` entry point, import validity, then every
 /// file's bodies, emitting the typed IR codegen consumes (§3.4, §4).
-pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, ProgramError> {
+pub fn check_program_typed(prog: &ParsedProgram) -> Result<ir::Programma, ProgramError> {
     let root_sigs = collect_sigs(&prog.root)?;
     let mut pkg_sigs: HashMap<String, HashMap<String, Sig>> = HashMap::new();
     for (name, files) in &prog.packages {
@@ -956,7 +931,7 @@ pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, Pr
                             if f.name == "initium" {
                                 return Err(ProgramError::in_file(&file.path, &file.src, LinguaError {
                                     message: "munus 'initium' nihil capere et 'ni' reddere debet".into(),
-                                    line: s.line, spatium: Some(s.spatium),
+                                    line: s.spatium.linea(), spatium: Some(s.spatium),
                                 }));
                             }
                         }
@@ -969,12 +944,12 @@ pub fn check_program_typed(prog: &mut ParsedProgram) -> Result<ir::Programma, Pr
 
     let func_ids = assign_func_ids(prog);
     let mut funcs = Vec::new();
-    for file in prog.root.iter_mut() {
+    for file in prog.root.iter() {
         check_file(file, None, &root_sigs, &pkg_sigs, &func_ids, &mut funcs)?;
     }
-    for (name, files) in prog.packages.iter_mut() {
+    for (name, files) in prog.packages.iter() {
         let ns = &pkg_sigs[name];
-        for file in files.iter_mut() {
+        for file in files.iter() {
             check_file(file, Some(name), ns, &pkg_sigs, &func_ids, &mut funcs)?;
         }
     }
@@ -996,8 +971,8 @@ mod tests {
     /// A complete single-file program through the real entry point; the error is
     /// narrowed back to a `LinguaError`, and a structural one surfaces at line 1.
     fn check_totum(src: &str) -> LResult<()> {
-        let mut p = pprog(&[("fons.liss", src)], &[]);
-        check_program(&mut p)
+        let p = pprog(&[("fons.liss", src)], &[]);
+        check_program(&p)
             .map_err(|e| LinguaError { message: e.message, line: e.line.unwrap_or(1), spatium: None, })
     }
 
@@ -1015,7 +990,7 @@ mod tests {
                 munus initium reddit ni { scribe(nomen()); redde nullus; }")],
             &[],
         );
-        let e = check_program(&mut { p }).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert_eq!(e.message, "munus 'nomen' non in omni via reddit");
     }
 
@@ -1028,20 +1003,20 @@ mod tests {
                 munus initium reddit ni { scribe(signum(°I)); redde nullus; }")],
             &[],
         );
-        assert!(check_program(&mut { p }).is_ok());
+        assert!(check_program(&p).is_ok());
     }
 
     #[test]
     fn only_the_root_initium_may_fall_off_its_end() {
         // §4.3; a package function that happens to be called `initium` is ordinary.
         let root_ok = pprog(&[("principale.liss", "munus initium reddit ni { scribe(°I); }")], &[]);
-        assert!(check_program(&mut { root_ok }).is_ok());
+        assert!(check_program(&root_ok).is_ok());
 
         let pkg = pprog(
             &[("principale.liss", "affer mathematica;\nmunus initium reddit ni { redde nullus; }")],
             &[("mathematica", &[("summa.liss", "munus initium reddit ni { scribe(°I); }")] as &[_])],
         );
-        let e = check_program(&mut { pkg }).unwrap_err();
+        let e = check_program(&pkg).unwrap_err();
         assert_eq!(e.message, "munus 'initium' non in omni via reddit");
     }
 
@@ -1053,7 +1028,7 @@ mod tests {
                 munus initium reddit ni { redde semper(); }")],
             &[],
         );
-        let e = check_program(&mut { p }).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert_eq!(e.message, "munus 'semper' non in omni via reddit");
     }
 
@@ -1312,20 +1287,20 @@ mod tests {
 
     #[test]
     fn program_with_import_and_qualified_call_checks() {
-        let mut p = pprog(
+        let p = pprog(
             &[("principale.liss",
                "affer mathematica;\nmunus initium reddit ni { scribe(mathematica.summa(°I, °II)); redde nullus; }")],
             &[("mathematica",
                &[("mathematica/summa.liss",
                   "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
         );
-        assert!(check_program(&mut p).is_ok());
+        assert!(check_program(&p).is_ok());
     }
 
     #[test]
     fn missing_initium_is_a_structural_error() {
-        let mut p = pprog(&[("a.liss", "munus f reddit ni { redde nullus; }")], &[]);
-        let e = check_program(&mut p).unwrap_err();
+        let p = pprog(&[("a.liss", "munus f reddit ni { redde nullus; }")], &[]);
+        let e = check_program(&p).unwrap_err();
         assert!(e.message.contains("initium"), "got: {}", e.message);
         assert_eq!(e.file, None);
         assert_eq!(e.line, None);
@@ -1333,37 +1308,37 @@ mod tests {
 
     #[test]
     fn initium_with_wrong_signature_is_rejected() {
-        let mut with_params = pprog(
+        let with_params = pprog(
             &[("a.liss", "munus initium capit (ni n) reddit ni { redde n; }")], &[]);
-        let e = check_program(&mut with_params).unwrap_err();
+        let e = check_program(&with_params).unwrap_err();
         assert!(e.message.contains("nihil capere"), "got: {}", e.message);
         assert_eq!(e.file.as_deref(), Some("a.liss"));
 
-        let mut wrong_ret = pprog(
+        let wrong_ret = pprog(
             &[("a.liss", "munus initium reddit voc { redde \"salve\"; }")], &[]);
-        let e = check_program(&mut wrong_ret).unwrap_err();
+        let e = check_program(&wrong_ret).unwrap_err();
         assert!(e.message.contains("reddere"), "got: {}", e.message);
     }
 
     #[test]
     fn duplicate_function_across_files_of_one_folder_is_rejected() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "munus initium reddit ni { redde nullus; }")],
             &[("mathematica", &[
                 ("mathematica/a.liss", "munus summa reddit ni { redde °I; }"),
                 ("mathematica/b.liss", "munus summa reddit ni { redde °II; }"),
             ])],
         );
-        let e = check_program(&mut p).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert!(e.message.contains("bis definita"), "got: {}", e.message);
         assert_eq!(e.file.as_deref(), Some("mathematica/b.liss"));
     }
 
     #[test]
     fn importing_an_unknown_package_is_rejected() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "affer ignota;\nmunus initium reddit ni { redde nullus; }")], &[]);
-        let e = check_program(&mut p).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert!(e.message.contains("non inventus"), "got: {}", e.message);
         assert_eq!(e.file.as_deref(), Some("a.liss"));
         assert_eq!(e.line, Some(1));
@@ -1371,29 +1346,29 @@ mod tests {
 
     #[test]
     fn qualified_call_without_import_is_rejected() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "munus initium reddit ni { redde mathematica.summa(°I, °II); }")],
             &[("mathematica", &[("mathematica/s.liss",
                 "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
         );
-        let e = check_program(&mut p).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert!(e.message.contains("non allatus"), "got: {}", e.message);
     }
 
     #[test]
     fn unknown_function_in_a_real_package_is_rejected() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "affer mathematica;\nmunus initium reddit ni { redde mathematica.ignota(); }")],
             &[("mathematica", &[("mathematica/s.liss",
                 "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
         );
-        let e = check_program(&mut p).unwrap_err();
+        let e = check_program(&p).unwrap_err();
         assert!(e.message.contains("in fasciculo"), "got: {}", e.message);
     }
 
     #[test]
     fn import_cycles_are_allowed() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "affer par;\nmunus initium reddit ni { redde par.aequum(°IV); }")],
             &[
                 ("par", &[("par/p.liss",
@@ -1402,27 +1377,27 @@ mod tests {
                     "affer par;\nmunus imparum capit (ni n) reddit ni { si (n par_est nullus) { redde nullus; } redde par.aequum(n - °I); }")]),
             ],
         );
-        assert!(check_program(&mut p).is_ok());
+        assert!(check_program(&p).is_ok());
     }
 
     #[test]
     fn local_and_imported_functions_may_share_a_name() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss",
                "affer mathematica;\nmunus summa reddit voc { redde \"summa\"; }\nmunus initium reddit ni { scribe(summa()); redde mathematica.summa(°I, °II); }")],
             &[("mathematica", &[("mathematica/s.liss",
                 "munus summa capit (ni a, ni b) reddit ni { redde a + b; }")])],
         );
-        assert!(check_program(&mut p).is_ok());
+        assert!(check_program(&p).is_ok());
     }
 
     #[test]
     fn initium_in_a_package_is_an_ordinary_function() {
-        let mut p = pprog(
+        let p = pprog(
             &[("a.liss", "affer alia;\nmunus initium reddit ni { redde alia.initium(°V); }")],
             &[("alia", &[("alia/x.liss",
                 "munus initium capit (ni n) reddit ni { redde n; }")])],
         );
-        assert!(check_program(&mut p).is_ok());
+        assert!(check_program(&p).is_ok());
     }
 }

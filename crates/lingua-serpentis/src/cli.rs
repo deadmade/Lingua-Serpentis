@@ -149,7 +149,7 @@ pub fn liss(args: &[String]) -> ! {
         Err(e) => finish(e),
     };
 
-    let mut parsed = match crate::parse_loaded(loaded) {
+    let parsed = match crate::parse_loaded(loaded) {
         Ok(p) => p,
         Err(e) => finish(strip(single, e)),
     };
@@ -162,7 +162,7 @@ pub fn liss(args: &[String]) -> ! {
         }
     }
 
-    let mut ir = match crate::checker::check_program_typed(&mut parsed) {
+    let mut ir = match crate::checker::check_program_typed(&parsed) {
         Ok(ir) => ir,
         Err(mut e) => {
             e.warnings = monita;

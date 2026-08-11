@@ -195,21 +195,27 @@ arithmetic that combines only such literals. Everything else is `Known`.
   checker's *diagnostics* need the two names apart (spec §4.1).
 - A bare `FloatLit` **defaults to `nr`** — in `infer_ir_ty`, in `infer_name` when a diagnostic has
   to name one, and in `resolve_expr` with no float context.
-- **`resolve_floatlit`** (over the AST) and **`resolve_floatlit_ir`** (over the IR) are deliberately
-  adjacent, with the same three arms in the same order, so the two cannot drift apart.
-  **`resolve_pair`** is the only caller of either, so neither rewrite can be written without the
-  other.
-- The IR node was built while the AST node was still abstract, so it carries `nr`'s grain.
+- **`resolve_floatlit_ir`** narrows the typed IR, and **nothing narrows the AST.** There was a
+  second rewrite over the AST once, turning `ExprKind::FloatLit` into `Float`/`Double` in place.
+  Those two variants were read by one arm of `check_expr`, which is to say only if an expression
+  were checked twice — and nothing checks twice: the driver drops the parse immediately after
+  `check_program_typed`, the Latinity lint runs *before* the checker and reads names only, and every
+  other caller builds a fresh `ParsedProgram`. It was the checker's **only** mutation of the tree,
+  and so the only reason `&mut` was threaded through `check_expr`, `check_stmt`, `check_block`,
+  `check_file` and both public entry points. All of them take `&` now.
+- The IR node was built while the literal was still abstract, so it carries `nr`'s grain.
   Re-narrowing onto `mnr`'s is **exact rather than lossy, because truncation composes**:
-  `trunc(trunc(n·CCLXXXVIII/d)·XII/CCLXXXVIII) = trunc(n·XII/d)`, which is what `resolve_floatlit`
-  computes directly from the rational. The composition is exact in **one direction only**; going the
-  other way violates it for the great majority of rationals. Nothing textual protects this —
-  `resolve_floatlit` recomputes from the original numerator and denominator and so is
-  direction-free, which means the two can stay perfectly parallel while `resolve_floatlit_ir`
-  silently goes wrong. Hence its `debug_assert!`. **Conflating an abstract literal with an
-  already-resolved `mnr`/`nr` one is safe for the same reason `resolve_floatlit` may**: it is only
-  ever called on a subtree whose synthesized type was `FloatLit`, and every leaf of such a subtree
+  `trunc(trunc(n·CCLXXXVIII/d)·XII/CCLXXXVIII) = trunc(n·XII/d)`. The composition is exact in **one
+  direction only**; going the other way violates it for the great majority of rationals, and nothing
+  textual protects it, since the rewrite itself is direction-free. Hence its `debug_assert!`.
+  **Conflating an abstract literal with an already-resolved `mnr`/`nr` one is safe**: it is only
+  ever reached on a subtree whose synthesized type was `FloatLit`, and every leaf of such a subtree
   is a literal.
+- **`unify_operands`** is the fractional half of `check_binary`'s table, which is one table for all
+  six arithmetic and comparison operators — it was written out four times. The pair that is *not*
+  uniform is `(FloatLit, FloatLit)`: arithmetic keeps it abstract, so the sum of two literals is
+  still free to take `mnr` from its context, while a comparison has to pick a grid to compare on and
+  picks `nr`, the default.
 
 ### Scopes and slots
 
@@ -829,9 +835,9 @@ break" is repeated here.
   then dispatched on the operator; those fixtures are what carries it now.
 - **`resolve_floatlit_ir`** — the truncation composition is exact **in one direction only**. Going
   the other way violates it for the great majority of rationals, and nothing textual protects this:
-  `resolve_floatlit` recomputes from the original numerator and denominator and so is
-  direction-free, which means the two can stay perfectly parallel while this one silently goes
-  wrong. Hence the `debug_assert!`.
+  the rewrite recomputes from whatever grain it finds on the node and so is direction-free, which
+  means a caller that hands it the wrong one gets silence rather than a mistake it can see. Hence
+  the `debug_assert!`.
 - **`check_expr`, the bare `Call` arm** — `self.func_id(self.namespace.as_deref(), name)` is the
   **sole namespace-sensitive `FuncId` binding in the compiler**. Bind it to `None` — which means the
   program's root — and a package's own unqualified call silently resolves to the **root's** function

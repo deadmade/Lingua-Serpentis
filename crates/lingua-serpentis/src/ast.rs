@@ -60,8 +60,6 @@ pub fn bx(kind: ExprKind) -> Box<Expr> {
 pub enum ExprKind {
     Int(Roman),
     FloatLit { numer: Roman, den: Roman }, // abstract, unresolved
-    Float(Roman),  // mnr: unciae (1/12)
-    Double(Roman), // nr: scripula (1/288)
     Text(String),
     Char(char),
     Bool(bool),
