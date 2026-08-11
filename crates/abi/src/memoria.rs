@@ -14,7 +14,7 @@ pub extern "C" fn liss_live_count() -> u64 {
 /// # Safety
 /// The caller must initialise the whole header before anything reads it, and
 /// must eventually pass the pointer to [`liberare`] exactly once.
-pub unsafe fn allocare(bytes: usize) -> *mut u8 {
+pub(crate) unsafe fn allocare(bytes: usize) -> *mut u8 {
     let p = unsafe { libc::malloc(bytes) }.cast::<u8>();
     if p.is_null() {
         crate::defectus::memoria_exhausta();
@@ -27,7 +27,7 @@ pub unsafe fn allocare(bytes: usize) -> *mut u8 {
 ///
 /// # Safety
 /// As [`allocare`].
-pub unsafe fn allocare_nulla(bytes: usize) -> *mut u8 {
+pub(crate) unsafe fn allocare_nulla(bytes: usize) -> *mut u8 {
     let p = unsafe { libc::calloc(1, bytes) }.cast::<u8>();
     if p.is_null() {
         crate::defectus::memoria_exhausta();
@@ -42,7 +42,7 @@ pub unsafe fn allocare_nulla(bytes: usize) -> *mut u8 {
 /// `p` must have come from [`allocare`]/[`allocare_nulla`] and must not have
 /// been freed already. Callers that hold a `LissHdr` should use [`abolere`],
 /// which checks the magic first.
-pub unsafe fn liberare(p: *mut u8) {
+pub(crate) unsafe fn liberare(p: *mut u8) {
     unsafe { libc::free(p.cast()) };
     VIVAE.fetch_sub(1, Ordering::Relaxed);
 }
@@ -52,7 +52,7 @@ pub unsafe fn liberare(p: *mut u8) {
 /// # Safety
 /// `h` must be readable for `size_of::<LissHdr>()` bytes, or null (which ends
 /// the process).
-pub unsafe fn verifica(h: *const LissHdr) {
+pub(crate) unsafe fn verifica(h: *const LissHdr) {
     if h.is_null() || unsafe { (*h).magic } != LISS_MAGIC {
         crate::defectus::memoria_violata();
     }
@@ -63,7 +63,7 @@ pub unsafe fn verifica(h: *const LissHdr) {
 ///
 /// # Safety
 /// `h` must be null, or a header from [`allocare`] that has not been freed.
-pub unsafe fn abolere(h: *mut LissHdr) {
+pub(crate) unsafe fn abolere(h: *mut LissHdr) {
     if h.is_null() {
         return;
     }

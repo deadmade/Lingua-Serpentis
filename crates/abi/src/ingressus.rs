@@ -1,6 +1,7 @@
 use core::ffi::{c_char, c_int};
 
 use crate::LissInt;
+use crate::scriptio::erratum;
 
 const MONITUM_PRAEFIXUM: &[u8] = b"monitum: ";
 
@@ -35,8 +36,4 @@ pub unsafe extern "C" fn main(_argc: c_int, _argv: *const *const c_char) -> c_in
     }
 
     unsafe { crate::defectus::liss_exit(c_int::from(status)) }
-}
-
-fn erratum(octeti: &[u8]) {
-    unsafe { crate::scriptio::liss_scribe_erratum(octeti.as_ptr(), octeti.len() as u64) };
 }

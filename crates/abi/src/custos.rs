@@ -4,6 +4,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::scriptio::erratum;
+
 /// The alternate stack, in bytes. Deliberately not `SIGSTKSZ`: musl's is a small
 /// compile-time constant, and on aarch64 with SVE the true minimum can exceed it.
 const MENSURA_ALTERNA: usize = 64 * 1024;
@@ -272,9 +274,4 @@ unsafe fn discerne(notitia: *const libc::siginfo_t) -> &'static CStr {
     } else {
         NUNTIUS_MEMORIA
     }
-}
-
-/// One unbuffered write to stderr, as `defectus::erratum` does it.
-fn erratum(octeti: &[u8]) {
-    unsafe { crate::scriptio::liss_scribe_erratum(octeti.as_ptr(), octeti.len() as u64) };
 }

@@ -4,14 +4,14 @@ expression: report
 ---
 118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
-crates/abi/src/custos.rs:25  acervus vocationum exhaustus est  → fixtured
-crates/abi/src/custos.rs:31  defectus internus: memoria violata est: signum  → UNCOVERED
-crates/abi/src/defectus.rs:123  memoria non liberata est  → UNCOVERED
-crates/abi/src/defectus.rs:139  divisio per nullum  → fixtured
-crates/abi/src/defectus.rs:154  modulus per nullum  → fixtured
-crates/abi/src/defectus.rs:175  index extra fines: {} (longitudo {})  → fixtured
-crates/abi/src/defectus.rs:191  defectus internus: memoria violata est: verificatio  → UNCOVERED
-crates/abi/src/defectus.rs:205  memoria exhausta est  → UNCOVERED
+crates/abi/src/custos.rs:27  acervus vocationum exhaustus est  → fixtured
+crates/abi/src/custos.rs:33  defectus internus: memoria violata est: signum  → UNCOVERED
+crates/abi/src/defectus.rs:119  memoria non liberata est  → UNCOVERED
+crates/abi/src/defectus.rs:135  divisio per nullum  → fixtured
+crates/abi/src/defectus.rs:150  modulus per nullum  → fixtured
+crates/abi/src/defectus.rs:171  index extra fines: {} (longitudo {})  → fixtured
+crates/abi/src/defectus.rs:187  defectus internus: memoria violata est: verificatio  → UNCOVERED
+crates/abi/src/defectus.rs:201  memoria exhausta est  → UNCOVERED
 crates/codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
 crates/codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
 crates/codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED

@@ -242,11 +242,7 @@ pub unsafe extern "C" fn liss_int_cmp(a: *mut LissInt, b: *mut LissInt) -> i8 {
     let (ra, rb) = unsafe { (roman_of(a), roman_of(b)) };
     unsafe { liss_int_free(a) };
     unsafe { liss_int_free(b) };
-    match ra.cmp(&rb) {
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Equal => 0,
-        core::cmp::Ordering::Greater => 1,
-    }
+    ra.cmp(&rb) as i8
 }
 
 /// `a * b` for `mnr`/`nr`: `(c1/g)*(c2/g)` back in grain units is

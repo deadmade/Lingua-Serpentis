@@ -143,9 +143,5 @@ pub unsafe extern "C" fn liss_text_cmp(a: *mut LissText, b: *mut LissText) -> i8
     let ordo = unsafe { textum_of(a) }.cmp(unsafe { textum_of(b) });
     unsafe { liss_text_free(a) };
     unsafe { liss_text_free(b) };
-    match ordo {
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Equal => 0,
-        core::cmp::Ordering::Greater => 1,
-    }
+    ordo as i8
 }

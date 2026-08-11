@@ -5,6 +5,7 @@ use runtime::Roman;
 
 use crate::LissInt;
 use crate::numeri::roman_of;
+use crate::scriptio::erratum;
 
 /// Raise, and never return. `fmt` is the sentence; up to two `{}` holes are
 /// filled from `arg0` and `arg1` as Roman numerals. Null and empty `file` both
@@ -75,11 +76,6 @@ pub unsafe extern "C" fn liss_panic(
     }
 
     unsafe { libc::_exit(1) }
-}
-
-/// One unbuffered write to stderr.
-fn erratum(bytes: &[u8]) {
-    unsafe { crate::scriptio::liss_scribe_erratum(bytes.as_ptr(), bytes.len() as u64) };
 }
 
 /// A C string's bytes, borrowed; empty for null.

@@ -78,6 +78,11 @@ pub unsafe extern "C" fn liss_scribe_erratum(p: *const u8, len: u64) {
     let _ = unsafe { scribe_ad(2, p, len as usize) };
 }
 
+/// One unbuffered write to stderr, for this crate's own diagnostics.
+pub(crate) fn erratum(octeti: &[u8]) {
+    unsafe { liss_scribe_erratum(octeti.as_ptr(), octeti.len() as u64) };
+}
+
 /// `write(2)` until everything is out. `false` means the descriptor is gone and
 /// the bytes did not get out. Every failure is the same outcome, `EPIPE` or not.
 unsafe fn scribe_ad(fd: c_int, mut p: *const u8, mut n: usize) -> bool {
