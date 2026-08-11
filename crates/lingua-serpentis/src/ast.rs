@@ -34,6 +34,7 @@ impl PartialEq for Expr {
 }
 
 /// So an expected shape can be written as the bare `ExprKind` it is about.
+#[cfg(test)]
 impl PartialEq<ExprKind> for Expr {
     fn eq(&self, other: &ExprKind) -> bool {
         self.kind == *other
@@ -45,10 +46,12 @@ impl PartialEq<ExprKind> for Expr {
 /// to draw a snippet for it rather than inventing one.
 pub const NUSQUAM: Spatium = Spatium { principium: 0, finis: 0, linea: 0 };
 
+#[cfg(test)]
 pub fn ex(kind: ExprKind) -> Expr {
     Expr::novum(kind, NUSQUAM)
 }
 
+#[cfg(test)]
 pub fn bx(kind: ExprKind) -> Box<Expr> {
     Box::new(ex(kind))
 }

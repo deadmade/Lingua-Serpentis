@@ -3,7 +3,7 @@ use crate::error::Warning;
 use crate::spatium::Spatium;
 
 /// One warning per declaration site whose name is not a Latin word, sorted by line.
-pub fn lint(program: &[Stmt]) -> Vec<Warning> {
+fn lint(program: &[Stmt]) -> Vec<Warning> {
     let mut out = Vec::new();
     for s in program {
         lint_stmt(s, &mut out);
