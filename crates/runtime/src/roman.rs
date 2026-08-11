@@ -173,17 +173,6 @@ impl Roman {
         usize::try_from(acc).ok()
     }
 
-    pub fn to_f64(&self) -> f64 {
-        let mut acc = 0.0f64;
-        for (k, t) in self.tiers.iter().enumerate() {
-            acc += *t as f64 * 10f64.powi(k as i32);
-        }
-        if self.negative { -acc } else { acc }
-    }
-}
-
-impl From<i64> for Roman {
-    fn from(n: i64) -> Roman { Roman::from_i64(n) }
 }
 
 pub(crate) fn convert_single(s: &str) -> Result<Roman, String> {
@@ -380,12 +369,6 @@ mod tests {
     fn to_usize_rejects_negative_accepts_len() {
         assert_eq!(r(-1).to_usize(), None);
         assert_eq!(Roman::from_usize(5).to_usize(), Some(5));
-    }
-
-    #[test]
-    fn to_f64_matches() {
-        assert_eq!(r(30532).to_f64(), 30532.0);
-        assert_eq!(r(-7).to_f64(), -7.0);
     }
 
     #[test]
