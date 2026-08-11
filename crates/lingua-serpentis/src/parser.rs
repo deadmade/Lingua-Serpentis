@@ -23,9 +23,14 @@ impl<'a> Parser<'a> {
     fn peek(&self) -> Option<&TokenKind> {
         self.toks.get(self.pos).map(|t| &t.kind)
     }
-    fn line(&self) -> usize {
+    /// The token about to be read, or the last one when the cursor is past the end:
+    /// three accessors asked for it separately and had to agree on the fallback.
+    fn hic(&self) -> Option<&Token> {
         self.toks.get(self.pos).or_else(|| self.toks.last())
-            .map(|t| t.line).unwrap_or(0)
+    }
+    /// Kept for `FileImport.line`, which has no span of its own.
+    fn line(&self) -> usize {
+        self.hic().map(|t| t.spatium.linea()).unwrap_or(0)
     }
     fn advance(&mut self) -> &Token {
         let t = &self.toks[self.pos];
@@ -47,7 +52,7 @@ impl<'a> Parser<'a> {
         LinguaError {
             message: msg.to_string(),
             line: self.line(),
-            spatium: self.toks.get(self.pos).or_else(|| self.toks.last()).map(|t| t.spatium),
+            spatium: self.hic().map(|t| t.spatium),
         }
     }
 
@@ -65,8 +70,7 @@ impl<'a> Parser<'a> {
 
     /// The span of the token about to be read, which is where a production begins.
     fn spatium_hic(&self) -> Spatium {
-        self.toks.get(self.pos).or_else(|| self.toks.last()).map(|t| t.spatium)
-            .unwrap_or(Spatium::novum(0, 0, 0))
+        self.hic().map(|t| t.spatium).unwrap_or(Spatium::novum(0, 0, 0))
     }
 
     /// The span of the token just consumed, which is where a production ends.
@@ -166,18 +170,25 @@ impl<'a> Parser<'a> {
         }
         Ok(e)
     }
-    fn call_args(&mut self) -> LResult<Vec<Expr>> {
-        self.eat(&TokenKind::LParen)?;
-        let mut args = Vec::new();
-        if self.peek() != Some(&TokenKind::RParen) {
-            args.push(self.expr()?);
+    /// A comma-separated list of expressions up to `finis`, which is consumed.
+    /// Empty is allowed; a trailing comma is not, because a comma is followed by an
+    /// element and nothing else.
+    fn separata(&mut self, finis: &TokenKind) -> LResult<Vec<Expr>> {
+        let mut out = Vec::new();
+        if self.peek() != Some(finis) {
+            out.push(self.expr()?);
             while self.peek() == Some(&TokenKind::Comma) {
                 self.advance();
-                args.push(self.expr()?);
+                out.push(self.expr()?);
             }
         }
-        self.eat(&TokenKind::RParen)?;
-        Ok(args)
+        self.eat(finis)?;
+        Ok(out)
+    }
+
+    fn call_args(&mut self) -> LResult<Vec<Expr>> {
+        self.eat(&TokenKind::LParen)?;
+        self.separata(&TokenKind::RParen)
     }
 
     fn primary(&mut self) -> LResult<Expr> {
@@ -227,15 +238,7 @@ impl<'a> Parser<'a> {
             }
             Some(TokenKind::LBracket) => {
                 let aperit = self.advance().spatium;
-                let mut elems = Vec::new();
-                if self.peek() != Some(&TokenKind::RBracket) {
-                    elems.push(self.expr()?);
-                    while self.peek() == Some(&TokenKind::Comma) {
-                        self.advance();
-                        elems.push(self.expr()?);
-                    }
-                }
-                self.eat(&TokenKind::RBracket)?;
+                let elems = self.separata(&TokenKind::RBracket)?;
                 let spatium = aperit.ad(self.ultimum());
                 Ok(Expr::novum(ExprKind::ListLit(elems), spatium))
             }
@@ -284,7 +287,6 @@ impl<'a> Parser<'a> {
     }
 
     fn if_stmt(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
@@ -301,22 +303,20 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Stmt { kind: StmtKind::If { cond, then, else_ }, line, spatium: initium.ad(self.ultimum()) })
+        Ok(Stmt { kind: StmtKind::If { cond, then, else_ }, spatium: initium.ad(self.ultimum()) })
     }
 
     fn while_stmt(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
         let cond = self.expr()?;
         self.eat(&TokenKind::RParen)?;
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::While { cond, body }, line, spatium: initium.ad(self.ultimum()) })
+        Ok(Stmt { kind: StmtKind::While { cond, body }, spatium: initium.ad(self.ultimum()) })
     }
 
     fn for_stmt(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
@@ -326,20 +326,18 @@ impl<'a> Parser<'a> {
         let step = Box::new(self.assign_no_semi()?);
         self.eat(&TokenKind::RParen)?;
         let body = self.block()?;
-        Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, line, spatium: initium.ad(self.ultimum()) })
+        Ok(Stmt { kind: StmtKind::For { init, cond, step, body }, spatium: initium.ad(self.ultimum()) })
     }
 
     fn assign_no_semi(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         let (name, _) = self.ident()?;
         self.eat(&TokenKind::Assign)?;
         let value = self.expr()?;
-        Ok(Stmt { kind: StmtKind::Assign { name, value }, line, spatium: initium.ad(self.ultimum()) })
+        Ok(Stmt { kind: StmtKind::Assign { name, value }, spatium: initium.ad(self.ultimum()) })
     }
 
     fn func_stmt(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         self.advance();
 
@@ -387,13 +385,11 @@ impl<'a> Parser<'a> {
         let body = self.block()?;
         Ok(Stmt {
             kind: StmtKind::Func(FuncDecl { name, name_span, params, ret, body }),
-            line,
             spatium: initium.ad(self.ultimum()),
         })
     }
 
     fn statement(&mut self) -> LResult<Stmt> {
-        let line = self.line();
         let initium = self.spatium_hic();
         match self.peek() {
             Some(TokenKind::If) => return self.if_stmt(),
@@ -404,17 +400,17 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let e = self.expr()?;
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Return(e), line, spatium: initium.ad(self.ultimum()) });
+                return Ok(Stmt { kind: StmtKind::Return(e), spatium: initium.ad(self.ultimum()) });
             }
             Some(TokenKind::Break) => {
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Break, line, spatium: initium.ad(self.ultimum()) });
+                return Ok(Stmt { kind: StmtKind::Break, spatium: initium.ad(self.ultimum()) });
             }
             Some(TokenKind::Continue) => {
                 self.advance();
                 self.eat(&TokenKind::Semicolon)?;
-                return Ok(Stmt { kind: StmtKind::Continue, line, spatium: initium.ad(self.ultimum()) });
+                return Ok(Stmt { kind: StmtKind::Continue, spatium: initium.ad(self.ultimum()) });
             }
             _ => {}
         }
@@ -423,7 +419,7 @@ impl<'a> Parser<'a> {
             self.eat(&TokenKind::Assign)?;
             let value = self.expr()?;
             self.eat(&TokenKind::Semicolon)?;
-            return Ok(Stmt { kind: StmtKind::Let { ty, name, name_span, value }, line, spatium: initium.ad(self.ultimum()) });
+            return Ok(Stmt { kind: StmtKind::Let { ty, name, name_span, value }, spatium: initium.ad(self.ultimum()) });
         }
         match self.peek() {
             Some(TokenKind::Print) => {
@@ -432,17 +428,18 @@ impl<'a> Parser<'a> {
                 let e = self.expr()?;
                 self.eat(&TokenKind::RParen)?;
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::Print(e), line, spatium: initium.ad(self.ultimum()) })
+                Ok(Stmt { kind: StmtKind::Print(e), spatium: initium.ad(self.ultimum()) })
             }
             // The lookahead is what distinguishes an assignment from a call.
             Some(TokenKind::Ident(_))
                 if self.toks.get(self.pos + 1).map(|t| &t.kind) == Some(&TokenKind::Assign) =>
             {
-                let (name, _) = self.ident()?;
-                self.eat(&TokenKind::Assign)?;
-                let value = self.expr()?;
+                let mut s = self.assign_no_semi()?;
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::Assign { name, value }, line, spatium: initium.ad(self.ultimum()) })
+                // Re-spanned so the statement closes on the semicolon, which
+                // `assign_no_semi` has not seen: as a `dum` step there is none.
+                s.spatium = initium.ad(self.ultimum());
+                Ok(s)
             }
             _ => {
                 let e = self.expr()?;
@@ -458,13 +455,13 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let value = self.expr()?;
                     self.eat(&TokenKind::Semicolon)?;
-                    return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, line, spatium: initium.ad(self.ultimum()) });
+                    return Ok(Stmt { kind: StmtKind::IndexAssign { name, index: *index, value }, spatium: initium.ad(self.ultimum()) });
                 }
                 if matches!(e.kind, ExprKind::Call { .. }) && self.peek() == Some(&TokenKind::LBrace) {
                     return Err(self.err("munus ante definitionem expectatum"));
                 }
                 self.eat(&TokenKind::Semicolon)?;
-                Ok(Stmt { kind: StmtKind::ExprStmt(e), line, spatium: initium.ad(self.ultimum()) })
+                Ok(Stmt { kind: StmtKind::ExprStmt(e), spatium: initium.ad(self.ultimum()) })
             }
         }
     }

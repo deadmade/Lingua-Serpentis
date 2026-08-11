@@ -78,9 +78,15 @@ single-source strip* below.
 
 ## The lexer
 
-**`lexer::tokenize`** (`lexer.rs`) is a single character-index scan producing `Token { kind, line
-}`. Keywords are recognised by whole word in **`word_to_kind`**, so `nimis`, `capitulum`,
-`redditus`, `listae` and `afferre` stay single identifiers.
+**`lexer::tokenize`** (`lexer.rs`) is a single character-index scan producing
+`Token { kind, spatium }`. Keywords are recognised by whole word in **`word_to_kind`**, so `nimis`,
+`capitulum`, `redditus`, `listae` and `afferre` stay single identifiers.
+
+A `Token` carried a `line` beside its span until every construction site was passing the same
+number twice — `sp(start, end, line)` already holds it. `ast::Stmt` carried one for the same reason
+and lost it the same way; both read `spatium.linea()` now. **`Warning.line` is not this**: it is a
+`pub` field consumed outside the crate and sorted on, and it stays. So does `FileImport.line`,
+which has no span to derive from.
 
 Three parts of it are not obvious:
 

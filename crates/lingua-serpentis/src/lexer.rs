@@ -33,21 +33,21 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
             '/' if chars.get(i + 1) == Some(&'/') => {
                 while i < chars.len() && chars[i] != '\n' { i += 1; }
             }
-            '(' => { tokens.push(Token { kind: TokenKind::LParen, line, spatium: uno }); i += 1; }
-            ')' => { tokens.push(Token { kind: TokenKind::RParen, line, spatium: uno }); i += 1; }
-            '{' => { tokens.push(Token { kind: TokenKind::LBrace, line, spatium: uno }); i += 1; }
-            '}' => { tokens.push(Token { kind: TokenKind::RBrace, line, spatium: uno }); i += 1; }
-            '[' => { tokens.push(Token { kind: TokenKind::LBracket, line, spatium: uno }); i += 1; }
-            ']' => { tokens.push(Token { kind: TokenKind::RBracket, line, spatium: uno }); i += 1; }
-            ';' => { tokens.push(Token { kind: TokenKind::Semicolon, line, spatium: uno }); i += 1; }
-            ',' => { tokens.push(Token { kind: TokenKind::Comma, line, spatium: uno }); i += 1; }
-            '.' => { tokens.push(Token { kind: TokenKind::Dot, line, spatium: uno }); i += 1; }
-            '+' => { tokens.push(Token { kind: TokenKind::Plus, line, spatium: uno }); i += 1; }
-            '-' => { tokens.push(Token { kind: TokenKind::Minus, line, spatium: uno }); i += 1; }
-            '*' => { tokens.push(Token { kind: TokenKind::Star, line, spatium: uno }); i += 1; }
-            '/' => { tokens.push(Token { kind: TokenKind::Slash, line, spatium: uno }); i += 1; }
-            '%' => { tokens.push(Token { kind: TokenKind::Percent, line, spatium: uno }); i += 1; }
-            '=' => { tokens.push(Token { kind: TokenKind::Assign, line, spatium: uno }); i += 1; }
+            '(' => { tokens.push(Token { kind: TokenKind::LParen, spatium: uno }); i += 1; }
+            ')' => { tokens.push(Token { kind: TokenKind::RParen, spatium: uno }); i += 1; }
+            '{' => { tokens.push(Token { kind: TokenKind::LBrace, spatium: uno }); i += 1; }
+            '}' => { tokens.push(Token { kind: TokenKind::RBrace, spatium: uno }); i += 1; }
+            '[' => { tokens.push(Token { kind: TokenKind::LBracket, spatium: uno }); i += 1; }
+            ']' => { tokens.push(Token { kind: TokenKind::RBracket, spatium: uno }); i += 1; }
+            ';' => { tokens.push(Token { kind: TokenKind::Semicolon, spatium: uno }); i += 1; }
+            ',' => { tokens.push(Token { kind: TokenKind::Comma, spatium: uno }); i += 1; }
+            '.' => { tokens.push(Token { kind: TokenKind::Dot, spatium: uno }); i += 1; }
+            '+' => { tokens.push(Token { kind: TokenKind::Plus, spatium: uno }); i += 1; }
+            '-' => { tokens.push(Token { kind: TokenKind::Minus, spatium: uno }); i += 1; }
+            '*' => { tokens.push(Token { kind: TokenKind::Star, spatium: uno }); i += 1; }
+            '/' => { tokens.push(Token { kind: TokenKind::Slash, spatium: uno }); i += 1; }
+            '%' => { tokens.push(Token { kind: TokenKind::Percent, spatium: uno }); i += 1; }
+            '=' => { tokens.push(Token { kind: TokenKind::Assign, spatium: uno }); i += 1; }
             '°' => {
                 let start = i;
                 i += 1;
@@ -60,7 +60,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                 let lexeme: String = chars[start..i].iter().collect();
                 let value = crate::roman::parse_roman(&lexeme)
                     .map_err(|m| LinguaError { message: m, line, spatium: None, })?;
-                tokens.push(Token { kind: value.into(), line, spatium: sp(start, i, line) });
+                tokens.push(Token { kind: value.into(), spatium: sp(start, i, line) });
             }
             '"' => {
                 // Attributed to the line it opens on, while `line` advances
@@ -81,7 +81,6 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                 // The span covers both quotes; the `kind` covers neither.
                 tokens.push(Token {
                     kind: TokenKind::Text(text),
-                    line: opened_on,
                     spatium: sp(quote, i, opened_on),
                 });
             }
@@ -93,7 +92,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                 }
                 let ch = chars[i];
                 i += 2;
-                tokens.push(Token { kind: TokenKind::Char(ch), line, spatium: sp(quote, i, line) });
+                tokens.push(Token { kind: TokenKind::Char(ch), spatium: sp(quote, i, line) });
             }
             c if c.is_alphabetic() || c == '_' => {
                 let start = i;
@@ -103,7 +102,7 @@ pub fn tokenize(src: &str) -> LResult<Vec<Token>> {
                     i += 1;
                 }
                 let word: String = chars[start..i].iter().collect();
-                tokens.push(Token { kind: word_to_kind(word), line, spatium: sp(start, i, line) });
+                tokens.push(Token { kind: word_to_kind(word), spatium: sp(start, i, line) });
             }
             // Ahead of the catch-all; the digit is quoted (D-15).
             c if c.is_ascii_digit() => {
@@ -171,7 +170,7 @@ mod tests {
     }
 
     fn lines(src: &str) -> Vec<usize> {
-        tokenize(src).unwrap().into_iter().map(|t| t.line).collect()
+        tokenize(src).unwrap().into_iter().map(|t| t.spatium.linea()).collect()
     }
 
     /// The source text each token's span selects, which is what a caret underlines.
@@ -250,7 +249,7 @@ mod tests {
         let src = "voc s = \"prima\nsecunda\";";
         let toks = tokenize(src).unwrap();
         let text = toks.iter().find(|t| matches!(t.kind, TokenKind::Text(_))).unwrap();
-        assert_eq!(text.line, 1);
+        assert_eq!(text.spatium.linea(), 1);
     }
 
     #[test]
@@ -338,9 +337,9 @@ mod tests {
     fn comments_and_lines_are_tracked() {
         let toks = tokenize("+ // ignored\n-").unwrap();
         assert_eq!(toks[0].kind, TokenKind::Plus);
-        assert_eq!(toks[0].line, 1);
+        assert_eq!(toks[0].spatium.linea(), 1);
         assert_eq!(toks[1].kind, TokenKind::Minus);
-        assert_eq!(toks[1].line, 2);
+        assert_eq!(toks[1].spatium.linea(), 2);
     }
 
     #[test]

@@ -86,7 +86,6 @@ pub struct FuncDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stmt {
     pub kind: StmtKind,
-    pub line: usize,
     /// First token through last, for the diagnostics that are about a statement
     /// rather than about an expression inside it.
     pub spatium: Spatium,
