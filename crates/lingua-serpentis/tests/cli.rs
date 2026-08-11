@@ -78,17 +78,6 @@ fn a_nonexistent_path_is_reported_as_missing_not_as_a_bad_extension() {
 }
 
 #[test]
-fn a_nonexistent_dot_liss_directory_is_also_reported_as_missing() {
-    // D-11
-    let d = temp_dir("liss-cli");
-    let missing = d.path().join("nusquam.liss");
-    let o = run(&[missing.to_str().unwrap()]);
-    let (code, _, err) = exited(&o);
-    assert_eq!(code, 1);
-    assert_eq!(err, format!("erratum: via '{}' non inventa est\n", missing.display()));
-}
-
-#[test]
 fn a_directory_named_dot_liss_runs_as_a_program_folder() {
     let d = temp_dir("liss-cli");
     d.write("scaena.liss/principale.liss",

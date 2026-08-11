@@ -562,12 +562,12 @@ left, a fixture would settle the question by implication rather than by decision
 
 ## The CLI suites
 
-**`cli.rs`** covers what the fixture format cannot express, one named test each. Twenty-three of
-its twenty-five spawn the binary through `support::proc`; the other two are
+**`cli.rs`** covers what the fixture format cannot express, one named test each. Twenty-two of
+its twenty-four spawn the binary through `support::proc`; the other two are
 `wait_or_kill_returns_the_status_of_a_child_that_finishes` and
 `wait_or_kill_reaps_a_child_that_outlives_its_deadline`, which drive that module's shared wait
 helper directly — its deadline arm had no coverage of its own while it was three copied loops.
-`BINARY` is `liss`; nineteen of the twenty-three were untouched by that flip, because the front end
+`BINARY` is `liss`; eighteen of the twenty-two were untouched by that flip, because the front end
 and `program::load_dir` are shared and the runtime reproduces the rest. It covers argv arity, `.liss` extension enforcement and its interaction with
 `is_dir()` (a *directory* named `x.liss` runs as a program folder), missing paths, unreadable files
 and directories, non-UTF-8 content, the stdout/stderr split, real process exit status including the

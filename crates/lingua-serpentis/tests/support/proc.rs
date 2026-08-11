@@ -15,21 +15,6 @@ pub enum Outcome {
     TimedOut,
 }
 
-impl Outcome {
-    pub fn stderr(&self) -> &str {
-        match self {
-            Outcome::Exited { stderr, .. } | Outcome::Signalled { stderr, .. } => stderr,
-            Outcome::TimedOut => "",
-        }
-    }
-    pub fn stdout(&self) -> &str {
-        match self {
-            Outcome::Exited { stdout, .. } | Outcome::Signalled { stdout, .. } => stdout,
-            Outcome::TimedOut => "",
-        }
-    }
-}
-
 /// This module's poll interval; `support`'s own `PAUSA` is a different, documented 2 ms.
 const PAUSA: Duration = Duration::from_millis(5);
 
