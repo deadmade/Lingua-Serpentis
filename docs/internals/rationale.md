@@ -416,17 +416,18 @@ an optional file and an optional line, and never stops a program. `ProgramError`
 error, optionally attributed to a file and a line; **structural** errors — about the program's shape
 rather than any source text — carry neither.
 
-A failed run is not only its message. Two things the program had already produced travel on the
-`ProgramError` rather than being thrown away with it:
+A failed run is not only its message. **`warnings`**, the Latinity notes computed before it,
+travels on the `ProgramError` rather than being thrown away with it (D-09): a program with two
+problems should report both, not whichever one halts it first. It is empty for an error raised
+before there was anything to collect.
 
-- **`stdout`**, everything `scribe` printed before the error (D-08). Output the program provably
-  produced is not the error's to discard.
-- **`warnings`**, the Latinity notes computed before it (D-09). A program with two problems should
-  report both, not whichever one halts it first.
+`ProgramError` carried a **`stdout`** beside it once, for what `scribe` had printed before the
+error (D-08). It does not now. There is no interpreter to print anything: the compiled image owns
+stdout and writes it directly, so partial output survives a later fault without passing through
+this type at all — `conformance/errores/emissio-ante-erratum` is that case, and its `emissio` bytes
+come from the exec'd image.
 
-Both are empty for an error raised before there was anything to collect.
-
-Both also carry a **`fragmentum`**: the one source line the diagnostic points at, already
+It also carries a **`fragmentum`**: the one source line the diagnostic points at, already
 extracted. `Display` renders it and never reads a file, which is the whole reason it is taken early
 — see below.
 
@@ -492,10 +493,10 @@ admits into an identifier. A wide character misaligns by one column each; spec �
 `unicode-width`, and that is the accepted cost.
 
 **`render`** (`lib.rs`) puts warnings on stderr — so they never contaminate piped program output —
-program output on stdout, and the program's own exit status on success, 1 on any error. On the error
-path the failure's own warnings are written **first** and its partial output still goes to stdout,
-so a run that printed something and then failed reports all three (D-08, D-09). Warnings before the
-error matches the success path's ordering and reads chronologically.
+and 1 on any error. It writes nothing to stdout on either path: the compiled image owns stdout, and
+where there is an error there is no image. On the error path the failure's own warnings are written
+**first** (D-09), which matches the success path's ordering and reads chronologically.
+**`cli::finish`** takes the failure itself, since only failures reach it.
 
 ## The `liss` driver
 

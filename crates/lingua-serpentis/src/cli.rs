@@ -1,7 +1,7 @@
 //! The command-line surface (spec §9.5), Unix only; the driver lives here and not in
 //! `src/bin/` because `tests/catalogus.rs` does not recurse there.
 
-use crate::error::{ProgramError, Warning};
+use crate::error::ProgramError;
 use crate::program::{Program, SourceFile};
 use crate::render;
 use codegen::nexus::{Nexus, WildNexus};
@@ -23,12 +23,11 @@ pub fn write_or_exit(w: &mut impl Write, text: &str) {
     }
 }
 
-/// Render a finished pipeline result to the two streams and exit. `liss run` never
-/// reaches it on the success path — the child owns stdout — but every failure does.
-pub fn finish(result: Result<(String, u8, Vec<Warning>), ProgramError>) -> ! {
-    let r = render(result);
+/// Render a failed pipeline to stderr and exit 1. Only failures reach it: on the
+/// success path the compiled image owns stdout, and this process never writes there.
+pub fn finish(e: ProgramError) -> ! {
+    let r = render(Err(e));
     write_or_exit(&mut std::io::stderr(), &r.stderr);
-    write_or_exit(&mut std::io::stdout(), &r.stdout);
     exit(r.code);
 }
 
@@ -147,12 +146,12 @@ pub fn liss(args: &[String]) -> ! {
     let (loaded, single) = match load(&inv.path) {
         Ok(x) => x,
         // Structural, and carries no line: `strip` must not give it one.
-        Err(e) => finish(Err(e)),
+        Err(e) => finish(e),
     };
 
     let mut parsed = match crate::parse_loaded(loaded) {
         Ok(p) => p,
-        Err(e) => finish(Err(strip(single, e))),
+        Err(e) => finish(strip(single, e)),
     };
 
     // Before the checker, and attached to a failure rather than dropped with it (D-09).
@@ -167,7 +166,7 @@ pub fn liss(args: &[String]) -> ! {
         Ok(ir) => ir,
         Err(mut e) => {
             e.warnings = monita;
-            finish(Err(strip(single, e)))
+            finish(strip(single, e))
         }
     };
 
@@ -181,7 +180,7 @@ pub fn liss(args: &[String]) -> ! {
 
     // Before the child exists: the warnings-then-output order the corpus records
     // only holds if these reach stderr before the spawn (spec §9.5).
-    let rendered = render(Ok::<_, ProgramError>((String::new(), 0, monita)));
+    let rendered = render(Ok::<_, ProgramError>(monita));
     write_or_exit(&mut std::io::stderr(), &rendered.stderr);
 
     let machina = match &inv.machine {

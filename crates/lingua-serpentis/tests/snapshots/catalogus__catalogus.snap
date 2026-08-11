@@ -71,21 +71,21 @@ crates/lingua-serpentis/src/checker.rs:873  functio '{}' bis definita  → fixtu
 crates/lingua-serpentis/src/checker.rs:917  fasciculus '{}' non inventus  → fixtured
 crates/lingua-serpentis/src/checker.rs:959  munus 'initium' in programmate non inventum  → fixtured
 crates/lingua-serpentis/src/checker.rs:967  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
-crates/lingua-serpentis/src/cli.rs:52  Usus: liss run <via.liss | directorium>
+crates/lingua-serpentis/src/cli.rs:51  Usus: liss run <via.liss | directorium>
       liss build <via.liss | directorium> [--exi <via>] [--ad <machina>]
       liss <via.liss | directorium>  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:57  Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
+crates/lingua-serpentis/src/cli.rs:56  Primum argumentum mandatum est solum si 'run' vel 'build' exacte est;
 directorium ita nominatum per './run' dandum est.  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:113  erratum: via '{}' non inventa est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:117  erratum: nomen scidae in '.liss' desinere debet  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:191  erratum: machina '{}' ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:198  erratum: machina huius computatri ignota est  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:252  erratum: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:258  erratum: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:303  erratum: scida '{}' scribi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:404  erratum: scida temporaria creari non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:419  erratum: programma incipi non potest  → UNCOVERED
-crates/lingua-serpentis/src/cli.rs:425  erratum: programma abrupte cessavit  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:112  erratum: via '{}' non inventa est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:116  erratum: nomen scidae in '.liss' desinere debet  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:190  erratum: machina '{}' ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:197  erratum: machina huius computatri ignota est  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:251  erratum: nomen exitus statui non potest; viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:257  erratum: exitus '{}' directorium est; aliam viam per '--exi' da  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:302  erratum: scida '{}' scribi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:403  erratum: scida temporaria creari non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:418  erratum: programma incipi non potest  → UNCOVERED
+crates/lingua-serpentis/src/cli.rs:424  erratum: programma abrupte cessavit  → UNCOVERED
 crates/lingua-serpentis/src/latinity.rs:20  nomen fasciculi '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/latinity.rs:47  nomen '{name}' fortasse non Latinum est  → fixtured
 crates/lingua-serpentis/src/lexer.rs:62  UNPARSED  → UNPARSED

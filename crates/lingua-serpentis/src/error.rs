@@ -41,14 +41,13 @@ impl std::fmt::Display for Warning {
     }
 }
 
-/// Structural errors carry no file and no line. `stdout` and `warnings` carry what the
-/// program produced before it failed (D-08, D-09).
+/// Structural errors carry no file and no line. `warnings` carries what the lint
+/// found before the failure, rather than dropping it with them (D-09).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProgramError {
     pub file: Option<String>,
     pub line: Option<usize>,
     pub message: String,
-    pub stdout: String,
     pub warnings: Vec<Warning>,
     pub fragmentum: Option<Fragmentum>,
 }
@@ -59,7 +58,6 @@ impl ProgramError {
             file: None,
             line: None,
             message: message.into(),
-            stdout: String::new(),
             warnings: Vec::new(),
             fragmentum: None,
         }
@@ -71,22 +69,8 @@ impl ProgramError {
             file: Some(file.to_string()),
             line: Some(e.line),
             message: e.message,
-            stdout: String::new(),
             warnings: Vec::new(),
             fragmentum: e.spatium.and_then(|s| crate::fragmentum::extract(src, s)),
-        }
-    }
-}
-
-impl From<LinguaError> for ProgramError {
-    fn from(e: LinguaError) -> Self {
-        ProgramError {
-            file: None,
-            line: Some(e.line),
-            message: e.message,
-            stdout: String::new(),
-            warnings: Vec::new(),
-            fragmentum: None,
         }
     }
 }
@@ -107,33 +91,25 @@ impl std::fmt::Display for ProgramError {
     }
 }
 
-impl std::fmt::Display for LinguaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", depinge(Genus::Erratum, &self.message, None, Some(self.line), None))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn formats_with_line_and_message() {
-        let e = LinguaError { message: "res mala".into(), line: 5, spatium: None, };
-        assert_eq!(e.to_string(), "erratum: res mala\n  in linea V");
-    }
-
-    #[test]
     fn program_error_formats_all_three_shapes() {
         let both = ProgramError {
             file: Some("mathematica/summa.liss".into()), line: Some(5), message: "res mala".into(),
-            stdout: String::new(), warnings: Vec::new(), fragmentum: None,
+            warnings: Vec::new(), fragmentum: None,
         };
         assert_eq!(
             both.to_string(),
             "erratum: res mala\n  in 'mathematica/summa.liss', linea V"
         );
-        let line_only: ProgramError = LinguaError { message: "res mala".into(), line: 5, spatium: None, }.into();
+        // File-less but placed: what `cli::strip` leaves behind for a single-file program.
+        let line_only = ProgramError {
+            file: None, line: Some(5), message: "res mala".into(),
+            warnings: Vec::new(), fragmentum: None,
+        };
         assert_eq!(line_only.to_string(), "erratum: res mala\n  in linea V");
         // Structural: no file, no line, and so no location row at all.
         let structural = ProgramError::structural("munus 'initium' in programmate non inventum");

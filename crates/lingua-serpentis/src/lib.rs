@@ -50,26 +50,26 @@ pub struct Rendered {
     pub code: i32,
 }
 
-/// Warnings to stderr, program output to stdout, the program's own status on success
-/// and 1 on any error; on the error path the warnings come first (D-08, D-09).
-pub fn render(result: Result<(String, u8, Vec<Warning>), ProgramError>) -> Rendered {
+/// Warnings to stderr, and on the error path the warnings come first (D-09).
+/// Nothing here writes stdout: the compiled image owns it, and on the error path
+/// there is no image.
+pub fn render(result: Result<Vec<Warning>, ProgramError>) -> Rendered {
     fn warnings_to(stderr: &mut String, warnings: &[Warning]) {
         for w in warnings {
             stderr.push_str(&w.to_string());
             stderr.push('\n');
         }
     }
+    let mut stderr = String::new();
     match result {
-        Ok((stdout, code, warnings)) => {
-            let mut stderr = String::new();
+        Ok(warnings) => {
             warnings_to(&mut stderr, &warnings);
-            Rendered { stdout, stderr, code: code as i32 }
+            Rendered { stdout: String::new(), stderr, code: 0 }
         }
         Err(e) => {
-            let mut stderr = String::new();
             warnings_to(&mut stderr, &e.warnings);
             stderr.push_str(&format!("{e}\n"));
-            Rendered { stdout: e.stdout, stderr, code: 1 }
+            Rendered { stdout: String::new(), stderr, code: 1 }
         }
     }
 }
@@ -84,13 +84,9 @@ mod tests {
     }
 
     #[test]
-    fn warnings_go_to_stderr_and_output_to_stdout() {
-        let r = render(Ok::<_, ProgramError>((
-            "V\n".to_string(),
-            0,
-            vec![monitum("res", Some(2))],
-        )));
-        assert_eq!(r.stdout, "V\n");
+    fn warnings_go_to_stderr_and_nothing_goes_to_stdout() {
+        let r = render(Ok::<_, ProgramError>(vec![monitum("res", Some(2))]));
+        assert_eq!(r.stdout, "");
         assert_eq!(r.stderr, "monitum: res\n  in linea II\n");
         assert_eq!(r.code, 0);
     }
@@ -98,25 +94,18 @@ mod tests {
     #[test]
     fn every_warning_gets_its_own_block_in_order() {
         // Nothing separates two blocks but the column-0 severity word.
-        let r = render(Ok::<_, ProgramError>((
-            String::new(),
-            0,
-            vec![monitum("prima", None), monitum("secunda", None)],
-        )));
+        let r = render(Ok::<_, ProgramError>(vec![
+            monitum("prima", None),
+            monitum("secunda", None),
+        ]));
         assert_eq!(r.stderr, "monitum: prima\nmonitum: secunda\n");
     }
 
     #[test]
-    fn the_programs_exit_status_is_carried_through() {
-        let r = render(Ok::<_, ProgramError>((String::new(), 5, vec![])));
-        assert_eq!(r.code, 5);
-    }
-
-    #[test]
     fn an_error_renders_to_stderr_with_status_one_and_no_stdout() {
-        let r = render(Err::<(String, u8, Vec<Warning>), _>(
-            ProgramError::structural("munus 'initium' in programmate non inventum"),
-        ));
+        let r = render(Err::<Vec<Warning>, _>(ProgramError::structural(
+            "munus 'initium' in programmate non inventum",
+        )));
         assert_eq!(r.stdout, "");
         assert_eq!(r.stderr, "erratum: munus 'initium' in programmate non inventum\n");
         assert_eq!(r.code, 1);
