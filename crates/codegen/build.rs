@@ -213,7 +213,7 @@ fn praeliga(archivum: &Path, contentum: &Path, opus: &Path) {
     );
     nomina.extend(desiderata_crt(&contentum.join("crt1.o")));
 
-    let mut cmd = Command::new(ligator());
+    let mut cmd = Command::new(instrumentum("LISS_LD", "rust-lld"));
     cmd.args(["-flavor", "gnu", "-r", "-o"]).arg(opus);
     for nomen in &nomina {
         cmd.arg("-u").arg(nomen);
@@ -257,11 +257,6 @@ fn exonera(opus: &Path) {
         "strip {} failed: {status}",
         opus.display()
     );
-}
-
-/// The relocatable linker: `LISS_LD`, else the `rust-lld` beside the toolchain.
-fn ligator() -> PathBuf {
-    instrumentum("LISS_LD", "rust-lld")
 }
 
 /// A cross-capable binutil out of the rustc sysroot, overridable by `clavis`.

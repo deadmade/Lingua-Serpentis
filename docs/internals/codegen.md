@@ -1045,7 +1045,6 @@ nothing and copies nothing.
 
 | Field | |
 |---|---|
-| `meta` | Which target these bytes are for — carried so a `Runtime` that has been passed around still knows its own `emulatio` and `machina`. |
 | `crt1` | The C runtime's entry stub: `_start`, which calls `__libc_start_main`, which calls `main`. |
 | `crti` | The prologue half of `.init`/`.fini`. |
 | `nucleus` | **The runtime.** `abi` cross-built for musl and prelinked (`ld -r`) with `libc.a` and `libunwind.a`, because rustc bundles neither into a `staticlib` — measured, spec §9.2. One strong undefined symbol survives in it, `liss_initium`, and compiled code is what supplies it. |

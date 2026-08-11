@@ -52,7 +52,6 @@ impl Target {
     pub const fn runtime(self) -> Runtime {
         match self {
             Target::X86_64 => Runtime {
-                meta: Target::X86_64,
                 crt1: include_bytes!(concat!(
                     env!("OUT_DIR"),
                     "/x86_64-unknown-linux-musl/crt1.o"
@@ -71,7 +70,6 @@ impl Target {
                 )),
             },
             Target::Aarch64 => Runtime {
-                meta: Target::Aarch64,
                 crt1: include_bytes!(concat!(
                     env!("OUT_DIR"),
                     "/aarch64-unknown-linux-musl/crt1.o"
@@ -96,7 +94,6 @@ impl Target {
 /// Everything a program link needs beyond the object codegen emits.
 #[derive(Debug, Clone, Copy)]
 pub struct Runtime {
-    pub meta: Target,
     /// `_start`, which calls `__libc_start_main`, which calls `main`.
     pub crt1: &'static [u8],
     /// The prologue half of `.init`/`.fini`.
@@ -434,7 +431,6 @@ mod tests {
     fn every_blob_is_present_and_is_this_target_s_architecture() {
         for meta in Target::OMNES {
             let r = meta.runtime();
-            assert_eq!(r.meta, meta);
             for (nomen, octeti) in [
                 ("crt1.o", r.crt1),
                 ("crti.o", r.crti),
