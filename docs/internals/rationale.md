@@ -213,9 +213,9 @@ arithmetic that combines only such literals. Everything else is `Known`.
 
 ### Scopes and slots
 
-`Checker` keeps `scopes` (names → types), `slots` (names → `SlotId`) and `scope_slots` (the slots
-each open scope introduced, in declaration order) as three parallel stacks, pushed and popped
-together by `push_scope`/`pop_scope`.
+`Checker` keeps `scopes` (names → type and `SlotId` together) and `scope_slots` (the slots each
+open scope introduced, in declaration order) as two parallel stacks, pushed and popped together by
+`push_scope`/`pop_scope`.
 
 **Slots are allocated per function and never reused.** Leaving a block pops the name binding and
 keeps the number — which is what makes shadowing need no special case, and what makes a function's
@@ -223,8 +223,10 @@ locals a flat `Vec<Ty>` (spec §4.2). `pop_scope` yields the slots the scope int
 becomes the block's `Block::declares`, which is the ownership machinery of spec §7.3 and which
 codegen must no more re-derive than it re-derives types.
 
-**`lookup`** reads the two stacks in lockstep rather than searching them separately, so a frame can
-only answer for a name it has in both; `declare` is the one writer and always writes both.
+**`lookup`** walks one stack outward and takes the first frame that holds the name. The type and
+the slot are one value in one map, so "a frame can only answer for a name it has in both" is not a
+rule anything has to keep — there is no second map to disagree. It was two stacks read in lockstep
+once, which is the same invariant maintained by hand.
 
 ### Return analysis
 

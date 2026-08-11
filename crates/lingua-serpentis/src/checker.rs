@@ -62,10 +62,9 @@ fn konst(ty: ir::Ty, c: ir::Const) -> ir::Expr {
 }
 
 struct Checker {
-    scopes: Vec<HashMap<String, Type>>,
-    // Parallel to `scopes`. Slots are per function and never reused, so leaving a
-    // block pops the NAME binding and keeps the number (spec §4.2).
-    slots: Vec<HashMap<String, ir::SlotId>>,
+    // Slots are per function and never reused, so leaving a block pops the NAME
+    // binding and keeps the number (spec §4.2).
+    scopes: Vec<HashMap<String, (Type, ir::SlotId)>>,
     // The current function's locals, indexed by `SlotId`; parameters are `0..params`.
     slot_types: Vec<ir::Ty>,
     // The slots each open scope introduced, in declaration order; on pop this becomes
@@ -120,7 +119,6 @@ impl Checker {
     fn new(namespace: Option<String>) -> Self {
         Checker {
             scopes: vec![HashMap::new()],
-            slots: vec![HashMap::new()],
             slot_types: Vec::new(),
             scope_slots: vec![Vec::new()],
             funcs: HashMap::new(),
@@ -139,10 +137,9 @@ impl Checker {
         self.namespace.is_none()
     }
 
-    /// Names, slot bindings and the declaration list, always pushed the three together.
+    /// Bindings and the declaration list, always pushed the two together.
     fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
-        self.slots.push(HashMap::new());
         self.scope_slots.push(Vec::new());
     }
 
@@ -150,7 +147,6 @@ impl Checker {
     /// returned to a pool, which is what makes an inner `ni x` a different variable.
     fn pop_scope(&mut self) -> Vec<ir::SlotId> {
         self.scopes.pop();
-        self.slots.pop();
         self.scope_slots.pop().unwrap_or_default()
     }
 
@@ -162,15 +158,10 @@ impl Checker {
         r
     }
 
-    /// The innermost binding of `name`. The two stacks are read in lockstep, so a
-    /// frame can only answer for a name it has in both; `declare` writes both.
+    /// The innermost binding of `name`. One frame holds the type and the slot
+    /// together, so neither can be present without the other.
     fn lookup(&self, name: &str) -> Option<(Type, ir::SlotId)> {
-        self.scopes.iter().zip(self.slots.iter()).rev().find_map(|(tys, sls)| {
-            match (tys.get(name), sls.get(name)) {
-                (Some(t), Some(s)) => Some((t.clone(), *s)),
-                _ => None,
-            }
-        })
+        self.scopes.iter().rev().find_map(|m| m.get(name).cloned())
     }
     /// `lookup`, raising the out-of-scope diagnostic. One site, not three (D-24).
     fn lookup_or_err(&self, name: &str, spatium: Spatium) -> LResult<(Type, ir::SlotId)> {
@@ -184,8 +175,7 @@ impl Checker {
     fn declare(&mut self, name: String, ty: Type) -> ir::SlotId {
         let slot = ir::SlotId(self.slot_types.len() as u32);
         self.slot_types.push(ty_of(&ty));
-        self.scopes.last_mut().unwrap().insert(name.clone(), ty);
-        self.slots.last_mut().unwrap().insert(name, slot);
+        self.scopes.last_mut().unwrap().insert(name, (ty, slot));
         if let Some(open) = self.scope_slots.last_mut() {
             open.push(slot);
         }
