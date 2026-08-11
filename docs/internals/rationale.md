@@ -1321,13 +1321,13 @@ break" is repeated here.
 - **`ex_horreo`** (codegen/build.rs) — `rerun-if-changed` on the blob *directory* watches its
   listing; replacing a `runtime.o` in place changes no listing, and the stale bytes would survive
   every rebuild until somebody added or removed a file. Each blob is named individually.
-- **`ex_horreo`** — with `LISS_RUNTIME_DIR` set, the layout proof runs zero times. The `const _`
-  block in `abi/src/lib.rs` is compiled only when `abi` is, which on that path never
-  happens: `conde` is skipped, and `abi` is workspace-`exclude`d and a dependency of nothing
-  there. **So a stale blob whose `dispositio` disagrees with today's source links cleanly, passes
-  every test in the crate, and produces silent wrong answers.** The close is to export the layout
-  constants as absolute symbols from the blob and compare them in a `target.rs` test that can see
-  both. **D-29**
+- **`ex_horreo`** — with `LISS_RUNTIME_DIR` set, the layout proof never reaches the blob. The
+  `const _` block in `abi/src/lib.rs` proves the crate's source against `runtime::dispositio`, not
+  the bytes that were copied in; and a crate-scoped build never evaluates it at all, since `conde`
+  is skipped and `abi` is a dependency of nothing there. **So a stale blob whose `dispositio`
+  disagrees with today's source links cleanly, passes every test in the crate, and produces silent
+  wrong answers.** The close is to export the layout constants as absolute symbols from the blob and
+  compare them in a `target.rs` test that can see both. **D-29**
 - **`Defectus::novus`** (codegen/src/lib.rs) — the one constructor, and the sentence must be
   written inline at the call site: spec §10.3 makes `Defectus::novus(` a catalogue marker, and a
   site that forwards a constant carries no literal of its own and the ratchet reports it `UNPARSED`.

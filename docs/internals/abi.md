@@ -1090,8 +1090,8 @@ because of it.
 
 **The risk in changing any of this is the build, not the diff.** `codegen/build.rs`
 cross-compiles this crate into two prebuilt musl archives during the outer build; a stale archive
-leaves the two workspaces disagreeing while *both* test commands pass. Force a rebuild and confirm
-a runtime-origin fixture actually moved.
+leaves the embedded blob disagreeing with this crate's source while the suite still passes. Force
+a rebuild and confirm a runtime-origin fixture actually moved.
 
 **Arity is validated before a single byte is written.** A hole with no argument used to render as a
 literal `{}`, which produces a *plausible* exit-1 Latin diagnostic — braces are not digits,

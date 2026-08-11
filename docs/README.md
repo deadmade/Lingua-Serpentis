@@ -74,7 +74,7 @@ not the coverage: the corpus and the `catalogus` snapshot remain the authority o
 
 ## `superpowers/specs/` — one design per milestone
 
-Twelve documents, dated, each the design agreed before a milestone was implemented. Front matter
+Thirteen documents, dated, each the design agreed before a milestone was implemented. Front matter
 carries **Date**, **Status**, **Author**, and — where one exists — a **Relationship**, **Amends** or
 **Supersedes** line naming the document it changes.
 
@@ -233,12 +233,12 @@ the expected failure text stated. Where a plan and its spec disagree, the spec g
 
 Opened 2026-08-03 by the conformance and robustness suite, and authoritative for severity, repro,
 observed behaviour, expected behaviour and the `file:line` cause of each entry. It holds **D-01
-through D-29** — as of 2026-08-08, **24 fixed, 3 deferred, 2 open** — plus three appendices:
+through D-30** — as of 2026-08-11, **24 fixed, 3 deferred, 3 open** — plus three appendices:
 **Appendix A**, the five corrections to the conformance design's §8.1 table; **Appendix B**, the
 triage log for candidates that arrived without an ID; and **Appendix C**, ten corrections to the
 register's own entries found while fixing them, three of which would have produced a broken fix if
-followed literally. D-28 and D-29 came from the compiler-backend milestone's whole-branch review and
-are recorded rather than fixed. Each fixed defect's `conformance/defectus/` fixture has moved to
+followed literally. **D-30 sits after Appendix C**, not with the numbered run. D-28 and D-29 came
+from the compiler-backend milestone's whole-branch review and are recorded rather than fixed. Each fixed defect's `conformance/defectus/` fixture has moved to
 `errores/`.
 
 ## Naming

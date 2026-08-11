@@ -1418,12 +1418,13 @@ order and the handler's relocation closure, the CRT's `.init`/`.fini` epilogues,
 A blob wrong in any of those fails them exactly as a wrong cross-build would.
 
 It reads **no layout constant at all** — `ONUS`, `VERBUM` and the three `size_of`s appear nowhere
-in it. Those are held by the `const _: () = { … }` block in `abi/src/lib.rs`, and that block
-is compiled only when `abi` is, which on this path never happens: `conde` is skipped, and
-`abi` is workspace-`exclude`d and a dependency of nothing here. So a stale blob whose
-`dispositio` disagrees with today's source links cleanly, passes every test in this crate, and
-produces silent wrong answers. Recorded as **D-29**; the close is to export the layout constants as
-absolute symbols from the blob and compare them here, in a `target.rs` test that can see both.
+in it. Those are held by the `const _: () = { … }` block in `abi/src/lib.rs`, which proves this
+crate's source against `runtime::dispositio` — never against the blob's bytes. A crate-scoped
+build never evaluates it at all: `conde` is skipped and `abi` is a dependency of nothing here, so
+`cargo build -p codegen` compiles it zero times. So a stale blob whose `dispositio` disagrees with
+today's source links cleanly, passes every test in this crate, and produces silent wrong answers.
+Recorded as **D-29**; the close is to export the layout constants as absolute symbols from the blob
+and compare them here, in a `target.rs` test that can see both.
 
 ### `transfer` — why the destination is removed first
 
