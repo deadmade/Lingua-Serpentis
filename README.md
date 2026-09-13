@@ -63,9 +63,9 @@ named `run` must be given as `./run`.
 
 ## Status
 
-Linux only, `x86_64` and `aarch64`. There is no optimisation pass yet — integers are boxed
-unconditionally, so allocation-heavy loops are slow. Windows has designated extension points in the
-design but is not implemented; macOS is not planned.
+Linux only, `x86_64` and `aarch64`. 1.0 is the last feature release — after it, dependency updates
+and fixes, not new syntax and not a second OS. The sequenced bar, including the two named
+optimisations and what is omitted for good, lives in `docs/via.md`.
 
 ## Layout
 
@@ -79,7 +79,7 @@ design but is not implemented; macOS is not planned.
 | `crates/latinitas` | Latin morphology, backed by Whitaker's WORDS |
 | `conformance/` | 118 fixtures: programs that run, that are rejected, that warn |
 | `examples/` | Sample programs |
-| `docs/` | Design specs, implementation plans, defect register |
+| `docs/` | Design specs, implementation plans, defect register, the road to 1.0 |
 
 ## Tests
 
@@ -97,6 +97,7 @@ and supersede one another. Start there.
 - `docs/internals/` — reference for the code as it stands: `codegen.md` (the back end), `abi.md`
   (the ABI, the runtime, the IR), `rationale.md` (the front end, and what was tried and broke),
   `testing.md` (the corpus and the ratchets).
+- `docs/via.md` — the road to 1.0, and what 1.0 freezes.
 - `docs/superpowers/specs/` — design specs, one per milestone. The most recent,
   `2026-08-07-compiler-backend-design.md`, describes the compiler as it stands; an unqualified
   "spec §N" means that file.

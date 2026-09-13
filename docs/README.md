@@ -1,11 +1,11 @@
 # Documentation
 
-Everything written about Lingua Serpentis that is not source lives here, in four places:
-`internals/` is evergreen reference for the code as it stands, `superpowers/specs/` is one design
-document per milestone, `superpowers/plans/` is the implementation plan each of those designs
-became, and `defectus/` is the defect register. There is **no consolidated language reference** —
-the surface language is described across three specs and their amendments, and this file is the map
-to them.
+Everything written about Lingua Serpentis that is not source lives here, in five places:
+`internals/` is evergreen reference for the code as it stands, `via.md` is the road to 1.0,
+`superpowers/specs/` is one design document per milestone, `superpowers/plans/` is the
+implementation plan each of those designs became, and `defectus/` is the defect register. There is
+**no consolidated language reference** — the surface language is described across three specs and
+their amendments, and this file is the map to them. The reference is milestone 10 of `via.md`.
 
 Read it before reading anything else here, because roughly half of the spec directory has been
 amended or superseded by a later document and the front matter alone does not tell you the order.
@@ -24,6 +24,7 @@ amended or superseded by a later document and the front matter alone does not te
 | Why may I not write a block comment there | `superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6 |
 | What shape does a diagnostic have, and why | `superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3 |
 | Is this known to be wrong | `defectus/2026-08-03-index.md` |
+| What is left before 1.0, and what 1.0 freezes | `via.md` |
 
 **An unqualified "spec §N" anywhere in this repository — in a comment, a doc, a commit message —
 means `superpowers/specs/2026-08-07-compiler-backend-design.md`.** It is the canonical current spec.
@@ -69,6 +70,20 @@ the fixture corpus, the diagnostic ratchet (`catalogus.rs`), the robustness inva
 generated-program property (`generative.rs`), the CLI suites, and the several tests that read Rust
 source as text and therefore constrain how Rust source may be written. It documents the machinery,
 not the coverage: the corpus and the `catalogus` snapshot remain the authority on what is covered.
+
+---
+
+## `via.md` — the road to 1.0
+
+One undated file. 1.0 is the last feature release: a closed product, then dependency updates and
+fixes, not new syntax and not a second OS. The file sequences ten milestones, names the never-list
+(Windows, macOS, a package manager, user-facing Rust FFI, short-circuiting `et`/`vel`, nested
+packages, D-30), and states the compatibility promise. It is not a spec. Each build milestone still
+gets a dated document in `superpowers/specs/` before it is built; when one ships, `via.md` is marked
+done in place and the spec is linked. After 1.0 the file stops being a road and becomes the product
+bar.
+
+The consolidated language reference does not exist yet. It is milestone 10.
 
 ---
 
@@ -251,6 +266,11 @@ followable.
 
 `internals/` is deliberately **undated**. Those four documents are evergreen reference that tracks
 the code, not a record of a decision made on a day. When the code changes, they are edited in place.
+
+`via.md` is undated for the same reason. It is the closed 1.0 product, sequenced as ten milestones.
+When a milestone ships, it is marked done in place and its spec is linked; the file is not renamed
+and does not get a date. After 1.0 it stops being a road and becomes the product bar. It is not a
+spec: each build milestone still gets a dated document in `superpowers/specs/` before it is built.
 
 ## The back-end crates were renamed
 
