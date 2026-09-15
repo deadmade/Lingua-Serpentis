@@ -208,3 +208,15 @@ pub(crate) fn memoria_exhausta() -> ! {
     }
 }
 
+/// D-20
+pub(crate) fn numerus_nimis_magnus() -> ! {
+    unsafe {
+        liss_panic(
+            ptr::null(),
+            0,
+            c"numerus nimis magnus est".as_ptr(),
+            ptr::null(),
+            ptr::null(),
+        )
+    }
+}

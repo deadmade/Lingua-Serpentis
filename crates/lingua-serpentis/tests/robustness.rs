@@ -243,6 +243,14 @@ fn pathologies() -> Vec<(&'static str, String, Duration, Option<&'static str>)> 
             MORA_ARTA,
             None,
         ),
+        // D-20
+        (
+            "quadratum sine fine",
+            "munus initium reddit ni { ni x = °II; indem (verus) { x = x * x; } redde nullus; }"
+                .to_string(),
+            MORA_ARTA,
+            None,
+        ),
         (
             "series longissima",
             format!(

@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/catalogus.rs
 expression: report
 ---
-120 sites · 72 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
+121 sites · 73 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
 crates/abi/src/custos.rs:27  acervus vocationum exhaustus est  → fixtured
 crates/abi/src/custos.rs:33  defectus internus: memoria violata est: signum  → UNCOVERED
@@ -12,6 +12,7 @@ crates/abi/src/defectus.rs:150  modulus per nullum  → fixtured
 crates/abi/src/defectus.rs:171  index extra fines: {} (longitudo {})  → fixtured
 crates/abi/src/defectus.rs:187  defectus internus: memoria violata est: verificatio  → UNCOVERED
 crates/abi/src/defectus.rs:201  memoria exhausta est  → UNCOVERED
+crates/abi/src/defectus.rs:214  numerus nimis magnus est  → fixtured
 crates/codegen/src/emissio.rs:62  defectus internus: sedes ignota  → UNCOVERED
 crates/codegen/src/emissio.rs:67  defectus internus: saltus extra ansam  → UNCOVERED
 crates/codegen/src/emissio.rs:100  defectus internus: machina institui non potuit  → UNCOVERED

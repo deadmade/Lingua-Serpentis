@@ -202,6 +202,7 @@ fn every_latin_sentence_this_crate_can_say_is_listed_here() {
             "memoria exhausta est",
             "memoria non liberata est",
             "modulus per nullum",
+            "numerus nimis magnus est",
         ],
         "a Latin sentence appeared or changed; justify it, then update this list",
     );
@@ -342,7 +343,7 @@ fn integer_arithmetic_consumes_and_returns_one_value() {
 }
 
 #[test]
-fn arithmetic_is_unbounded() {
+fn arithmetic_passes_a_machine_word() {
     solus(|| unsafe {
         assert_eq!(liss_live_count(), 0);
         // 3999^6 is about 4.1e21, far past i64::MAX; the payload simply grows.
@@ -353,6 +354,26 @@ fn arithmetic_is_unbounded() {
         let (neg, d) = consume(acc);
         assert!(!neg);
         assert_eq!(d.len(), 22, "twenty-two digits does not fit a machine word");
+        assert_eq!(liss_live_count(), 0);
+    });
+}
+
+#[test]
+fn a_number_of_xxxviii_digits_is_stored() {
+    // D-20
+    solus(|| unsafe {
+        assert_eq!(liss_live_count(), 0);
+        let novem = [9u8; 38];
+        assert_eq!(
+            consume(liss_int_new(KIND_INT, 0, novem.as_ptr(), 38)),
+            (false, vec![9; 38]),
+        );
+        assert_eq!(
+            consume(liss_int_new(KIND_INT, 1, novem.as_ptr(), 38)),
+            (true, vec![9; 38]),
+        );
+        let maximus = liss_int_new(KIND_INT, 0, novem.as_ptr(), 38);
+        assert_eq!(consume(liss_int_sub(ni(0), maximus)), (true, vec![9; 38]));
         assert_eq!(liss_live_count(), 0);
     });
 }
@@ -558,7 +579,7 @@ fn scaena() {
             "index-immanis" => {
                 // A subscript far past `usize`, which this language can spell.
                 let xs = liss_list_new(u64::from(KIND_INT), 0);
-                let magnus = liss_int_new(KIND_INT, 0, [9u8; 40].as_ptr(), 40);
+                let magnus = liss_int_new(KIND_INT, 0, [9u8; 38].as_ptr(), 38);
                 liss_list_get(xs, magnus, scida, 3);
             }
             "index-scriptio" => {
@@ -636,6 +657,15 @@ fn scaena() {
                 // Rust's own heap, not `allocare`'s: more than any address space holds.
                 let forma = std::alloc::Layout::from_size_align(1 << 62, 1).expect("a layout");
                 let _ = std::alloc::alloc(forma);
+            }
+            "numerus-xxxix" => {
+                let mut decem = [0u8; 39];
+                decem[38] = 1;
+                liss_int_new(KIND_INT, 0, decem.as_ptr(), 39);
+            }
+            "summa-xxxix" => {
+                let novem = [9u8; 38];
+                liss_int_add(liss_int_new(KIND_INT, 0, novem.as_ptr(), 38), ni(1));
             }
             other => panic!("unknown scenario {other}"),
         }
@@ -755,6 +785,18 @@ fn an_exhausted_heap_is_a_latin_exit_and_never_an_abort() {
         erratum("memoria-exhausta"),
         (Some(1), "erratum: memoria exhausta est\n".to_string())
     );
+}
+
+#[test]
+fn a_number_of_xxxix_digits_raises() {
+    // D-20
+    for scaena in ["numerus-xxxix", "summa-xxxix"] {
+        assert_eq!(
+            erratum(scaena),
+            (Some(1), "erratum: numerus nimis magnus est\n".to_string()),
+            "{scaena}",
+        );
+    }
 }
 
 #[test]

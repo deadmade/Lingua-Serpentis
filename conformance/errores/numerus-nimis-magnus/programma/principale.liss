@@ -1,0 +1,8 @@
+// D-20: 'x = x * x' sine fine.
+munus initium reddit ni {
+    ni x = °II;
+    indem (verus) {
+        x = x * x;
+    }
+    redde nullus;
+}

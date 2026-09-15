@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/nuntii.rs
 expression: report
 ---
-91 fixtures · 104 diagnostics
+92 fixtures · 105 diagnostics
 
 currunt::exemplum-praecisio
   monitum  linea 11  nomen 'tertia_brevis' fortasse non Latinum est
@@ -143,6 +143,8 @@ errores::numerus-argumentorum
   erratum  principale.liss:3  functio 'geminus' numerum argumentorum falsum accepit
 errores::numerus-fractus-in-ni
   erratum  principale.liss:2  numerus fractus typum 'mnr' vel 'nr' requirit, non 'ni'
+errores::numerus-nimis-magnus
+  erratum  -  numerus nimis magnus est
 errores::numerus-non-canonicus
   erratum  principale.liss:2  numerus Romanus non canonicus: 'IIX'
 errores::numerus-romanus-invalidus

@@ -5,7 +5,9 @@ use core::ptr;
 
 use runtime::{Roman, fraction};
 
-use crate::defectus::{divisio_per_nullum, memoria_exhausta, memoria_violata, modulus_per_nullum};
+use crate::defectus::{
+    divisio_per_nullum, memoria_exhausta, memoria_violata, modulus_per_nullum, numerus_nimis_magnus,
+};
 use crate::memoria::{abolere, allocare, verifica};
 use crate::{LISS_MAGIC, LissHdr, LissInt, ONUS, basis, profunditas};
 
@@ -47,6 +49,10 @@ pub(crate) unsafe fn roman_of(p: *const LissInt) -> Roman {
 /// Returns a fresh owned pointer the caller must free.
 pub(crate) unsafe fn int_novus(kind: u32, r: &Roman) -> *mut LissInt {
     let digiti = r.digits();
+    // D-20
+    if digiti.len() > 38 {
+        numerus_nimis_magnus()
+    }
     let Some(bytes) = ONUS.checked_add(digiti.len()) else {
         memoria_exhausta()
     };
