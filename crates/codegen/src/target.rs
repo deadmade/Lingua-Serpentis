@@ -185,6 +185,29 @@ mod tests {
         }
     }
 
+    /// D-28: the English `runtime` used to carry into every compiled program.
+    #[test]
+    fn the_runtime_carries_none_of_our_english() {
+        for meta in Target::OMNES {
+            let nucleus = meta.runtime().nucleus;
+            for anglice in [
+                "tier digit out of range",
+                "the grain is a nonzero constant",
+                "a parsed denominator is never zero",
+                "c2 was just checked nonzero",
+                "CCLVI is not zero",
+                "fits i64",
+                "scriptio only ever writes valid utf-8",
+            ] {
+                assert!(
+                    !nucleus.windows(anglice.len()).any(|f| f == anglice.as_bytes()),
+                    "{}: the runtime still carries {anglice:?}",
+                    meta.triple(),
+                );
+            }
+        }
+    }
+
     /// Every strong undefined symbol: what the program link must still supply.
     fn desiderata(fasciculus: &object::File<'_>) -> Vec<String> {
         fasciculus

@@ -632,6 +632,11 @@ fn scaena() {
                     std::ptr::null(),
                 );
             }
+            "memoria-exhausta" => {
+                // Rust's own heap, not `allocare`'s: more than any address space holds.
+                let forma = std::alloc::Layout::from_size_align(1 << 62, 1).expect("a layout");
+                let _ = std::alloc::alloc(forma);
+            }
             other => panic!("unknown scenario {other}"),
         }
     }
@@ -741,6 +746,15 @@ fn corrupt_input_is_a_latin_exit_and_never_a_panic() {
         // A Rust panic across an `extern "C"` boundary aborts: SIGABRT, exit 134, D-04's shape.
         assert!(!stderr.contains("panicked"), "{scaena} must not be a Rust panic");
     }
+}
+
+#[test]
+fn an_exhausted_heap_is_a_latin_exit_and_never_an_abort() {
+    // D-28: Rust's own allocations, which `allocare` never sees.
+    assert_eq!(
+        erratum("memoria-exhausta"),
+        (Some(1), "erratum: memoria exhausta est\n".to_string())
+    );
 }
 
 #[test]

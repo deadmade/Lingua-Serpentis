@@ -1,6 +1,7 @@
 //! Roman-native fractions: a signed `Roman` count of a fixed grain unit, the grain fixed by the type.
 
 use crate::roman::Roman;
+use crate::scriptio::Sink;
 
 /// An `as` is 12 unciae.
 pub fn uncia_grain() -> Roman { Roman::from_u64(12) }
@@ -8,21 +9,21 @@ pub fn uncia_grain() -> Roman { Roman::from_u64(12) }
 /// An `as` is 288 scripula.
 pub fn scripulum_grain() -> Roman { Roman::from_u64(288) }
 
-/// `count = trunc(numer * g / den)`; the caller guarantees `den` is non-zero.
-pub fn from_rational(numer: &Roman, den: &Roman, g: &Roman) -> Roman {
-    numer.mul(g).div_rem(den).expect("a parsed denominator is never zero").0
+/// `count = trunc(numer * g / den)`; `None` only for a zero `den`.
+pub fn from_rational(numer: &Roman, den: &Roman, g: &Roman) -> Option<Roman> {
+    Some(numer.mul(g).div_rem(den)?.0)
 }
 
-/// `(c1/g)*(c2/g)` back in grain units is `trunc(c1*c2 / g)`.
-pub fn mul(c1: &Roman, c2: &Roman, g: &Roman) -> Roman {
-    c1.mul(c2).div_rem(g).expect("the grain is a nonzero constant").0
+/// `(c1/g)*(c2/g)` back in grain units is `trunc(c1*c2 / g)`; `None` only for a
+/// zero grain. D-28
+pub fn mul(c1: &Roman, c2: &Roman, g: &Roman) -> Option<Roman> {
+    Some(c1.mul(c2).div_rem(g)?.0)
 }
 
 /// `(c1/g)/(c2/g)` back in grain units is `trunc(c1*g / c2)`; `None` lets the
 /// caller raise `divisio per nullum`.
 pub fn div(c1: &Roman, c2: &Roman, g: &Roman) -> Option<Roman> {
-    if c2.is_zero() { return None; }
-    Some(c1.mul(g).div_rem(c2).expect("c2 was just checked nonzero").0)
+    Some(c1.mul(g).div_rem(c2)?.0)
 }
 
 /// Fraction of the `as` for k/12, indexed by k (0..=11); index 0 is unused.
@@ -40,40 +41,56 @@ const SUBUNCIA: [(i64, &str); 5] = [
     (1, "scripulum"),
 ];
 
-/// A grain count as classical Latin fraction names, joined with " et ".
-pub fn display(count: &Roman, g: &Roman) -> String {
-    debug_assert!(
-        *g == uncia_grain() || *g == scripulum_grain(),
-        "fraction grain must be uncia (12) or scripulum (288)"
-    );
+/// A grain count as classical Latin fraction names, joined with " et ", into
+/// `out`. A grain other than XII or CCLXXXVIII writes nothing. D-28
+pub fn display_ad(count: &Roman, g: &Roman, out: &mut impl Sink) {
     if count.is_zero() {
-        return "nullus".to_string();
+        return out.push(b"nullus");
     }
     let negative = *count < Roman::zero();
     let magnitude = if negative { count.neg() } else { count.clone() };
 
-    let (whole, rem) = magnitude.div_rem(g).expect("the grain is a nonzero constant");
-    let scr_per_grain = 288 / g.to_i64().unwrap();
-    let mut scripula = rem.to_i64().unwrap() * scr_per_grain;
+    let Some((whole, rem)) = magnitude.div_rem(g) else { return };
+    let (Some(g), Some(rem)) = (g.to_i64(), rem.to_i64()) else { return };
+    if g != 12 && g != 288 {
+        return;
+    }
+    let mut scripula = rem * (288 / g);
 
-    let mut parts: Vec<String> = Vec::new();
+    if negative {
+        out.push(b"-");
+    }
+    let mut et = false;
     if !whole.is_zero() {
-        parts.push(whole.display());
+        whole.display_ad(out);
+        et = true;
     }
     let twelfths = (scripula / 24) as usize; // 24 scripula to the uncia
     scripula %= 24;
     if twelfths > 0 {
-        parts.push(TWELFTHS[twelfths].to_string());
+        verbum(out, &mut et, TWELFTHS[twelfths]);
     }
     for (val, name) in SUBUNCIA {
         if scripula >= val {
             scripula -= val;
-            parts.push(name.to_string());
+            verbum(out, &mut et, name);
         }
     }
+}
 
-    let body = parts.join(" et ");
-    if negative { format!("-{body}") } else { body }
+/// One name, after an " et " if anything came before it.
+fn verbum(out: &mut impl Sink, et: &mut bool, name: &str) {
+    if *et {
+        out.push(b" et ");
+    }
+    out.push(name.as_bytes());
+    *et = true;
+}
+
+pub fn display(count: &Roman, g: &Roman) -> String {
+    let mut s = String::new();
+    display_ad(count, g, &mut s);
+    s
 }
 
 #[cfg(test)]
@@ -88,7 +105,7 @@ mod tests {
         let cases = [(4i64, 3i64), (11, 2), (5, 4), (25, 24), (9, 8), (1, 7), (-4, 3), (7, -3)];
         for (numer, den) in cases {
             for g in [12i64, 288] {
-                let got = from_rational(&r(numer), &r(den), &r(g)).to_i64().unwrap();
+                let got = from_rational(&r(numer), &r(den), &r(g)).unwrap().to_i64().unwrap();
                 let want = ((numer as i128 * g as i128) / den as i128) as i64;
                 assert_eq!(got, want, "from_rational {numer}/{den} g={g}");
             }
@@ -100,11 +117,12 @@ mod tests {
         let cases = [(16i64, 16i64), (6, 6), (5, 5), (360, 2), (-5, 5), (-6, -7)];
         for (c1, c2) in cases {
             for g in [12i64, 288] {
-                let got = mul(&r(c1), &r(c2), &r(g)).to_i64().unwrap();
+                let got = mul(&r(c1), &r(c2), &r(g)).unwrap().to_i64().unwrap();
                 let want = ((c1 as i128 * c2 as i128) / g as i128) as i64;
                 assert_eq!(got, want, "mul {c1}*{c2} g={g}");
             }
         }
+        assert!(mul(&r(5), &r(5), &r(0)).is_none(), "a zero grain must be guarded");
     }
 
     #[test]
@@ -177,5 +195,11 @@ mod tests {
         let big = Roman::from_u64(u64::MAX);
         let s = display(&big, &scripulum_grain());
         assert!(s.contains('\u{0305}'), "huge whole part uses a vinculum: {s}");
+    }
+
+    #[test]
+    fn display_of_a_foreign_grain_writes_nothing() {
+        assert_eq!(display(&r(16), &r(7)), "");
+        assert_eq!(display(&r(16), &r(0)), "");
     }
 }

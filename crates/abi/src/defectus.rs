@@ -5,7 +5,7 @@ use runtime::Roman;
 
 use crate::LissInt;
 use crate::numeri::roman_of;
-use crate::scriptio::erratum;
+use crate::scriptio::{Erratum, erratum};
 
 /// Raise, and never return. `fmt` is the sentence; up to two `{}` holes are
 /// filled from `arg0` and `arg1` as Roman numerals. Null and empty `file` both
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn liss_panic(
     while let Some(i) = positio(reliquum) {
         erratum(&reliquum[..i]);
         match argumenta.next() {
-            Some(p) => erratum(unsafe { roman_of(p) }.display().as_bytes()),
+            Some(p) => unsafe { roman_of(p) }.display_ad(&mut Erratum),
             None => memoria_violata(),
         }
         reliquum = &reliquum[i + 2..];
@@ -64,13 +64,13 @@ pub unsafe extern "C" fn liss_panic(
             erratum(b"  in '");
             erratum(nomen);
             erratum(b"', linea ");
-            erratum(Roman::from_u64(n).display().as_bytes());
+            Roman::from_u64(n).display_ad(&mut Erratum);
             erratum(b"\n");
         }
         (true, 0) => {}
         (true, n) => {
             erratum(b"  in linea ");
-            erratum(Roman::from_u64(n).display().as_bytes());
+            Roman::from_u64(n).display_ad(&mut Erratum);
             erratum(b"\n");
         }
     }

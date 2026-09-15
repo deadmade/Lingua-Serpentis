@@ -248,46 +248,48 @@ pub fn parse_roman(literal: &str) -> Result<RomanNumber, String> {
 const ONES3: [&str; 3] = ["X", "C", "M"];
 const FIVES3: [&str; 3] = ["V", "L", "D"];
 
-fn with_bars(base: &str, bars: usize) -> String {
-    let mut s = base.to_string();
-    for _ in 0..bars { s.push('\u{0305}'); } // U+0305 COMBINING OVERLINE
-    s
+fn with_bars(out: &mut impl crate::scriptio::Sink, base: &str, bars: usize) {
+    out.push(base.as_bytes());
+    for _ in 0..bars { out.push("\u{0305}".as_bytes()); } // U+0305 COMBINING OVERLINE
 }
 
 /// I, X, C, M, X̄, C̄, M̄, X̿, … (a bar is ×1000).
-fn glyph_one(tier: usize) -> String {
-    if tier == 0 { return "I".to_string(); }
-    with_bars(ONES3[(tier - 1) % 3], (tier - 1) / 3)
+fn glyph_one(out: &mut impl crate::scriptio::Sink, tier: usize) {
+    if tier == 0 { return out.push(b"I"); }
+    with_bars(out, ONES3[(tier - 1) % 3], (tier - 1) / 3)
 }
 
 /// V, L, D, V̄, L̄, D̄, V̿, …
-fn glyph_five(tier: usize) -> String {
-    with_bars(FIVES3[tier % 3], tier / 3)
+fn glyph_five(out: &mut impl crate::scriptio::Sink, tier: usize) {
+    with_bars(out, FIVES3[tier % 3], tier / 3)
 }
 
 /// The classic subtractive rules, using the next tier's one glyph for the 9 case.
-fn render_digit(d: u8, tier: usize) -> String {
-    let one = glyph_one(tier);
-    let five = glyph_five(tier);
+/// A digit is `0..=9` by the type's invariant, so the last arm is 9. D-28
+fn render_digit(out: &mut impl crate::scriptio::Sink, d: u8, tier: usize) {
     match d {
-        0 => String::new(),
-        1..=3 => one.repeat(d as usize),
-        4 => format!("{one}{five}"),
-        5 => five,
-        6..=8 => format!("{five}{}", one.repeat((d - 5) as usize)),
-        9 => format!("{one}{}", glyph_one(tier + 1)),
-        _ => unreachable!("tier digit out of range"),
+        0 => {}
+        1..=3 => for _ in 0..d { glyph_one(out, tier) },
+        4 => { glyph_one(out, tier); glyph_five(out, tier) }
+        5 => glyph_five(out, tier),
+        6..=8 => { glyph_five(out, tier); for _ in 5..d { glyph_one(out, tier) } }
+        _ => { glyph_one(out, tier); glyph_one(out, tier + 1) }
     }
 }
 
 impl Roman {
-    pub fn display(&self) -> String {
-        if self.is_zero() { return "nullus".to_string(); }
-        let mut s = String::new();
-        if self.negative { s.push('-'); }
+    /// Into `out`, allocating nothing. D-28
+    pub fn display_ad(&self, out: &mut impl crate::scriptio::Sink) {
+        if self.is_zero() { return out.push(b"nullus"); }
+        if self.negative { out.push(b"-"); }
         for k in (0..self.tiers.len()).rev() {
-            s.push_str(&render_digit(self.tiers[k], k));
+            render_digit(out, self.tiers[k], k);
         }
+    }
+
+    pub fn display(&self) -> String {
+        let mut s = String::new();
+        self.display_ad(&mut s);
         s
     }
 

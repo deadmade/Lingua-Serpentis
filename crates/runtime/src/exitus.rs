@@ -10,13 +10,13 @@ pub struct Warning {
 }
 
 /// The value mod CCLVI, shifted non-negative; `Some(warning)` exactly when the
-/// value did not already fit in 0..=CCLV (D-10). Keep this doc block at four
-/// lines or longer — it is what holds the English `expect` message below out
-/// of the 300-byte window `catalogus.rs` reads after the struct's brace above.
+/// value did not already fit in 0..=CCLV (D-10). The residue is folded out of
+/// the digits rather than divided, so nothing on the way to the status can
+/// panic. D-28
 pub fn exit_status(r: &Roman) -> (u8, Option<Warning>) {
-    let rem = r.div_rem(&Roman::from_u64(256)).expect("CCLVI is not zero").1;
-    let x = rem.to_i64().expect("|rem| < 256 fits i64");
-    let code = ((x + 256) % 256) as u8;
+    let modulus = r.digits().iter().rev().fold(0u16, |m, &d| (m * 10 + u16::from(d)) % 256);
+    let modulus = if r.negative() { (256 - modulus) % 256 } else { modulus };
+    let code = modulus as u8;
     let truncated = *r != Roman::from_u64(code as u64);
     let warning = truncated.then(|| Warning {
         message: format!(

@@ -114,6 +114,15 @@ impl Sink for Pixis {
     }
 }
 
+/// Stderr, unbuffered, as a `runtime` formatter sink. D-28
+pub(crate) struct Erratum;
+
+impl Sink for Erratum {
+    fn push(&mut self, bytes: &[u8]) {
+        erratum(bytes);
+    }
+}
+
 /// Render one machine word of kind `kind`, without a trailing newline and
 /// without consuming it.
 ///

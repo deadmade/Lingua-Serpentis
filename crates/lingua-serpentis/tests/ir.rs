@@ -648,7 +648,7 @@ fn the_ir_mirror_narrows_exactly_as_the_ast_does() {
             let f = func(&p, "initium");
             let ir::StmtKind::Let { value, .. } = &f.body.stmts[0].kind else { panic!("a let") };
             let want = fraction::from_rational(
-                &Roman::from_i64(numer), &Roman::from_i64(den), &grain);
+                &Roman::from_i64(numer), &Roman::from_i64(den), &grain).expect("a nonzero denominator");
             assert_eq!(
                 value.kind,
                 ir::ExprKind::Const(ir::Const::Frac(want_grain, want)),

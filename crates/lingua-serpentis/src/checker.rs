@@ -251,7 +251,7 @@ impl Checker {
                 // Still abstract, so the IR takes `nr`'s grain; `resolve_frac`
                 // re-narrows onto `mnr`'s grid exactly, because truncation composes.
                 let count = crate::fraction::from_rational(
-                    numer, den, &crate::fraction::scripulum_grain());
+                    numer, den, &crate::fraction::scripulum_grain()).expect("a literal's denominator is never zero");
                 Ok((InferTy::FloatLit, konst(
                     ir::Ty::Frac(ir::Grain::Scripulum),
                     ir::Const::Frac(ir::Grain::Scripulum, count))))
@@ -758,7 +758,7 @@ fn resolve_floatlit_ir(e: &mut ir::Expr, g: ir::Grain) {
             // protects it: this rewrite is direction-free.
             debug_assert!(*had == ir::Grain::Scripulum || *had == g,
                 "resolve_floatlit_ir is exact only narrowing from nr's grain");
-            *count = crate::fraction::from_rational(count, &grain_denom(*had), &grain_denom(g));
+            *count = crate::fraction::from_rational(count, &grain_denom(*had), &grain_denom(g)).expect("a grain is never zero");
             *had = g;
             true
         }

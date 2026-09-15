@@ -74,3 +74,35 @@ pub(crate) unsafe fn abolere(h: *mut LissHdr) {
         liberare(h.cast());
     }
 }
+
+/// Rust's own heap, uncounted: `System`, except that a null is
+/// `memoria exhausta est` and never `handle_alloc_error`. D-28
+struct Systema;
+
+#[global_allocator]
+static SYSTEMA: Systema = Systema;
+
+unsafe impl std::alloc::GlobalAlloc for Systema {
+    unsafe fn alloc(&self, forma: std::alloc::Layout) -> *mut u8 {
+        exige(unsafe { std::alloc::GlobalAlloc::alloc(&std::alloc::System, forma) })
+    }
+
+    unsafe fn alloc_zeroed(&self, forma: std::alloc::Layout) -> *mut u8 {
+        exige(unsafe { std::alloc::GlobalAlloc::alloc_zeroed(&std::alloc::System, forma) })
+    }
+
+    unsafe fn realloc(&self, p: *mut u8, forma: std::alloc::Layout, mensura: usize) -> *mut u8 {
+        exige(unsafe { std::alloc::GlobalAlloc::realloc(&std::alloc::System, p, forma, mensura) })
+    }
+
+    unsafe fn dealloc(&self, p: *mut u8, forma: std::alloc::Layout) {
+        unsafe { std::alloc::GlobalAlloc::dealloc(&std::alloc::System, p, forma) }
+    }
+}
+
+fn exige(p: *mut u8) -> *mut u8 {
+    if p.is_null() {
+        crate::defectus::memoria_exhausta();
+    }
+    p
+}

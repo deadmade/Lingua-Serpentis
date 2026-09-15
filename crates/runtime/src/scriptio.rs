@@ -10,18 +10,17 @@ pub trait Sink {
 
 impl Sink for String {
     fn push(&mut self, bytes: &[u8]) {
-        self.push_str(std::str::from_utf8(bytes).expect("scriptio only ever writes valid utf-8"));
+        self.push_str(&String::from_utf8_lossy(bytes));
     }
 }
 
-// D-28
 pub fn scribe_int(r: &Roman, out: &mut impl Sink) {
-    out.push(r.display().as_bytes());
+    r.display_ad(out);
 }
 
-/// `grain` is 12 for `mnr`, 288 for `nr`. D-28
+/// `grain` is 12 for `mnr`, 288 for `nr`.
 pub fn scribe_frac(count: &Roman, grain: u64, out: &mut impl Sink) {
-    out.push(fraction::display(count, &Roman::from_u64(grain)).as_bytes());
+    fraction::display_ad(count, &Roman::from_u64(grain), out);
 }
 
 pub fn scribe_text(s: &str, out: &mut impl Sink) {

@@ -259,7 +259,10 @@ pub unsafe extern "C" fn liss_frac_mul(
     let g = exige_granum(granum);
     let (ra, rb) = unsafe { (roman_of(a), roman_of(b)) };
     let kind = unsafe { genus(a) };
-    let out = unsafe { int_novus(kind, &fraction::mul(&ra, &rb, &g)) };
+    let Some(productum) = fraction::mul(&ra, &rb, &g) else {
+        memoria_violata()
+    };
+    let out = unsafe { int_novus(kind, &productum) };
     unsafe { liss_int_free(a) };
     unsafe { liss_int_free(b) };
     out
@@ -290,8 +293,7 @@ pub unsafe extern "C" fn liss_frac_div(
     out
 }
 
-/// The two grains the language has, and nothing else: `fraction::mul` `expect`s
-/// a nonzero grain, and a panic across `extern "C"` would abort.
+/// The two grains the language has, and nothing else.
 fn exige_granum(granum: u64) -> Roman {
     if granum != 12 && granum != 288 {
         memoria_violata();
