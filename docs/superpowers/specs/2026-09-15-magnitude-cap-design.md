@@ -398,6 +398,11 @@ errores::numerus-nimis-magnus
     each give `(Some(1), "erratum: numerus nimis magnus est\n")`.
   - `arithmetic_is_unbounded` is renamed `arithmetic_passes_a_machine_word`. Its body, twenty-two
     digits, is unchanged and still passes; the old name now lies.
+  - `scaena`'s `index-immanis` arm, behind `an_index_outside_the_bounds_raises_with_roman_numerals`,
+    built its subscript "far past `usize`" from **forty** 9s through `liss_int_new`. The cap refuses
+    that before the index is read, and the test failed with `numerus nimis magnus est`. It is
+    thirty-eight 9s now, still eighteen digits past any `usize`, and asserts what it did. This list
+    missed it when the spec was written; the implementation found it.
 - `crates/lingua-serpentis/tests/robustness.rs` — `pathologies()` gains `quadratum sine fine`, §1's
   program on one line, under `MORA_ARTA` with `None`, with a bare `// D-20`. It times out today and
   must satisfy the invariant after §5.
