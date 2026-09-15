@@ -122,7 +122,7 @@ value ranges differ:
 |---|---|---|---|
 | `ni` | the value | 10³⁸ − 1 = 99 999 999 999 999 999 999 999 999 999 999 999 999 (38 digits) | the same |
 | `mnr` | unciae | (10³⁸ − 1)/12 | 8 333 333 333 333 333 333 333 333 333 333 333 333 (37 digits), and 3/12 |
-| `nr` | scripula | (10³⁸ − 1)/288 | 347 222 222 222 222 222 222 222 222 222 222 (36 digits), and 63/288 |
+| `nr` | scripula | (10³⁸ − 1)/288 | 347 222 222 222 222 222 222 222 222 222 222 222 (36 digits), and 63/288 |
 
 A number whose digit count is 38 is stored; one whose digit count is 39 is not. `nullus` has zero
 digits. Nothing is rounded, saturated or wrapped: the operation that would store the 39-digit number
