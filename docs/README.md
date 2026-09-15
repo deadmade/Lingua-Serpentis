@@ -276,11 +276,11 @@ the expected failure text stated. Where a plan and its spec disagree, the spec g
 
 Opened 2026-08-03 by the conformance and robustness suite, and authoritative for severity, repro,
 observed behaviour, expected behaviour and the `file:line` cause of each entry. It holds **D-01
-through D-30** — as of 2026-09-15, **28 fixed, 1 deferred, 1 open** — plus three appendices:
+through D-31** — as of 2026-09-15, **29 fixed, 0 deferred, 2 open** — plus three appendices:
 **Appendix A**, the five corrections to the conformance design's §8.1 table; **Appendix B**, the
 triage log for candidates that arrived without an ID; and **Appendix C**, ten corrections to the
 register's own entries found while fixing them, three of which would have produced a broken fix if
-followed literally. **D-30 sits after Appendix C**, not with the numbered run. D-28 and D-29 came
+followed literally. **D-30 and D-31 sit after Appendix C**, not with the numbered run. D-28 and D-29 came
 from the compiler-backend milestone's whole-branch review, were recorded rather than fixed, and are fixed by `via.md`'s milestone 1. Each fixed defect's `conformance/defectus/` fixture has moved to
 `errores/`.
 
