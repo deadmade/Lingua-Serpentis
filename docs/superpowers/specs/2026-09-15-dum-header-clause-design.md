@@ -238,7 +238,7 @@ Every row difference, with its cause:
 | row | change | cause |
 |---|---|---|
 | `parser.rs:<for_stmt>  clausula prima capitis 'dum' declaratio vel assignatio esse debet  → fixtured` | **added** | §4; fixtured by all four fixtures of §8 |
-| `parser.rs:350` … `parser.rs:494` (16 rows) | `:line` only | the lines `for_stmt` gains |
+| `parser.rs:350` … `parser.rs:494` (12 rows) | `:line` only | the lines `for_stmt` gains |
 | `checker.rs:730  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured` | `:line` only, and reorders to sit above the `:623` row | §6 — the rejection moves into the `Func` arm |
 | `checker.rs:623` … `checker.rs:932` (the other 13 rows: `623 635 643 650 661 664 694 747 821 838 882 924 932`) | `:line` only | the comment loses a line; the arm and the `if let` change size |
 | `emissio.rs:813  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED` | `:line` only | the header-walk guard's lines go |
@@ -286,8 +286,9 @@ where milestone 2 closes, not in the fix commit, so that D-13 and D-20 do not ea
 Four `nuntii` files are *new*; none is rewritten. That makes this the narrow case, and it is kept
 narrow mechanically:
 
-1. **Before blessing,** `cargo nextest run --test conformance` fails on exactly the four new trials,
-   each missing its `nuntii`, and nothing else.
+1. **Before blessing,** `cargo nextest run --no-fail-fast --test conformance` fails on three of the four new trials,
+   and nothing else. `si-in-capite-dum` passes: its old behaviour, exit 1 with no stderr, is exactly
+   the expectation before its `nuntii` exists.
 2. **Bless with a filter**, not the whole corpus: `LISS_BLESS=1 cargo test --test conformance --
    in-capite-dum`. `libtest-mimic` matches the substring against `errores::<casus>`.
 3. **`git status --porcelain conformance/`** lists the four new directories and nothing else.
