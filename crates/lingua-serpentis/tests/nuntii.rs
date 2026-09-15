@@ -1,6 +1,6 @@
 //! The blessing net: what every fixture's stderr *says*, independent of how it is framed.
 //!
-//! `LISS_BLESS=1` rewrites all 86 `nuntii` files from actual output, and blessing a
+//! `LISS_BLESS=1` rewrites all 92 `nuntii` files from actual output, and blessing a
 //! regression is the one way the conformance corpus fails silently. This snapshot
 //! records the `(genus, scida, linea, sententia)` of every diagnostic in the corpus with
 //! the framing normalised away, so a change of *shape* leaves it untouched and a change

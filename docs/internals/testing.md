@@ -52,9 +52,10 @@ see them (below).
 
 ## The conformance corpus
 
-`conformance/` is 118 fixtures in four groups — `currunt/` 35, `errores/` 78, `monita/` 4,
-`defectus/` 1. The vocabulary is the language's own: `currunt` "they run", `errores` programs that
-fail, `monita` programs that warn but run, `defectus` a known defect pinning today's behaviour.
+`conformance/` is 123 fixtures in three groups — `currunt/` 35, `errores/` 84, `monita/` 4. The
+vocabulary is the language's own: `currunt` "they run", `errores` programs that fail, `monita`
+programs that warn but run. A fourth, `defectus`, held a known defect pinning today's behaviour,
+and is empty now that none is deferred.
 
 Each case directory holds:
 
@@ -281,7 +282,7 @@ tail naming which failure it is, and every pattern in the workspace is unique.
 Each row prints as `{file}:{line}  {pattern}  → {status}`, under a header the snapshot pins:
 
 ```
-118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
+121 sites · 73 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 ```
 
 `UNCOVERED` and `UNPARSED` are legal states, but they are *visible* states — the header is the
@@ -289,13 +290,13 @@ number the project is choosing to live with.
 
 ### The blessing net: `nuntii.rs`
 
-`LISS_BLESS=1` rewrites all 86 `nuntii` files from actual output, and **blessing a regression is the
+`LISS_BLESS=1` rewrites all 92 `nuntii` files from actual output, and **blessing a regression is the
 one way this corpus fails silently.** Nothing before could tell a diagnostic that changed *shape*
 from one that changed *sentence*.
 
 `nuntii.rs` closes that. It reads the committed files — not the compiler, which is what it is
 guarding — and snapshots every diagnostic in the corpus reduced to `(genus, scida, linea,
-sententia)`, with the framing discarded: 86 fixtures, 99 diagnostics. **A blessing that moves this
+sententia)`, with the framing discarded: 92 fixtures, 105 diagnostics. **A blessing that moves this
 snapshot changed a sentence or a line number, and neither is a framing change.** Two companions keep
 it honest: every non-empty line of every file must be accounted for as a diagnostic or as framing
 belonging to one, and every rendered numeral must be the way the language writes that number — the

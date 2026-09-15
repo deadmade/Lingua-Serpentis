@@ -77,7 +77,7 @@ optimisations and what is omitted for good, lives in `docs/via.md`.
 | `crates/runtime` | Roman numerals; compiled for both host and target |
 | `crates/abi` | The musl-side runtime — cross-built for musl by `crates/codegen/build.rs` |
 | `crates/latinitas` | Latin morphology, backed by Whitaker's WORDS |
-| `conformance/` | 118 fixtures: programs that run, that are rejected, that warn |
+| `conformance/` | 123 fixtures: programs that run, that are rejected, that warn |
 | `examples/` | Sample programs |
 | `docs/` | Design specs, implementation plans, defect register, the road to 1.0 |
 

@@ -29,8 +29,7 @@ Linux AOT compiler, `x86_64` and `aarch64`. Explicit types, Roman numerals, list
 diagnostics with carets. `liss build` emits a static musl ELF.
 
 Not yet: maps, first-class functions, stdin, files, `>=`/`<=`, `sit`, a REPL, `try`/`catch`,
-threads, the two named optimisations, a consolidated language reference. The three deferred
-language decisions in `defectus/2026-08-03-index.md` — `D-13`, `D-20` and `D-26` — are all taken.
+threads, the two named optimisations, a consolidated language reference.
 
 ## What 1.0 is not (and therefore not later either)
 
@@ -65,15 +64,21 @@ now records how it shipped.
 - **D-29** — `9e0b318`. The blob exports `liss_onus` and `liss_verbum`, and a `target.rs` test
   reads them against `runtime::dispositio` on every build path.
 
-### 2. The last breaking language decisions
+### 2. The last breaking language decisions — done
 
-Needs a spec per row. Do them before anything additive so 1.0 does not freeze a hole.
+Each took a spec, and each was done before anything additive, so 1.0 does not freeze a hole. Each
+register entry records how it shipped.
 
-| ID | Decision the spec must take |
-|----|-----------------------------|
-| **D-13** | **Shipped** 2026-09-15 (`6a6badc`): every chunk of a literal is written the way its value prints, 1..=3999 (`2026-09-15-roman-numeral-form-design.md`). |
-| **D-20** | **Shipped** 2026-09-15 (`ee3ee08`): a stored number has at most XXXVIII decimal digits, and past it the program ends with a Latin sentence (`2026-09-15-magnitude-cap-design.md`). |
-| **D-26** | **Shipped** 2026-09-15 (`a823697`): a `dum` init clause is a declaration or an assignment, and nothing else parses (`2026-09-15-dum-header-clause-design.md`). |
+- **D-26** — `a823697`, [`2026-09-15-dum-header-clause-design.md`](superpowers/specs/2026-09-15-dum-header-clause-design.md).
+  A `dum` init clause is a declaration or an assignment, and anything else is rejected at its first
+  token with `clausula prima capitis 'dum' declaratio vel assignatio esse debet`.
+- **D-13** — `6a6badc`, [`2026-09-15-roman-numeral-form-design.md`](superpowers/specs/2026-09-15-roman-numeral-form-design.md).
+  Every chunk of a literal is accepted only if it is the numeral its own value prints as, 1..=3999;
+  the first chunk that is not is `numerus Romanus non canonicus`.
+- **D-20** — `ee3ee08`, [`2026-09-15-magnitude-cap-design.md`](superpowers/specs/2026-09-15-magnitude-cap-design.md).
+  A stored number has at most XXXVIII decimal digits, and past them the program ends with
+  `numerus nimis magnus est`. The robustness fuzzer's `terminates` rule did not retire with it: a
+  mutation can still write a loop no bound ends, and that is **D-31**, open.
 
 ### 3. Small holes
 

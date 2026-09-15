@@ -245,7 +245,7 @@ read, in this order:
   grow;
 - **`2026-07-22-v2-lists-design.md`** for `lista`.
 
-The `conformance/` corpus is the operational answer to the same question: 118 fixtures with blessed
+The `conformance/` corpus is the operational answer to the same question: 123 fixtures with blessed
 `emissio`, `nuntii` and `exitus` files, which are recorded facts about the language as shipped.
 
 ### The interpreter was deleted

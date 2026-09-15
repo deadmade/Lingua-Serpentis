@@ -49,9 +49,9 @@ invoking cargo on it *during* an outer build would contend for the outer `.cargo
   the `# Safety` clauses, the fixture and test pointers, and a bare `D-NN`. Write the reasoning for
   a new decision in `docs/internals/`, not above the line it defends.
 - **Comments move the catalogue snapshot.** `catalogus__catalogus.snap` records `file:line` for
-  118 diagnostic sites, so deleting or adding a comment line above any of them fails
+  121 diagnostic sites, so deleting or adding a comment line above any of them fails
   `tests/catalogus.rs`. Re-bless it, then check the header still reads
-  `118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed` and that only the `:line`
+  `121 sites · 73 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed` and that only the `:line`
   field moved — a changed count means a site was gained, lost or reclassified. Renaming a crate
   directory is the one change where the `:line` test does not apply: `extract_sites` sorts by full
   path, so a new directory name reorders the whole file. Compare the sorted set of
@@ -65,9 +65,8 @@ invoking cargo on it *during* an outer build would contend for the outer `.cargo
 
 ## The conformance corpus
 
-`conformance/` is 118 fixtures in four groups: `currunt/` (programs that run), `errores/` (programs
-that must be rejected), `monita/` (programs that warn), `defectus/` (one deferred defect). Each
-fixture directory holds:
+`conformance/` is 123 fixtures in three groups: `currunt/` (programs that run), `errores/` (programs
+that must be rejected), `monita/` (programs that warn). Each fixture directory holds:
 
 - `programma/` — the program, or `VIA` — a file naming a program elsewhere in the repo;
 - `emissio` — expected stdout, `nuntii` — expected stderr, `exitus` — expected exit code (absent
@@ -76,7 +75,7 @@ fixture directory holds:
 
 `cargo test --test conformance` runs them (`harness = false`, one named trial per fixture).
 `LISS_BLESS=1` rewrites the expectation files from actual output — blessing a regression is the one
-way this suite fails silently. **`tests/nuntii.rs` is the net**: it snapshots all 99 diagnostics in
+way this suite fails silently. **`tests/nuntii.rs` is the net**: it snapshots all 105 diagnostics in
 the corpus with the framing stripped, so a blessing that changes a *sentence* or a *line* moves it
 and a blessing that changes only the shape does not. Never bless without re-running it.
 
