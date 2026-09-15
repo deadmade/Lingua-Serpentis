@@ -275,14 +275,26 @@ before:  119 sites · 71 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 after:   120 sites · 72 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 ```
 
-Every row difference, with its cause, for the check written as three lines after the loop's closing
-brace at `roman.rs:195`:
+Every row difference, with its cause, for the check written as three lines replacing `Ok(total)`
+after the loop's closing brace at `roman.rs:195`:
+
+```rust
+    Some(total)
+        .filter(|t| t.display() == s)
+        .ok_or_else(|| format!("numerus Romanus non canonicus: '{}'", s))
+```
+
+**The shape is load-bearing.** The catalogue's extractor counts `.ok_or_else(|| format!(…))` as a
+site, but counts `Err(…)` only when its argument *opens* with a string literal
+(`catalogus.rs`'s `incipit_literale`), so `if total.display() != s { return Err(format!(…)); }` —
+the form this section first named — is no site at all, and the header would not move. That was
+found by running it; the corrected form is what shipped.
 
 | row | change | cause |
 |---|---|---|
-| `crates/runtime/src/roman.rs:197  numerus Romanus non canonicus: '{}'  → fixtured` | **added** | §4; fixtured by `errores/numerus-non-canonicus` (§8) |
-| `crates/runtime/src/roman.rs:226  numerus sine '°': '{}'  → UNCOVERED` | `:line` only → `:229` | the three lines above it |
-| `crates/runtime/src/roman.rs:238  fractio sine denominatore  → fixtured` | `:line` only → `:241` | the same |
+| `crates/runtime/src/roman.rs:198  numerus Romanus non canonicus: '{}'  → fixtured` | **added** | §4; fixtured by `errores/numerus-non-canonicus` (§8) |
+| `crates/runtime/src/roman.rs:226  numerus sine '°': '{}'  → UNCOVERED` | `:line` only → `:228` | the two lines added above it |
+| `crates/runtime/src/roman.rs:238  fractio sine denominatore  → fixtured` | `:line` only → `:240` | the same |
 
 `roman.rs:180` (`vacuus`) and `:192` (`invalidus`) do not move. No row in any other file moves.
 `ambiguous`, `uncovered` and `unparsed` do not move. If the check is written in a different number

@@ -187,14 +187,15 @@ returns `Err("numerus Romanus non canonicus: '<s>'")`. Consumes Task 2's fixture
 - [ ] Step 2: `cargo nextest run -p runtime --lib convert_single a_non_canonical`. Expected: both fail —
       the enumeration on the first non-canonical string it walks, `"IL" accepted but not
       canonical`, and `a_non_canonical_chunk_is_named` on `°IIII` (`Ok(Int(…))` against `Err`).
-- [ ] Step 3: In `convert_single`, between the loop's closing brace (`:195`) and `Ok(total)`, three
-      lines:
+- [ ] Step 3: In `convert_single`, replace `Ok(total)` after the loop's closing brace (`:195`) with
+      three lines:
       ```rust
-      if total.display() != s {
-          return Err(format!("numerus Romanus non canonicus: '{}'", s));
-      }
+      Some(total)
+          .filter(|t| t.display() == s)
+          .ok_or_else(|| format!("numerus Romanus non canonicus: '{}'", s))
       ```
-      The literal inline. No comment.
+      The literal inline. No comment. Not `return Err(format!(…))`: the catalogue does not see that
+      shape as a site (spec §7).
 - [ ] Step 4: `cargo nextest run -p runtime`. Green, including `single_rejects_garbage`,
       `int_multiplicative_pairs`, `parse_fraction_literal` and
       `parse_rejects_malformed_or_zero_fraction`, whose inputs are canonical or fail earlier.
@@ -213,8 +214,8 @@ returns `Err("numerus Romanus non canonicus: '<s>'")`. Consumes Task 2's fixture
       `errores::numerus-non-canonicus` / `erratum  principale.liss:2  numerus Romanus non canonicus: 'IIX'`,
       nothing removed or changed. Accept: `INSTA_UPDATE=always cargo nextest run --test nuntii`; header
       now `91 fixtures · 104 diagnostics`.
-- [ ] Step 9: `cargo nextest run --test catalogus`. Expected: fails — one added `roman.rs:197` row, and
-      `roman.rs:226` → `:229`, `:238` → `:241`. Accept with `INSTA_UPDATE=always`; header
+- [ ] Step 9: `cargo nextest run --test catalogus`. Expected: fails — one added `roman.rs:198` row, and
+      `roman.rs:226` → `:228`, `:238` → `:240`. Accept with `INSTA_UPDATE=always`; header
       `120 sites · 72 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed`.
 - [ ] Step 10: Spec §7's set check: regenerate the sorted `(pattern, status)` list as in Task 0 Step 4
       and `diff $SCRATCH/catalogus-ante.txt -`. Expected: exactly one `>` line,
