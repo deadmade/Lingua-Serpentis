@@ -25,6 +25,7 @@ amended or superseded by a later document and the front matter alone does not te
 | What shape does a diagnostic have, and why | `superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3 |
 | What may a `dum` header's first clause be | `superpowers/specs/2026-09-15-dum-header-clause-design.md` §3 |
 | How must a Roman numeral literal be written | `superpowers/specs/2026-09-15-roman-numeral-form-design.md` §3 |
+| How large may a number grow, and what happens past it | `superpowers/specs/2026-09-15-magnitude-cap-design.md` §3 |
 | Is this known to be wrong | `defectus/2026-08-03-index.md` |
 | What is left before 1.0, and what 1.0 freezes | `via.md` |
 
@@ -91,7 +92,7 @@ The consolidated language reference does not exist yet. It is milestone 10.
 
 ## `superpowers/specs/` — one design per milestone
 
-Fifteen documents, dated, each the design agreed before a milestone was implemented. Front matter
+Sixteen documents, dated, each the design agreed before a milestone was implemented. Front matter
 carries **Date**, **Status**, **Author**, and — where one exists — a **Relationship**, **Amends** or
 **Supersedes** line naming the document it changes.
 
@@ -103,8 +104,8 @@ carries **Date**, **Status**, **Author**, and — where one exists — a **Relat
 | `2026-07-22-capit-reddit-function-headers-design.md` | 2026-07-22 | Approved (design) | The function header as it is today — `munus summare capit (ni a, ni b) reddit ni` |
 | `2026-07-22-nr-double-distinct-type-design.md` | 2026-07-22 | Approved (design) | Makes `nr` a type distinct from `mnr`. Its `f32`/`f64` backing is superseded; the distinction stands |
 | `2026-07-22-v2-lists-design.md` | 2026-07-22 | Approved (brainstorming complete; plan not yet written) | `lista`: the first parametric type, `[...]` literals, 1-based indexing, `longitudo`/`adde`, value semantics |
-| `2026-07-23-roman-native-integers-design.md` | 2026-07-23 | Design approved in brainstorming; written spec pending user review | `ni` stops being an `i64` wearing Roman input syntax: the numeral becomes the runtime value. Amended once, for literal form |
-| `2026-07-23-roman-native-fractions-design.md` | 2026-07-23 | Design approved in brainstorming; written spec pending user review | `mnr`/`nr` become duodecimal fixed point — `mnr` counts unciae (1/12), `nr` scripula (1/288) — and print in Latin fraction names |
+| `2026-07-23-roman-native-integers-design.md` | 2026-07-23 | Design approved in brainstorming; written spec pending user review | `ni` stops being an `i64` wearing Roman input syntax: the numeral becomes the runtime value. Amended twice, for literal form and a magnitude cap |
+| `2026-07-23-roman-native-fractions-design.md` | 2026-07-23 | Design approved in brainstorming; written spec pending user review | `mnr`/`nr` become duodecimal fixed point — `mnr` counts unciae (1/12), `nr` scripula (1/288) — and print in Latin fraction names. Amended once, for a magnitude cap on the grain count |
 | `2026-08-01-programs-and-packages-design.md` | 2026-08-01 | Approved — implemented | Program = folder, package = subfolder, entry at `munus initium reddit ni`, `affer` imports, declarations-only top level |
 | `2026-08-03-conformance-and-robustness-suite-design.md` | 2026-08-03 | Proposed | The conformance corpus, the robustness invariant, the diagnostic catalogue ratchet, and the defect register it opened |
 | `2026-08-07-compiler-backend-design.md` | 2026-08-07 | Proposed | **The canonical current spec.** The ahead-of-time compiler, the typed IR, the C ABI, ownership, stack exhaustion, linking — and the removal of the interpreter |
@@ -112,9 +113,10 @@ carries **Date**, **Status**, **Author**, and — where one exists — a **Relat
 | `2026-08-09-caret-diagnostics-design.md` | 2026-08-09 | Proposed | Spans through the front end, and a three-level diagnostic grammar with a caret under the offending expression. `Error` becomes `erratum`; the line number becomes a Roman numeral everywhere |
 | `2026-09-15-dum-header-clause-design.md` | 2026-09-15 | Proposed | A `dum` init clause is a declaration or an assignment and nothing else parses; closes D-26 and the `munus`-in-header hole |
 | `2026-09-15-roman-numeral-form-design.md` | 2026-09-15 | Proposed | Every `.`, `:` and `/` chunk of a Roman literal is written the way its value prints, 1..=3999, or it does not lex; closes D-13 |
+| `2026-09-15-magnitude-cap-design.md` | 2026-09-15 | Proposed | A stored number has at most XXXVIII decimal digits — for `mnr` and `nr`, its grain count — and a program that would store more exits 1 with `numerus nimis magnus est`; closes D-20 |
 
 The **Status** lines record the state at the moment each document was written and have not been
-maintained since. Every one of the fifteen has an implementation plan in `superpowers/plans/`, so a
+maintained since. Every one of the sixteen has an implementation plan in `superpowers/plans/`, so a
 status of "pending implementation plan" or "plan not yet written" should be read as history, not as
 the current state of the tree.
 
@@ -184,11 +186,17 @@ decision made by the one before:
    **Superseded 2026-07-23** in place, because the second engine arrived the same day. **Amended
    2026-09-15** by `2026-09-15-roman-numeral-form-design.md`: §3.5's "input notation is untouched"
    and §4.2's "parsing keeps its shape" give way to a per-chunk form rule, and §7's round-trip claim
-   for the dot form `°VII.M` is corrected — it never held.
+   for the dot form `°VII.M` is corrected — it never held. **Amended again 2026-09-15** by
+   `2026-09-15-magnitude-cap-design.md`: §3.6's "no overflow" and §5's removal of
+   `numerus nimis magnus` give way to a cap of XXXVIII decimal digits on every stored number,
+   checked in the compiled image; `Roman` itself stays unbounded.
 3. **`2026-07-23-roman-native-fractions-design.md`** amends
    `2026-07-22-nr-double-distinct-type-design.md`: the `f32`/`f64` backing and decimal printing are
    superseded by duodecimal fixed point in Latin fraction names. **The `mnr`/`nr` type distinction
-   itself stands.** The integer engine (`roman.rs`, the `Roman` type) is reused, not changed.
+   itself stands.** The integer engine (`roman.rs`, the `Roman` type) is reused, not changed. **Amended
+   2026-09-15** by `2026-09-15-magnitude-cap-design.md`: §3.6's "cannot overflow" gives way to the
+   same cap, applied to the grain count, so `mnr` and `nr` hold magnitudes up to the cap over 12 and
+   over 288.
 
 ### Testing and the compiler
 
@@ -205,6 +213,8 @@ decision made by the one before:
   the spec an unqualified `§N` refers to. **Amended 2026-08-09** by the caret-diagnostics design,
   for §5.4 and §10 only: the diagnostic grammar it fixes at one line becomes three levels, and the
   `(file, line)` pair every fallible runtime entry point takes renders its line as a Roman numeral.
+  **Amended 2026-09-15** by `2026-09-15-magnitude-cap-design.md`, for §5.4's runtime vocabulary
+  and §10.3's sentence list: the image gains `numerus nimis magnus est`, with no file and no line.
   Everything else in it stands, with one correction: **§9.1's diagram calls `abi` its "own
   workspace", and since 2026-08-09 it is not.** The crate is an ordinary member of the one
   workspace; the deadlock the split was meant to prevent is prevented by the `--target-dir` its
@@ -231,7 +241,8 @@ read, in this order:
 - **`2026-08-01-programs-and-packages-design.md` §4** — what a program is, what a package is, where
   execution starts, what the top level may contain, `affer` and qualified calls;
 - **the three numeric-type specs**, in the sequence given above, for how `ni`, `mnr` and `nr`
-  actually behave and print;
+  actually behave and print, and `2026-09-15-magnitude-cap-design.md` §3 for how large each may
+  grow;
 - **`2026-07-22-v2-lists-design.md`** for `lista`.
 
 The `conformance/` corpus is the operational answer to the same question: 118 fixtures with blessed
@@ -253,7 +264,7 @@ language spec.** Read its §5 for the language; do not read the rest as a descri
 
 ## `superpowers/plans/` — the implementation plans
 
-Sixteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
+Seventeen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
 its own — it works from the conformance design (§5, §7, §8.1) and the defect register. Each plan
 opens with a Goal, an Architecture paragraph, a Tech Stack line and, usually, a pointer to its spec,
 and is written as numbered tasks with checkbox steps. The house convention is that every code task

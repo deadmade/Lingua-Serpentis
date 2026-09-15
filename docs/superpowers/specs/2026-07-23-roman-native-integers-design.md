@@ -17,6 +17,15 @@
 > multiplicative `°VII.M`**, which prints `V̅MM`. Closes D-13. See
 > `2026-09-15-roman-numeral-form-design.md`.
 
+> **Amended 2026-09-15:** §3.6 "No overflow" and §5's removal of
+> `numerus nimis magnus` no longer hold for a running program, and §1's
+> "unbounded vinculum numeral" is bounded: a stored `ni` has at most XXXVIII
+> decimal digits, and a compiled program that would store a larger one exits 1
+> with `numerus nimis magnus est`, with no file and no line. `Roman` itself, and
+> the compiler's arithmetic on literals, stay unbounded. §7's "Unbounded" test
+> bullet holds for `roman.rs` and not for the image. Closes D-20. See
+> `2026-09-15-magnitude-cap-design.md`.
+
 ## 1. Vision
 
 Today a Roman numeral is pure input syntax. `°XXV` is converted to `i64` in the

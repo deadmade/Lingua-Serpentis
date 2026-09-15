@@ -8,6 +8,14 @@
   default) and closes deferred defect D-19. Changes one conformance expectation
   and no others.
 
+> **Amended 2026-09-15:** §5.4's "The runtime's own vocabulary" gains
+> `numerus nimis magnus est`, raised by `int_novus` when a number would be
+> stored with more than XXXVIII decimal digits, with no file and no line. Unlike
+> the table's other rows it is **not** UNCOVERED by design: `errores/numerus-nimis-magnus`
+> provokes it. §10.3's list of runtime sentences gains it too. The `liss_panic`
+> signature, every entry point's arity and the `LissInt` layout are unchanged.
+> Closes D-20. See `2026-09-15-magnitude-cap-design.md`.
+
 ## 1. Vision
 
 Lingua Serpentis can be read, checked and run. It cannot be *given* to anyone.

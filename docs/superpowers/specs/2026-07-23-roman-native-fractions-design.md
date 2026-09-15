@@ -10,6 +10,14 @@
   builds that second engine. The integer engine (`roman.rs`, the `Roman` type) is
   **reused, not changed**.
 
+> **Amended 2026-09-15:** §3.6 "No overflow" and §3.1's "it is unbounded (no
+> overflow, §3.6)" no longer hold for a running program. The cap of XXXVIII
+> decimal digits on a stored number applies to the grain **count**, so an `mnr`
+> holds a magnitude of at most (10³⁸ − 1)/12 and an `nr` at most
+> (10³⁸ − 1)/288; past it the program exits 1 with `numerus nimis magnus est`.
+> §7's "Unbounded" test bullet holds for `fraction.rs` and not for the image.
+> Closes D-20. See `2026-09-15-magnitude-cap-design.md`.
+
 ## 1. Vision
 
 The integer half of the language now tells the truth: you write Roman, compute in
