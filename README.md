@@ -84,10 +84,10 @@ optimisations and what is omitted for good, lives in `docs/via.md`.
 ## Tests
 
 ```console
-$ cargo test
+$ cargo nextest run
 ```
 
-One workspace, one lock file, one command.
+One workspace, one lock file, one command. `cargo test` runs the same tests, one binary at a time.
 
 ## Documentation
 

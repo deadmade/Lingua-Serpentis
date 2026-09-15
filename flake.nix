@@ -39,6 +39,7 @@
               rustToolchain
               pkgs.wild
               pkgs.qemu
+              pkgs.cargo-nextest
             ];
 
             env.RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";

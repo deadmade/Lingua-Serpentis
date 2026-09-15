@@ -11,8 +11,13 @@ number is stated, a test asserts it.
 ## The one command
 
 ```console
-$ cargo test
+$ cargo nextest run
 ```
+
+`cargo test` runs the same tests, but one binary after another. `catalogus`, `generative` and
+`robustness` take about 33 s, 24 s and 23 s, and a sequential run waits for all three in turn.
+Nextest runs every test of every binary, each in its own process, from one pool. The workspace has no
+doctests, so nextest skipping them costs nothing.
 
 There used to be a second, because `crates/abi` was `exclude`d from the root workspace and a run
 that skipped it left `abi.rs`, `custos.rs` and `emissio.rs` unexecuted — most of what guards the
@@ -840,8 +845,11 @@ describes the *main* thread's stack, and `libtest` spawns a thread per test even
 `--test-threads=1`; a recursion on a worker would fault in an ordinary `mmap` megabytes from the
 band and take the handler's other branch, so the test would pass or fail for reasons unrelated to
 what it claims. Owning `main` is the only way to put the scenario on the thread the runtime runs on.
-It hand-rolls a six-test runner and its own `ok`/`FAILED` reporting. Its scenarios likewise
-re-execute the binary, under `LISS_CUSTOS_SCAENA`.
+It hand-rolls a six-test runner and its own `ok`/`FAILED` reporting. It also handles the few libtest
+arguments that test runners send: `--list [--ignored]` prints `name: test` lines, and name filters
+work with or without `--exact`. That is what lets `cargo nextest run` list its tests and run each one
+in its own process, still on the main thread. Its scenarios likewise re-execute the binary, under
+`LISS_CUSTOS_SCAENA`.
 
 **`emissio.rs` holds exactly one `#[test]`, and that is load-bearing.** Redirecting fd 1 redirects
 it for the whole process, and `libtest` writes its own progress lines to that descriptor from the

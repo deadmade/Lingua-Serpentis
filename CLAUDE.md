@@ -9,7 +9,11 @@ Work inside `nix develop`. The build cross-compiles `abi` for both musl targets 
 build time and fails without both musl `std`s; `crates/codegen/build.rs` names the missing
 target and the flake when that happens.
 
-- `cargo test` — the whole workspace, `abi` included. There is one lock file and one command.
+- `cargo nextest run` — the whole workspace, `abi` included, every binary at once. There is one
+  lock file and one command. `cargo test` still works but runs the binaries in sequence, and
+  `catalogus`, `generative` and `robustness` alone are ~80 s of that. There are no doctests.
+- `tests/custos.rs` owns `main` and answers nextest's `--list`/`--exact` itself; a new test there
+  must go in its `probationes` table or nextest never sees it.
 
 `crates/abi` was a second workspace until 2026-08-09, on the theory that `codegen/build.rs`
 invoking cargo on it *during* an outer build would contend for the outer `.cargo-lock`. The

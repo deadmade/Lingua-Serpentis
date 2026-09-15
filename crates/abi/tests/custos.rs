@@ -43,9 +43,41 @@ fn main() {
         ),
     ];
 
+    // The slice of libtest's command line that `cargo test NAME` and `cargo nextest` speak.
+    let argumenta: Vec<String> = std::env::args().skip(1).collect();
+    if argumenta.iter().any(|a| a == "--list") {
+        if !argumenta.iter().any(|a| a == "--ignored") {
+            for (nomen, _) in probationes {
+                println!("{nomen}: test");
+            }
+        }
+        return;
+    }
+    let exact = argumenta.iter().any(|a| a == "--exact");
+    let mut filtra = Vec::new();
+    let mut reliqua = argumenta.iter();
+    while let Some(a) = reliqua.next() {
+        match a.as_str() {
+            "--test-threads" | "--skip" | "--format" | "--color" | "--logfile" | "-Z" => {
+                reliqua.next();
+            }
+            a if a.starts_with('-') => {}
+            a => filtra.push(a),
+        }
+    }
+    let probationes: Vec<_> = probationes
+        .into_iter()
+        .filter(|(nomen, _)| {
+            filtra.is_empty()
+                || filtra
+                    .iter()
+                    .any(|f| if exact { nomen == f } else { nomen.contains(f) })
+        })
+        .collect();
+
     println!("\nrunning {} tests", probationes.len());
     let mut lapsae = 0usize;
-    for (nomen, probatio) in probationes {
+    for &(nomen, probatio) in &probationes {
         print!("test {nomen} ... ");
         let _ = std::io::stdout().flush();
         match std::panic::catch_unwind(probatio) {
