@@ -5,10 +5,10 @@
 - **Author:** Manuel (with Claude)
 - **Relationship:** Amends `2026-07-19-lingua-serpentis-rust-interpreter-design.md` §5.3 — and
   **supersedes** two of its clauses outright: "ported from the existing `RomanNumeralConverter.py`,
-  whose exact semantics must be preserved" (:146-148) and the porting note's "Preserve existing
-  behaviour in v1; broaden subtractive support only if a test demands it (YAGNI)" (:164-168). Amends
-  `2026-07-23-roman-native-integers-design.md` §3.5 ("Input notation is untouched", :215-217), §4.2
-  ("parsing keeps its shape", :254-269) and §7, whose round-trip bullet (:406-408) names the
+  whose exact semantics must be preserved" (:154-156) and the porting note's "Preserve existing
+  behaviour in v1; broaden subtractive support only if a test demands it (YAGNI)" (:172-176). Amends
+  `2026-07-23-roman-native-integers-design.md` §3.5 ("Input notation is untouched", :223-225), §4.2
+  ("parsing keeps its shape", :262-277) and §7, whose round-trip bullet (:414-416) names the
   multiplicative `°VII.M` and is false for it. Closes deferred defect D-13
   (`defectus/2026-08-03-index.md`). Cites, and does not amend, `2026-07-23-roman-native-fractions-design.md`
   ("literal syntax unchanged", :66, :232 — the `°W:N/D` shape is unchanged; its parts now obey §3),
@@ -97,7 +97,7 @@ alone (§10).
   (`°XXX.M.V.C.VII`, the `exemplum-calc` fixture and the spec's own example), `cli.rs:118,266`,
   `programs.rs:58` and `roman.rs`'s own tests, and would make 10⁶ and above unwritable unless `M.M`
   were allowed again. The dot form is multiplication; it is not a spelling. A round-tripping dot
-  *output* stays where the integers spec §9 (:490-492) put it, a v2 display option.
+  *output* stays where the integers spec §9 (:498-500) put it, a v2 display option.
 - **Not a fraction rule beyond chunks.** No lowest terms (`codegen/tests/series.rs:78` writes
   `°I:VI/XII`), no numerator below denominator, no denominator dividing the grain
   (`tests/ir.rs:308-311,605,637` write `°I:I/VII` and `°II:III/V` to test truncation). A fraction's
@@ -112,7 +112,7 @@ alone (§10).
   one.
 - **Not every bad literal in a file.** `tokenize` returns at the first `Err` (`lexer.rs:62`'s `?`),
   so `°IIX + °VV + °IM` reports `'IIX'` and stops. The register's "Expected: … for each" (index
-  :434) cannot hold for any lexer error today, and is corrected when D-13 closes (§10).
+  :450) cannot hold for any lexer error today, and is corrected when D-13 closes (§10).
 - **Not a warning.** A `monitum` would need a lexer warning channel that does not exist
   (`tokenize` returns `LResult<Vec<Token>>`; the token keeps the value, not the lexeme), and would
   freeze the hole into 1.0 as a warning.
