@@ -1,0 +1,10 @@
+// D-26: 'abrumpe' in capite 'dum', intra iterationem exteriorem.
+munus initium reddit ni {
+    ni i = nullus;
+    indem (i minor_est °II) {
+        i = i + °I;
+        dum (abrumpe; verus; i = i) { scribe("intus"); }
+        scribe("extra");
+    }
+    redde nullus;
+}

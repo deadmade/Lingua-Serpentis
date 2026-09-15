@@ -320,6 +320,18 @@ impl<'a> Parser<'a> {
         let initium = self.spatium_hic();
         self.advance();
         self.eat(&TokenKind::LParen)?;
+        // D-26
+        let declaratio_vel_assignatio = match self.peek() {
+            Some(TokenKind::TyInt | TokenKind::TyFloat | TokenKind::TyDouble
+                 | TokenKind::TyText | TokenKind::TyChar | TokenKind::TyBool) => true,
+            Some(TokenKind::Ident(_)) => {
+                self.toks.get(self.pos + 1).map(|t| &t.kind) == Some(&TokenKind::Assign)
+            }
+            _ => false,
+        };
+        if !declaratio_vel_assignatio {
+            return Err(self.err("clausula prima capitis 'dum' declaratio vel assignatio esse debet"));
+        }
         let init = Box::new(self.statement()?); // consumes its own ';'
         let cond = self.expr()?;
         self.eat(&TokenKind::Semicolon)?;
@@ -665,6 +677,28 @@ mod tests {
         assert!(matches!(s[0].kind, StmtKind::While { .. }));
         let f = parse_all("dum (ni i = °I; i minor_est °X; i = i + °I) { continua; }");
         assert!(matches!(f[0].kind, StmtKind::For { .. }));
+    }
+
+    #[test]
+    fn dum_init_is_a_declaration_or_an_assignment() {
+        // D-26
+        for init in ["ni i = °I;", "ni lista l = [°I];", "i = °I;"] {
+            let src = format!("dum ({init} verus; i = i + °I) {{ }}");
+            assert!(matches!(parse_all(&src)[0].kind, StmtKind::For { .. }), "{src}");
+        }
+        for init in [
+            "redde °I;", "abrumpe;", "continua;",
+            "si (verus) { redde °I; }", "indem (verus) { abrumpe; }",
+            "dum (redde °I; verus; i = i) { }", "munus f reddit ni { redde °I; }",
+            "scribe(°I);", "f(°I);", "p.f(°I);", "x[°I] = °I;", ";",
+        ] {
+            let src = format!("dum ({init} verus; i = i + °I) {{ }}");
+            assert_eq!(
+                parse_err(&src),
+                "clausula prima capitis 'dum' declaratio vel assignatio esse debet",
+                "{src}"
+            );
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/nuntii.rs
 expression: report
 ---
-86 fixtures · 99 diagnostics
+90 fixtures · 103 diagnostics
 
 currunt::exemplum-praecisio
   monitum  linea 11  nomen 'tertia_brevis' fortasse non Latinum est
@@ -17,6 +17,8 @@ currunt::scribe-ante-acervum
   erratum  -  acervus vocationum exhaustus est
 errores::abrumpe-extra-iterationem
   erratum  principale.liss:3  'abrumpe' extra iterationem
+errores::abrumpe-in-capite-dum
+  erratum  principale.liss:6  clausula prima capitis 'dum' declaratio vel assignatio esse debet
 errores::acervus-exhaustus
   erratum  -  acervus vocationum exhaustus est
 errores::adde-argumenta
@@ -117,6 +119,8 @@ errores::munus-capit-omissum
   erratum  principale.liss:4  'capit' ante parametra expectatum
 errores::munus-capit-vacuum
   erratum  principale.liss:4  munus sine parametris 'capit' omittat
+errores::munus-in-capite-dum
+  erratum  principale.liss:4  clausula prima capitis 'dum' declaratio vel assignatio esse debet
 errores::munus-nidificatum
   erratum  principale.liss:2  functio 'interior' intra corpus definiri non potest; functiones nidificatae non sustinentur
 errores::munus-reddit-omissum
@@ -149,6 +153,8 @@ errores::operatio-unaria-typo
   erratum  principale.liss:2  negatio numerum requirit
 errores::parametri-gemini
   erratum  principale.liss:2  parametrum 'a' bis nominatum
+errores::redde-in-capite-dum
+  erratum  principale.liss:4  clausula prima capitis 'dum' declaratio vel assignatio esse debet
 errores::reditus-omissus
   erratum  principale.liss:2  munus 'nomen' non in omni via reddit
 errores::res-non-subscribenda
@@ -157,6 +163,8 @@ errores::series-comparatio-ordinis
   erratum  principale.liss:2  series ordine comparari non potest (par_est/par_non_est tantum)
 errores::series-vacua-sine-typo
   erratum  principale.liss:2  typus elementorum seriei vacuae ignotus
+errores::si-in-capite-dum
+  erratum  principale.liss:4  clausula prima capitis 'dum' declaratio vel assignatio esse debet
 errores::signum-ignotum
   erratum  principale.liss:2  numerus Arabicus '5' non licet; scribe '°V' vel simile
 errores::signum-ignotum-extra-numerum

@@ -1,0 +1,5 @@
+erratum: clausula prima capitis 'dum' declaratio vel assignatio esse debet
+  in 'principale.liss', linea VI
+    |
+ VI |         dum (abrumpe; verus; i = i) { scribe("intus"); }
+    |              ^^^^^^^

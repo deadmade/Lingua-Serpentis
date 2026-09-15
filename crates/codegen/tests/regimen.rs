@@ -295,54 +295,6 @@ fn sententia_post_abrumpe_neglegitur() {
     );
 }
 
-/// D-26, a terminator in a `dum` init clause: the only pin on this behaviour anywhere,
-/// and deliberately not a `conformance/` fixture.
-#[test]
-fn caput_dum_terminatum_componitur() {
-    // `redde` — control leaves the function from the init clause.
-    let (code, out, err) = support::curre(
-        r#"munus initium reddit ni {
-    ni k = nullus;
-    dum (redde nullus; verus; k = k + °I) { scribe("numquam"); }
-}
-"#,
-        "caput-redde",
-    );
-    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
-
-    // `abrumpe` — binds to the *enclosing* loop, which is left on its first iteration.
-    let (code, out, err) = support::curre(
-        r#"munus initium reddit ni {
-    ni t = nullus;
-    dum (ni a = nullus; a minor_est °II; a = a + °I) {
-        dum (abrumpe; t minor_est °III; t = t + °I) { scribe("intus"); }
-        scribe("extra");
-    }
-    redde nullus;
-}
-"#,
-        "caput-abrumpe",
-    );
-    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
-
-    // `continua` — the same, to the enclosing loop's step; the `voc` makes it a memory
-    // assertion too, since exit 0 is the live count at zero.
-    let (code, out, err) = support::curre(
-        r#"munus initium reddit ni {
-    ni t = nullus;
-    dum (ni a = nullus; a minor_est °II; a = a + °I) {
-        voc nota = "n";
-        dum (continua; t minor_est °III; t = t + °I) { scribe(nota); }
-        scribe("extra");
-    }
-    redde nullus;
-}
-"#,
-        "caput-continua",
-    );
-    assert_eq!((code, out.as_str(), err.as_str()), (Some(0), "", ""));
-}
-
 /// Without this the second target's CFG is never built at all.
 #[test]
 fn regimen_utrique_machinae_componitur() {

@@ -1,0 +1,5 @@
+erratum: clausula prima capitis 'dum' declaratio vel assignatio esse debet
+  in 'principale.liss', linea IV
+    |
+ IV |     dum (si (verus) { redde °I; } k minor_est °II; k = k + °I) { scribe(k); }
+    |          ^^

@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/catalogus.rs
 expression: report
 ---
-118 sites · 70 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
+119 sites · 71 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
 crates/abi/src/custos.rs:27  acervus vocationum exhaustus est  → fixtured
 crates/abi/src/custos.rs:33  defectus internus: memoria violata est: signum  → UNCOVERED
@@ -100,18 +100,19 @@ crates/lingua-serpentis/src/parser.rs:222  vocatio functionis post nomen fascicu
 crates/lingua-serpentis/src/parser.rs:245  expressio expectata  → fixtured
 crates/lingua-serpentis/src/parser.rs:270  nomen expectatum  → fixtured
 crates/lingua-serpentis/src/parser.rs:280  '}' expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:350  typus reditus post 'reddit' ponendus, non ante nomen  → fixtured
-crates/lingua-serpentis/src/parser.rs:360  munus sine parametris 'capit' omittat  → fixtured
-crates/lingua-serpentis/src/parser.rs:364  typus parametri expectatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:368  parametrum '{}' bis nominatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:375  'capit' ante parametra expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:379  'reddit' et typus reditus expectati  → fixtured
-crates/lingua-serpentis/src/parser.rs:383  typus post 'reddit' expectatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:453  sinistra subscriptionis variabilis esse debet  → fixtured
-crates/lingua-serpentis/src/parser.rs:461  munus ante definitionem expectatum  → fixtured
-crates/lingua-serpentis/src/parser.rs:480  fasciculus '{}' bis allatus  → fixtured
-crates/lingua-serpentis/src/parser.rs:492  'affer' ante omnia munera ponendum  → fixtured
-crates/lingua-serpentis/src/parser.rs:494  extra munera nihil nisi declarationes licet  → fixtured
+crates/lingua-serpentis/src/parser.rs:333  clausula prima capitis 'dum' declaratio vel assignatio esse debet  → fixtured
+crates/lingua-serpentis/src/parser.rs:362  typus reditus post 'reddit' ponendus, non ante nomen  → fixtured
+crates/lingua-serpentis/src/parser.rs:372  munus sine parametris 'capit' omittat  → fixtured
+crates/lingua-serpentis/src/parser.rs:376  typus parametri expectatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:380  parametrum '{}' bis nominatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:387  'capit' ante parametra expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:391  'reddit' et typus reditus expectati  → fixtured
+crates/lingua-serpentis/src/parser.rs:395  typus post 'reddit' expectatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:465  sinistra subscriptionis variabilis esse debet  → fixtured
+crates/lingua-serpentis/src/parser.rs:473  munus ante definitionem expectatum  → fixtured
+crates/lingua-serpentis/src/parser.rs:492  fasciculus '{}' bis allatus  → fixtured
+crates/lingua-serpentis/src/parser.rs:504  'affer' ante omnia munera ponendum  → fixtured
+crates/lingua-serpentis/src/parser.rs:506  extra munera nihil nisi declarationes licet  → fixtured
 crates/lingua-serpentis/src/program.rs:38  nomen fasciculi '{}' non validum est  → fixtured
 crates/lingua-serpentis/src/program.rs:44  fasciculus in fasciculo non licet: '{}/{}'  → fixtured
 crates/lingua-serpentis/src/program.rs:69  scida '{}' non inventa est  → UNCOVERED

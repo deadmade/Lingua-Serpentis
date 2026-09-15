@@ -1,0 +1,5 @@
+// D-26: 'redde' in capite 'dum'.
+munus initium reddit ni {
+    ni k = nullus;
+    dum (redde nullus; verus; k = k + °I) { scribe("numquam"); }
+}

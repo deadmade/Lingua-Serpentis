@@ -1,0 +1,6 @@
+// D-26: 'si' cum 'redde' in capite 'dum'.
+munus initium reddit ni {
+    ni k = nullus;
+    dum (si (verus) { redde °I; } k minor_est °II; k = k + °I) { scribe(k); }
+    redde nullus;
+}
