@@ -224,11 +224,21 @@ fn pathologies() -> Vec<(&'static str, String, Duration, Option<&'static str>)> 
             MORA_ARTA,
             None,
         ),
+        // D-13
         (
             "numerus longissimus",
             format!(
                 "munus initium reddit ni {{ scribe(°{}); redde nullus; }}",
                 "M".repeat(5_000)
+            ),
+            MORA_ARTA,
+            None,
+        ),
+        (
+            "catena numeri longissima",
+            format!(
+                "munus initium reddit ni {{ scribe(°{}); redde nullus; }}",
+                vec!["MMMCMXCIX"; 500].join(".")
             ),
             MORA_ARTA,
             None,
