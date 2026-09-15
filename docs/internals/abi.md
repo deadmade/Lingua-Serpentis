@@ -509,9 +509,19 @@ what makes keeping it honest rather than dead. The other two are gone. `"fractio
 was not merely unreached but **impossible**: `splitn` always yields at least one item, for every
 input including `""`. `"denominator est nullus"` was unreachable because `convert_int_roman` cannot
 return zero — every numeral it accepts is a sum of products of `convert_single` values, and
-`convert_single` is at least 1 for every string it accepts. Rather than rest on that argument,
-`convert_single_is_never_zero_or_negative` enumerates every string the function accepts up to length
-6 — **137,256 of them** — and checks.
+`convert_single` is at least 1 for every string it accepts, **because** an accepted chunk equals
+`display` of its value, which is a string of Roman letters only from 1 up (D-13). Rather than rest on
+that argument, `convert_single_accepts_exactly_the_canonical_numerals` walks every string of length
+1..=6 over the seven symbols — **137,256 of them** — accepts **1,308**, and checks both that a string
+is accepted exactly when it is canonical and that every accepted value is at least 1.
+
+**D-13 — parsing accepts exactly the classical form, per chunk.** `convert_single` computes a value
+by the positional add-or-subtract rule and then accepts the chunk only if it equals `display` of
+that value; anything else is `numerus Romanus non canonicus`, quoting the chunk. That one equality
+confines a chunk to 1..=3999, `I X C M` at most three in a row, `V L D` once, and the six
+subtractive pairs, because `display` never prints `nullus`, a `-` or U+0305 below 4000. The dot form
+is multiplication, not spelling: `°IV.M`, `°M.IV` and `°II.MM` are all 4000, and larger values are
+written only that way (`2026-09-15-roman-numeral-form-design.md` §2).
 
 Rendering (`display`) is subtractive per tier, with the vinculum for thousands: `glyph_one` gives I,
 X, C, M, X̄, C̄, M̄, X̿, … and `glyph_five` gives V, L, D, V̄, L̄, D̄, V̿, … , a bar

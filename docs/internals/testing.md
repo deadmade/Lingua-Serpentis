@@ -434,7 +434,8 @@ Cranelift pass and a link before it runs at all. Measured on this machine with `
 |---|---|---|
 | `series longissima` (5,001-element literal) | **17.1 s** | 0.67 s |
 | `nomen longissimum` (100,000-char identifier) | 0.39 s | — |
-| `numerus longissimus` (5,000 `M`s) | 0.4 s | — |
+| `numerus longissimus` (5,000 `M`s, rejected since D-13) | < 0.01 s | — |
+| `catena numeri longissima` (500 `MMMCMXCIX` chunks) | 0.36 s | — |
 | `parentheses nimium implicatae` | 0.05 s | — |
 | `recursio infinita` | 0.6 s | — |
 
@@ -462,7 +463,8 @@ drift lasted the reported line was 4, matching the string's two embedded newline
 in `efa0f57`, and its fixture is `conformance/errores/linea-post-chordam`** — not
 `conformance/defectus/D-03-linea-post-chordam`, which is what `robustness.rs`'s comment beside this
 case still says and has said since before the fix. Every fixed defect's fixture moved out of
-`conformance/defectus/`, which now holds D-13's directory and nothing else. The case stays as proof
+`conformance/defectus/`, which is now empty and absent from git; `discover()` skips a category
+directory that does not exist. The case stays as proof
 that the input remains inside the error model.
 
 ### The mutation fuzzer

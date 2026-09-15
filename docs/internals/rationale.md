@@ -94,7 +94,9 @@ Three parts of it are not obvious:
   (`°XXX.M`, `°V:I/II`) but are also the language's `Dot` and `Slash`, and the scan is greedy
   (D-14). Trimming unconditionally is exactly "try, fail, retreat over separators" without the
   retry: `parse_roman` splits on `:`, then `/`, then `.`, and every leaf goes to `convert_single`,
-  which rejects the empty string — so a lexeme ending in a separator can never parse. Retreating one
+  which rejects the empty string — so a lexeme ending in a separator can never parse. Every leaf
+  must also be written the way its value prints (D-13), and that error quotes the leaf, not the
+  literal: `°V.IIX` reports `numerus Romanus non canonicus: 'IIX'`. Retreating one
   *character* at a time would be wrong: `°I:I` would fall back to `°I` and leave a stray
   `Ident("I")`, silently killing `fractio sine denominatore`. The guard `i > start + 1` keeps a bare
   `°` intact so it still reaches `parse_roman` and reports `numerus Romanus vacuus`.
@@ -1069,9 +1071,12 @@ break" is repeated here.
   enforces. **D-21**
 - **`parse_roman`** (roman.rs) — three of its guards could not fire. `fractio sine numeratore` was
   **impossible**, because `splitn` always yields at least one item for every input including `""`.
-  `denominator est nullus` could only fire if `convert_int_roman` returned zero, which
-  `convert_single_is_never_zero_or_negative` refutes by enumerating **every string of length 1..=6
-  over the seven symbols — 137,256 of them**. The missing-`°` arm is kept, because `parse_roman` is
+  `denominator est nullus` could only fire if `convert_int_roman` returned zero, and it cannot: an
+  accepted chunk equals `display` of its value, which is a Roman numeral only from 1 up, and sums
+  and products of values at least 1 are at least 1.
+  `convert_single_accepts_exactly_the_canonical_numerals` checks this by enumerating **every string
+  of length 1..=6 over the seven symbols — 137,256 of them** — and asserting that exactly the 1,308
+  canonical ones are accepted, each at least 1. The missing-`°` arm is kept, because `parse_roman` is
   `pub` and a direct caller has no such guarantee; it records UNCOVERED, which is the honest label,
   and it has a test, which is what makes keeping it honest rather than dead. **D-25**
 - **`Roman::from_digits`** — left unchecked, a digit beyond 9 prints as a 9 through
@@ -1399,13 +1404,10 @@ Three consequences held while it was open:
 
 ## Deferred elsewhere
 
-One further deferred item is named in the sources without a counterfactual of its own: **D-20**
+One deferred item is named in the sources without a counterfactual of its own: **D-20**
 (`x = x * x` in a loop runs forever, because `Roman` is unbounded). It is named twice, and in both
 places as the reason a rule cannot be enforced — in `lingua-serpentis/tests/support/diag.rs`, which
 is why `terminates` is the one entry in `RECORDED_RULES` rather than an open rule, and in
 `tests/robustness.rs`, whose 60-second `T` cannot be the thing that holds it, since a program that
-does not terminate *at all* is let through by no finite deadline.
-
-**D-13** (Roman numeral form is never validated) is deferred too, but it is named nowhere under
-`crates/`: its fixture is `conformance/defectus/D-13-numerus-non-canonicus/`, which is the only
-directory `conformance/defectus/` holds. Both remain deferred language changes; see the register.
+does not terminate *at all* is let through by no finite deadline. It remains a deferred language
+change; see the register.
