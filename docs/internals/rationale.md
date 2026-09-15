@@ -349,8 +349,13 @@ be an `Option` for. Dropping it is what lets that field be a `Type`.
   and the `dum` variable belongs in a `declares` like every other owned slot. §7.3.5 still emits its
   teardown once after the exit block rather than on the back edge — but `redde` never reaches that
   block, and §7.3.4 frees every enclosing *block*, so a header outside the `Block` tree would leak.
-  **`init`, `cond` and `step` are the loop's header, not its body: an `abrumpe` there is as loose as
-  one outside.** (That reading is the subject of D-26 — see Part 2.)
+  **The init clause is a declaration or an assignment**, and the parser, not the checker, says so
+  (`Parser::for_stmt`, D-26 — see Part 2). A checker rule was the alternative — `take(loop_depth)`
+  around `init` and an `in_caput` flag for `redde` — and was rejected: it needs a sentence per
+  terminator to read well, borrows D-07's "extra iterationem" where the user can see an enclosing
+  loop, and leaves a `munus` in the header parseable. The grammar rule closes both holes with one
+  sentence. So `check_stmt`'s `Func` arm is reached only from a block, and it is where the
+  nested-function rejection lives.
 - **`Break`/`Continue` outside a loop are rejected** (D-07): `'abrumpe' extra iterationem`,
   `'continua' extra iterationem`. `check_loop_body` is the only thing that raises `loop_depth`, and
   `check_func_decl` takes it to zero for a body — a function body is not inside any loop, whatever
@@ -1206,13 +1211,12 @@ break" is repeated here.
   already filled: **a panic in debug, and in release a `Defectus` claiming an internal compiler
   failure over a program that is simply valid**. `abrumpe` and `continua` need the same guard,
   because both fill the block with a `jump` exactly as `redde` fills it with a `return`.
-- **`Corpus::dum_intus`** (emissio.rs) — the header is a second statement walk and owes the same
-  guard, because a `dum` init clause is any statement, terminators included. Before `9f54f57` all
-  three shapes were `you cannot add an instruction to a block already filled` in debug and `defectus
-  internus: munus componi non potuit` in release — a valid program told it had broken the compiler.
-  **Breaking out of the walk is not sufficient, and was verified not to be:** the instruction that
-  lands in the filled block is the `jump caput` that starts the loop, so the whole loop must be
-  abandoned.
+- **`Corpus::dum_intus`** (emissio.rs) — the header walk *had* the same guard while a `dum` init
+  clause was any statement. Before `9f54f57` all three terminator shapes were `you cannot add an
+  instruction to a block already filled` in debug and `defectus internus: munus componi non potuit`
+  in release; breaking out of the walk was verified not to be enough, because the instruction that
+  landed in the filled block was the `jump caput`. Since D-26 closed the parser admits only a
+  declaration or an assignment there, neither can fill a block, and the guard is gone. **D-26**
 - **`Corpus::sententia`, the `IndexAssign` arm** — a `Load` here would be **the silent version of
   the bug**: it would copy the list, write the element into the copy, and free the copy, leaving the
   program's own list untouched and every later read correct-looking but stale. `liss_list_put`
@@ -1350,17 +1354,26 @@ break" is repeated here.
   errors and `libwild::error::Error` all say their piece in English, and forwarding any of them
   would put English on a user's stderr, **which is D-22 exactly**.
 
-## D-26 is an open question, not a closed defect
+## D-26 was an open question, and the grammar closed it
 
-**`Corpus::dum_intus`** (emissio.rs) marks its own behaviour as **undecided, not settled**. A `dum`
-init clause is `self.statement()` — any statement, terminators included — and the checker admits
-one, so `dum (redde nullus; verus; k = k + °I) { … }` is a program a user can write. Codegen honours
-the terminator: `redde` returns, and `abrumpe`/`continua` bind to the **enclosing** loop, which is
-the checker's own rule for the header ("`init`, `cond` and `step` are the loop's header, not its
-body: an `abrumpe` there is as loose as one outside").
+**Closed 2026-09-15** (`docs/superpowers/specs/2026-09-15-dum-header-clause-design.md`): a `dum`
+init clause is a declaration or an assignment, and nothing else parses —
+`clausula prima capitis 'dum' declaratio vel assignatio esse debet`, caret on the clause's first
+token. That is the first candidate below, taken as a grammar rule rather than a flow rule, and it
+also closes the `munus`-in-header hole the checker's `Func` arm existed for. The four
+`conformance/errores/*-in-capite-dum` fixtures hold it; `regimen.rs`'s
+`caput_dum_terminatum_componitur`, `generative.rs`'s `caput_dum_terminatum` and `dum_intus`'s guard
+are deleted. What follows is the record of the question as it stood while it was open.
 
-That reading has **not been chosen**. It is **D-26**, deferred pending a language decision, and it
-is not codegen's to resolve. Two candidates survive the interpreter's deletion, and both are new
+**`Corpus::dum_intus`** (emissio.rs) marked its own behaviour as **undecided, not settled**. A `dum`
+init clause was `self.statement()` — any statement, terminators included — and the checker admitted
+one, so `dum (redde nullus; verus; k = k + °I) { … }` was a program a user could write. Codegen
+honoured the terminator: `redde` returned, and `abrumpe`/`continua` bound to the **enclosing** loop,
+which was the checker's own rule for the header ("`init`, `cond` and `step` are the loop's header,
+not its body: an `abrumpe` there is as loose as one outside").
+
+That reading was **never chosen**. It was **D-26**, deferred pending a language decision, and it
+was not codegen's to resolve. Two candidates survived the interpreter's deletion, and both were new
 language semantics and therefore Non-Goals of the compiler-backend milestone:
 
 - **reject a terminator in a `dum` init clause** with a new diagnostic — the more defensible
@@ -1370,9 +1383,9 @@ language semantics and therefore Non-Goals of the compiler-backend milestone:
   happens, but it is still a decision someone has to take rather than one the implementation takes
   by accident. That distinction is the whole reason this was filed instead of fixed.
 
-Three consequences for anyone working near it:
+Three consequences held while it was open:
 
-- **There is no `conformance/` fixture and there must not be one yet.** It used to be that a fixture
+- **There was no `conformance/` fixture and there must not be one yet.** It used to be that a fixture
   would bless one backend's answer as the language's; now it would bless *the* answer as the
   language's, which is worse — the corpus is what the compiler is held to, so a fixture would close
   the question by implication, with no spec and no one having decided.

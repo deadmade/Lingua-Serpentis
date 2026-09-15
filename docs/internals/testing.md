@@ -534,36 +534,11 @@ Three tests:
   produces: deleting the weighted arm drops the count to 3 of 2000, and the failure message names
   `PONDUS_NULLIUS` by name.
 
-**D-26 is excluded by a check rather than by luck.** A terminator in a `dum` **init clause** is the
-one program shape whose meaning is an open language question — the two backends answered it
-differently while there were two — so `caput_dum_terminatum` rejects `dum (redde …; …)` and its
-`abrumpe` and `continua` spellings, and both generating tests check every program they emit against
-it. The generator cannot draw the shape today, which is precisely why the guard is a function and
-not a sentence: a widening that adds loops trips it on the first draw and is sent to D-26 instead of
-quietly compiling a program nobody has decided the meaning of. The guard is textual, reading the
-source the generator *renders*, so no change to the `Expr` tree routes around it.
-
-**The init clause is the whole of D-26, and that is provable rather than hopeful.** A `dum` header
-has three clauses, and only two of them could in principle carry a terminator. The *step* clause
-cannot: `parser.rs`'s `assign_no_semi` admits only `<ident> = <expr>` there, so `dum (…; …; redde
-x)` is a parse error — it never reaches lowering at all, and never reached either backend's reading
-while there were two. The init clause is therefore the only route, and matching on it alone is
-complete, not merely narrow.
-
-`clausula_initialis` finds the init clause by tracking parenthesis depth and string quotes, and
-returns `None` where the header closes without a `;` — `dum (verus)` is not a three-clause header,
-and reading past its `)` for a `;` would find the one ending the first statement of the **body**,
-reporting the ordinary program `dum (verus) { redde nullus; }` as D-26's shape. That was a real bug
-in the first draft, caught by the negative. `verbum_est` rejects `dummodo`, `nondum`, `reddendum`
-and a `continua` inside a string literal; substring matching over-excludes, which is the safe
-direction but a silent one. `the_guard_recognises_the_shape_it_excludes_and_nothing_else` is what
-stops the guard degenerating into a function that always answers `false` once per drawn program and
-protecting nothing. Its positives are D-26's own three spellings in the init clause; the first
-of its negatives is a terminator in the loop **body**, which is an ordinary program both backends
-agree about and which the corpus holds as `conformance/currunt/memoria-caput-dum-redditum`. The
-behaviour is pinned instead by `caput_dum_terminatum_componitur` in
-`codegen/tests/regimen.rs`, deliberately **not** by a `conformance/` fixture: with one backend
-left, a fixture would settle the question by implication rather than by decision.
+**There is no D-26 guard, because the shape it kept the generator off no longer parses.** A `dum`
+init clause is a declaration or an assignment (D-26, fixed 2026-09-15), so a widened generator that
+draws `dum (redde …; …)` gets the parser's `clausula prima capitis 'dum' …` like any user would —
+a diagnostic `judge` accepts, not an undecided meaning — and the `caput_dum_terminatum` text scan
+and its self-test were deleted with the question.
 
 ## The CLI suites
 

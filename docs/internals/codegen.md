@@ -624,11 +624,11 @@ internal compiler failure over a program that is simply valid.
 **`abrumpe` and `continua` need the same guard**, because both fill the block with a `jump` exactly
 as `redde` fills it with a `return`. `sententia_post_abrumpe_neglegitur` exercises both spellings.
 
-**It is not the only place that owes it.** Every walk over a statement list does, and
-`Corpus::dum_intus`'s walk over a header is the second one — a `dum` init clause is any statement,
-terminators included. An earlier draft of the comment claimed this guard was the only one needed and
-was wrong; the header crashed the compiler on `dum (redde nullus; …)`. **Whoever adds a third
-statement walk owes it too.**
+**Every walk over a statement list that can hold a terminator owes it.** `Corpus::dum_intus`'s walk
+over a header does not, because a `dum` init clause is a declaration or an assignment and nothing
+else parses (D-26, §7 below). An earlier draft claimed this guard was the only one needed at a time
+when the header could hold a `redde`, and was wrong; the header crashed the compiler on
+`dum (redde nullus; …)`. **Whoever adds a statement walk over a list that can hold one owes it.**
 
 Scope exit (spec §7.3.2) runs at the end of the block *unless* it already ended in a `redde`, an
 `abrumpe` or a `continua`, each of which freed this scope itself on its way out. Running it again is
@@ -732,35 +732,20 @@ restored to the `dum`'s own line after the init clause, which moved it (spec §4
 
 #### A terminator in the header (D-26)
 
-**The header is a second statement walk and owes the same terminator guard as `blocus`.** A `dum`
-init clause is `self.statement()` (the `dum` arm of `parser.rs`) — *any* statement, terminators
-included —
-and the checker admits one, so `dum (redde nullus; verus; k = k + °I) { … }` is a program a user
-can write. Without the guard, the `jump caput` adds an instruction to a block the `redde` already
-filled: the debug panic of `8f94ed7` again, and in release a `Defectus` claiming an internal
-compiler failure over a valid program.
+**The parser makes the shape unconstructible, so `dum_intus` walks the header plainly.** A `dum`
+init clause is a declaration (`TYPE ident = expr ;`) or an assignment (`ident = expr ;`), decided on
+lookahead in `Parser::for_stmt`; anything else is `clausula prima capitis 'dum' declaratio vel
+assignatio esse debet`. A `Let` or an `Assign` cannot fill a Cranelift block, so the header walk is
+`for stmt in &header.stmts { self.sententia(stmt)?; }` with no `terminatus()` check, and the
+`jump caput` that follows it always lands in an open block.
 
-**Breaking is not enough; `dum_intus` must return.** The instruction that panics is not a later
-header statement — a header has at most one — it is the `jump caput` that starts the loop. So
-the whole loop is abandoned, which is also what the program means: control has left.
-
-Nothing leaks. `redde` freed every open scope including this header's (`libera_usque(0)`);
-`abrumpe`/`continua` freed every scope from the *enclosing* loop's body outwards, and this header's
-frame — pushed by `Corpus::dum` before the call — is inside that range. That the jump binds to
-the enclosing loop is the checker's own rule, not an accident: "`init`, `cond` and `step` are the
-loop's header, not its body: an `abrumpe` there is as loose as one outside."
-
-**This behaviour is undecided, not settled** — it is **D-26** in
-`docs/defectus/2026-08-03-index.md`, deferred pending a language decision, and it is not codegen's
-to resolve. The interpreter used to disagree (`interp.rs:325` discarded the `Flow` from
-`self.exec(init)`, so a `redde` there looped forever and an `abrumpe` there was ignored); with one
-backend left there is nothing to disagree *with*, and what remains is that the reading above is the
-only one anybody can observe while nobody has chosen it.
-
-So this is the one place in the compiler whose output a fixture must **not** bless —
-`regimen.rs`'s `caput_dum_terminatum_componitur` pins it instead, and `generative.rs`'s
-`caput_dum_terminatum` keeps the generator from drawing the shape. Codegen's duty here is only not
-to crash.
+Until D-26 closed the init clause was `self.statement()` — any statement — and the walk carried the
+same guard as `blocus`, returning rather than breaking, because the instruction that panicked was the
+`jump caput` and not a later header statement. The compiled reading it produced (`redde` returned,
+`abrumpe`/`continua` bound to the enclosing loop) was never chosen; the record of it is
+`rationale.md` Part 2, and the four `conformance/errores/*-in-capite-dum` fixtures are what hold the
+rejection now. If the header grammar ever widens to a statement that can terminate, the guard comes
+back with it.
 
 ---
 
