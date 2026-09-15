@@ -453,6 +453,34 @@ Two `memcpy`s bound the type at the ABI edge:
   one, because its `Ord` orders every negative below zero and forces zero non-negative, so this is
   the canonical sign by construction.
 
+**`int_novus` refuses a number of more than XXXVIII decimal digits**, before it allocates, with
+`numerus nimis magnus est` and no location (D-20). The bound is on what is *stored*: for `ni` that
+is the value, at most 10³⁸ − 1 in magnitude; for `mnr` and `nr` it is the grain count, so their value
+ranges are the cap over XII and over CCLXXXVIII — a 37-digit and a 36-digit whole part. The digit
+count is sign-symmetric, so negation is total, and it is a `Vec` length against a constant, so both
+musl targets agree and nothing can panic. The operations take no `(file, line)`, which is why the
+sentence has the shape of `memoria exhausta est`. Every `LissInt` built from a value passes through
+here — `liss_int_copy` copies one that already passed — so the check is one line, and which callers
+can reach it is a property of the operation:
+
+| caller | reaches the bound | why |
+|---|---|---|
+| `liss_int_add`, `liss_int_sub` | yes | a sum, or a difference of opposite signs, gains a digit |
+| `liss_int_mul` | yes | `x = x * x` doubles the digits; `errores/numerus-nimis-magnus` |
+| `liss_frac_mul`, `liss_frac_div` | yes | `c1·c2/g` and `c1·g/c2` |
+| `liss_int_neg` | no | the magnitude is unchanged |
+| `liss_int_div`, `liss_int_mod` | no | \|a / b\| ≤ \|a\| and \|a % b\| < \|b\| |
+| `liss_list_len`, `index_extra_fines` | no | a `u64` has at most XX digits, so the raise never re-enters itself |
+| `liss_int_new` | only from a test | no literal can be written that large |
+
+**No literal can exceed the cap, which is why there is no compile-time site.** Under D-13 every chunk
+of a numeral is a classical numeral of at most MMMCMXCIX, and a dot chain is a sum of products of
+adjacent pairs. The most value per source byte any pair buys is `MMMCM.MMMCM.`, 3900² for twelve
+bytes, so an over-cap integer literal needs about 7.9 × 10³¹ bytes and a fraction literal, whose
+scripulum count is at most CCLXXXVIII times its whole part and numerator, about 2.7 × 10²⁹ — both far
+past the largest `String` a 64-bit `usize` can index. The only compile-time fold is a negated
+literal, which keeps the digit count. `2026-09-15-magnitude-cap-design.md` §6 has the enumeration.
+
 **`liss_int_copy` is a raw copy of header plus payload rather than a `Roman` round-trip**: it
 preserves the kind, allocates once, and does not need the digits to be valid — a corrupt integer
 is caught wherever it is *used*, by `roman_of`.
@@ -1032,6 +1060,7 @@ that breaks it.
 | `defectus internus: memoria violata est: signum` | `custos`'s `NUNTIUS_MEMORIA` | the kernel reported a fault away from the stack |
 | `acervus vocationum exhaustus est` | `custos`'s `NUNTIUS_ACERVUS` | the fault is within the stack band, or the bounds are unknown |
 | `memoria exhausta est` | `defectus::memoria_exhausta` | `malloc` returned null, or a length computation overflowed `usize` |
+| `numerus nimis magnus est` | `defectus::numerus_nimis_magnus` | `int_novus` would store more than XXXVIII digits |
 
 `modulus per nullum` is deliberately *not* folded into `divisio_per_nullum` with an interpolated
 operator: it is a different diagnostic, and one pattern with a hole would cost the catalogue the
@@ -1061,6 +1090,11 @@ no line — because a signal handler has a return address and no line table (spe
 already name. It is needed because the alternative to reporting it is ignoring a null from `malloc`,
 and it is **permanently UNCOVERED by design**: no fixture can exhaust a 4 MiB-floor address space on
 purpose.
+
+`numerus nimis magnus est` is the one row of the table a fixture provokes, and the sentence the
+interpreter's `numerus nimis magnus (excessus arithmeticus)` was, returned without its parenthetical
+now that there is no `i64` to overflow (D-20). It carries no hole: the offending value is by
+definition one the program could not store.
 
 `defectus internus: ` in either form is the compiler admitting to a bug. `parse_diagnostic`
 classifies these as `Diagnostic::Structural`, and `judge` refuses them outright; the fuzzers exist

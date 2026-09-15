@@ -418,11 +418,16 @@ sentence of the same shape (`acervus vocationum exhaustus est`, `memoria exhaust
 `Acceptable`, so the rules are keyed on the message and not on "exit 1 with a structural error",
 which would condemn most of the corpus.
 
-`RECORDED_RULES` is violations the suite *tolerates*, currently one: `"terminates"` (D-20).
+`RECORDED_RULES` is violations the suite *tolerates*, currently one: `"terminates"` (D-31).
 Shrinking it is how progress is measured; never add to it without adding a register entry too. Five
 entries have been retired, and none by weakening its rule — `no panic` (D-06), `Latin only` (D-11,
 D-22), `no abort` (D-04, D-05), `no Rust type names` (D-02), `no Arabic digits` (D-12). Both
 underlying checks stay in `judge`; they are what keep these fixed.
+
+`terminates` was D-20's until the digit cap closed D-20, and it was not retired then. With the list
+empty, the 300-draw fuzz turned `errores/numerus-nimis-magnus`'s `°II` into `°I`, and a loop squaring
+I never ends and never grows. A mutation can write a loop no bound on numbers ends. So the entry
+stays, under the defect that is actually its reason.
 
 ### Deadlines, and why there are two
 
@@ -436,6 +441,7 @@ Cranelift pass and a link before it runs at all. Measured on this machine with `
 | `nomen longissimum` (100,000-char identifier) | 0.39 s | — |
 | `numerus longissimus` (5,000 `M`s, rejected since D-13) | < 0.01 s | — |
 | `catena numeri longissima` (500 `MMMCMXCIX` chunks) | 0.36 s | — |
+| `quadratum sine fine` (D-20's loop, refused at the seventh squaring) | 0.36 s | — |
 | `parentheses nimium implicatae` | 0.05 s | — |
 | `recursio infinita` | 0.6 s | — |
 

@@ -1190,6 +1190,13 @@ break" is repeated here.
   arriving with a digit above 9 panics inside `render_digit`'s `unreachable!` or silently wraps the
   `u8` addition in `mag_add` in a release build, and a zero grain from a miscompiled call site is a
   Rust panic crossing an `extern "C"` boundary.
+- **`numeri::int_novus`** — without the digit cap, `x = x * x` in a loop ran until killed, with no
+  output and no diagnostic: `Roman` is arbitrary precision and `int_novus` stored whatever it was
+  given, each squaring doubling the digits and roughly quadrupling the time. The cap is here and
+  **not in `Roman`**, because returning `Option` from `Roman::add`, `mul` or `div_rem` would turn the
+  checker's literal arithmetic into reachable English panics, which D-28's close forbids; the bound
+  is a property of the compiled image, and every stored number is boxed by this one function.
+  **D-20**
 - **`lib.rs`, the `const _` block** — `ONUS` is held by the three `size_of`s, but the element stride
   was held by nothing at all until `VERBUM == size_of::<u64>()` was asserted here. See the
   `dispositio::VERBUM` entry above for what drift would have cost. **Now something does fail to
@@ -1401,13 +1408,3 @@ Three consequences held while it was open:
 - **Codegen's duty was only not to crash.** The historical disagreement — `interp.rs:325`
   discarded the `Flow` from `self.exec(init)`, so a `redde` there looped forever and an `abrumpe`
   there was ignored — is history, kept because it records what was true when the question was found.
-
-## Deferred elsewhere
-
-One deferred item is named in the sources without a counterfactual of its own: **D-20**
-(`x = x * x` in a loop runs forever, because `Roman` is unbounded). It is named twice, and in both
-places as the reason a rule cannot be enforced — in `lingua-serpentis/tests/support/diag.rs`, which
-is why `terminates` is the one entry in `RECORDED_RULES` rather than an open rule, and in
-`tests/robustness.rs`, whose 60-second `T` cannot be the thing that holds it, since a program that
-does not terminate *at all* is let through by no finite deadline. It remains a deferred language
-change; see the register.

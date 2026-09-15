@@ -786,9 +786,10 @@ it is exactly the attribution the corpus is blessed against.
 
 `ni`, `mnr` or `nr`, from a static digit blob. The blob is `Roman`'s own representation, byte for
 byte: little-endian digits `0..=9`, canonical, the empty payload the unique zero (spec §5.2).
-Emitting it as static data is why `liss_int_new` takes a blob rather than an `i64` — the
-language's integers are unbounded and no immediate could carry one — and why the sign is a
-separate argument.
+Emitting it as static data is why `liss_int_new` takes a blob rather than an `i64` — a stored
+number has up to XXXVIII digits, which no machine word carries — and why the sign is a separate
+argument. The cap would fit an `i128`, and boxing stays anyway: it is uniform ownership, one
+allocation per value, rather than a question of width.
 
 ### `Corpus::unarium` — `non` and unary `-`
 
