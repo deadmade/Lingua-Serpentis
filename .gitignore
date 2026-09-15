@@ -12,3 +12,6 @@ target/
 # Editors and tools.
 .idea/
 .claude/settings.local.json
+
+# graphify's knowledge graph and its caches, rebuilt locally.
+graphify-out/
