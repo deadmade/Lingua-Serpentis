@@ -591,8 +591,7 @@ impl Checker {
             StmtKind::For { init, cond, step, body } => {
                 self.push_scope();
                 let r = (|| {
-                    // `init`, `cond` and `step` are the loop's header, not its body:
-                    // an `abrumpe` there is as loose as one outside (D-26).
+                    // D-26
                     let init_ir = self.check_stmt(init)?;
                     let cond_ir = self.expect_bool(cond)?;
                     let step_ir = self.check_stmt(step)?;
@@ -610,12 +609,10 @@ impl Checker {
                     body: body_ir,
                 } }))
             }
-            StmtKind::Func(f) => {
-                // Reaching here means a `munus` in a `dum` header, which the parser
-                // accepts and nothing can call: checked, then dropped.
-                self.check_func_decl(f, spatium)?;
-                Ok(None)
-            }
+            StmtKind::Func(f) => Err(LinguaError {
+                message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
+                line, spatium: Some(spatium),
+            }),
             StmtKind::Return(e) => {
                 let want = self.current_ret.clone();
                 let (got, node) = self.resolve_expr(e, Some(want.clone()))?;
@@ -726,12 +723,6 @@ impl Checker {
     fn check_block_inner(&mut self, body: &[Stmt]) -> LResult<Vec<ir::Stmt>> {
         let mut stmts = Vec::new();
         for s in body.iter() {
-            if let StmtKind::Func(f) = &s.kind {
-                return Err(LinguaError {
-                    message: format!("functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur", f.name),
-                    line: s.spatium.linea(), spatium: Some(s.spatium),
-                });
-            }
             stmts.extend(self.check_stmt(s)?);
         }
         Ok(stmts)

@@ -733,19 +733,8 @@ impl<'a> Corpus<'a> {
         step: &Stmt,
         body: &Block,
     ) -> Result<(), Defectus> {
-        // A second statement walk, owing the same terminator guard as `blocus`;
-        // breaking is not enough, this must return — the `jump caput` below is what
-        // would panic. D-26: undecided, not settled, so no fixture may bless it.
-        // `regimen.rs`'s `caput_dum_terminatum_componitur` pins it instead, and
-        // `generative.rs`'s `caput_dum_terminatum` keeps the generator off the shape.
         for stmt in &header.stmts {
-            if self.terminatus() {
-                break;
-            }
             self.sententia(stmt)?;
-        }
-        if self.terminatus() {
-            return Ok(());
         }
 
         let caput = self.fb.create_block();

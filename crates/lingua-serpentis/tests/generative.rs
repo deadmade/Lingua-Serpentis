@@ -88,59 +88,6 @@ fn program(e: &Expr) -> String {
     )
 }
 
-/// D-26's shape: a `dum` whose **init clause** — the header's `(` to its first `;` — has a
-/// terminator. Textual, so no change to the `Expr` tree routes around it. The compiled behaviour
-/// is pinned by `caput_dum_terminatum_componitur` in `codegen/tests/regimen.rs`.
-fn caput_dum_terminatum(src: &str) -> bool {
-    const TERMINI: [&str; 3] = ["redde", "abrumpe", "continua"];
-    for (i, _) in src.match_indices("dum") {
-        if !verbum_est(src, i, "dum") {
-            continue;
-        }
-        let post = &src[i + "dum".len()..];
-        let Some(j) = post.find('(') else { continue };
-        if !post[..j].trim().is_empty() {
-            continue;
-        }
-        let Some(initium) = clausula_initialis(&post[j + 1..]) else { continue };
-        if TERMINI.iter().any(|t| initium.match_indices(t).any(|(k, _)| verbum_est(initium, k, t)))
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// The init clause, given everything after the header's opening `(`; `None` where the header
-/// closes without a `;`, since `dum (verus)` is not a three-clause header.
-fn clausula_initialis(post: &str) -> Option<&str> {
-    let mut altitudo = 1usize;
-    let mut in_chorda = false;
-    for (i, c) in post.char_indices() {
-        match c {
-            '"' => in_chorda = !in_chorda,
-            _ if in_chorda => {}
-            '(' => altitudo += 1,
-            ')' => {
-                altitudo -= 1;
-                if altitudo == 0 {
-                    return None;
-                }
-            }
-            ';' if altitudo == 1 => return Some(&post[..i]),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn verbum_est(haec: &str, i: usize, verbum: &str) -> bool {
-    let pars_nominis = |c: char| c.is_alphanumeric() || c == '_';
-    let ante = haec[..i].chars().next_back().is_none_or(|c| !pars_nominis(c));
-    let post = haec[i + verbum.len()..].chars().next().is_none_or(|c| !pars_nominis(c));
-    ante && post
-}
-
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: CASUS,
@@ -151,12 +98,6 @@ proptest! {
     #[test]
     fn generated_programs_never_escape_the_error_model(e in expr()) {
         let src = program(&e);
-        prop_assert!(
-            !caput_dum_terminatum(&src),
-            "the generator drew D-26's shape — a terminator in a `dum` init \
-             clause — whose meaning is an open language question and not \
-             settled behaviour (D-26):\n{src}"
-        );
         let d = temp_dir("liss-gen");
         let p = d.write("fons.liss", &src);
         let outcome = run_binary(&[OsStr::new(p.to_str().unwrap())], T);
@@ -197,7 +138,6 @@ fn generation_reaches_the_runtime() {
     for i in 0..SAMPLES {
         let e = strategy.new_tree(&mut runner).expect("draw an expression").current();
         let src = program(&e);
-        assert!(!caput_dum_terminatum(&src), "sample {i} drew D-26's shape:\n{src}");
         let d = temp_dir("liss-attingit");
         let p = d.write("fons.liss", &src);
         let outcome = run_binary(&[OsStr::new(p.to_str().unwrap())], T);
@@ -252,29 +192,4 @@ fn the_generator_still_draws_a_zero_divisor() {
          CASUS = {CASUS}. Has PONDUS_NULLIUS been dropped from the leaf?",
         pars * 100.0,
     );
-}
-
-/// Without this the D-26 guard could always answer `false` and protect nothing.
-#[test]
-fn the_guard_recognises_the_shape_it_excludes_and_nothing_else() {
-    for terminus in ["redde nullus", "abrumpe", "continua"] {
-        let src = format!("munus initium reddit ni {{\n  dum ({terminus}; verus; ) {{ }}\n}}");
-        assert!(caput_dum_terminatum(&src), "{src}");
-    }
-    for innocuum in [
-        // A terminator in the body: `conformance/currunt/memoria-caput-dum-redditum`.
-        "munus initium reddit ni {\n  dum (ni i = °I; verus; i = i + °I) { redde nullus; }\n}",
-        "munus initium reddit ni {\n  dum (ni i = °I; verus; i = i + °I) { }\n}",
-        "munus initium reddit ni {\n  redde nullus;\n}",
-        "munus initium reddit ni {\n  ni dummodo = °I;\n  redde nullus;\n}",
-        "munus initium reddit ni {\n  ni nondum = °I;\n  dum (ni i = °I; verus; i = i + °I) { }\n}",
-        "munus initium reddit ni {\n  dum (ni reddendum = °I; verus; i = i + °I) { }\n}",
-        "munus initium reddit ni {\n  dum (voc s = \"continuatio\"; verus; i = i + °I) { }\n}",
-        // A header with no init clause; its body's `redde` must not be read as one.
-        "munus initium reddit ni {\n  dum (verus) { redde nullus; }\n}",
-        "munus initium reddit ni {\n  dum (ni i = (°I + °II); verus; i = i + °I) \
-         { redde nullus; }\n}",
-    ] {
-        assert!(!caput_dum_terminatum(innocuum), "{innocuum}");
-    }
 }

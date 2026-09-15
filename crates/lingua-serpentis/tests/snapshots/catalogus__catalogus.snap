@@ -25,7 +25,7 @@ crates/codegen/src/emissio.rs:292  defectus internus: munus 'initium' in program
 crates/codegen/src/emissio.rs:322  defectus internus: objectum scribi non potuit  → UNCOVERED
 crates/codegen/src/emissio.rs:442  defectus internus: datum declarari non potuit: constans  → UNCOVERED
 crates/codegen/src/emissio.rs:462  defectus internus: datum declarari non potuit: scida  → UNCOVERED
-crates/codegen/src/emissio.rs:813  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
+crates/codegen/src/emissio.rs:802  defectus internus: munus vocatum non inventum: vocatio  → UNCOVERED
 crates/codegen/src/nexus.rs:149  imago non coniuncta est: argumenta  → UNCOVERED
 crates/codegen/src/nexus.rs:153  imago non coniuncta est: perscrutatio  → UNCOVERED
 crates/codegen/src/nexus.rs:159  imago non coniuncta est: nexus  → UNCOVERED
@@ -57,20 +57,20 @@ crates/lingua-serpentis/src/checker.rs:476  operatio typis '{}' et '{}' non conv
 crates/lingua-serpentis/src/checker.rs:513  series ordine comparari non potest (par_est/par_non_est tantum)  → fixtured
 crates/lingua-serpentis/src/checker.rs:545  '{}' typum '{}' expectat, sed '{}' datum est  → fixtured
 crates/lingua-serpentis/src/checker.rs:560  '{}' iam typum '{}' habet, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:623  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:635  '{}' non est series (typus '{}')  → fixtured
-crates/lingua-serpentis/src/checker.rs:643  index assignationis 'ni' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:650  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:661  'abrumpe' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:664  'continua' extra iterationem  → fixtured
-crates/lingua-serpentis/src/checker.rs:694  munus '{}' non in omni via reddit  → fixtured
-crates/lingua-serpentis/src/checker.rs:730  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
-crates/lingua-serpentis/src/checker.rs:747  condicio 'veritas' esse debet  → fixtured
-crates/lingua-serpentis/src/checker.rs:821  nomen '{}' reservatum est  → fixtured
-crates/lingua-serpentis/src/checker.rs:838  functio '{}' bis definita  → fixtured
-crates/lingua-serpentis/src/checker.rs:882  fasciculus '{}' non inventus  → fixtured
-crates/lingua-serpentis/src/checker.rs:924  munus 'initium' in programmate non inventum  → fixtured
-crates/lingua-serpentis/src/checker.rs:932  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:612  functio '{}' intra corpus definiri non potest; functiones nidificatae non sustinentur  → fixtured
+crates/lingua-serpentis/src/checker.rs:620  reditus typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:632  '{}' non est series (typus '{}')  → fixtured
+crates/lingua-serpentis/src/checker.rs:640  index assignationis 'ni' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:647  elementum typum '{}' expectat, sed '{}' datum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:658  'abrumpe' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:661  'continua' extra iterationem  → fixtured
+crates/lingua-serpentis/src/checker.rs:691  munus '{}' non in omni via reddit  → fixtured
+crates/lingua-serpentis/src/checker.rs:738  condicio 'veritas' esse debet  → fixtured
+crates/lingua-serpentis/src/checker.rs:812  nomen '{}' reservatum est  → fixtured
+crates/lingua-serpentis/src/checker.rs:829  functio '{}' bis definita  → fixtured
+crates/lingua-serpentis/src/checker.rs:873  fasciculus '{}' non inventus  → fixtured
+crates/lingua-serpentis/src/checker.rs:915  munus 'initium' in programmate non inventum  → fixtured
+crates/lingua-serpentis/src/checker.rs:923  munus 'initium' nihil capere et 'ni' reddere debet  → fixtured
 crates/lingua-serpentis/src/cli.rs:51  Usus: liss run <via.liss | directorium>
       liss build <via.liss | directorium> [--exi <via>] [--ad <machina>]
       liss <via.liss | directorium>  → UNCOVERED
