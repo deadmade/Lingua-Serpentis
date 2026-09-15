@@ -626,9 +626,9 @@ as `redde` fills it with a `return`. `sententia_post_abrumpe_neglegitur` exercis
 
 **Every walk over a statement list that can hold a terminator owes it.** `Corpus::dum_intus`'s walk
 over a header does not, because a `dum` init clause is a declaration or an assignment and nothing
-else parses (D-26, §7 below). An earlier draft claimed this guard was the only one needed at a time
-when the header could hold a `redde`, and was wrong; the header crashed the compiler on
-`dum (redde nullus; …)`. **Whoever adds a statement walk over a list that can hold one owes it.**
+else parses (D-26; see *A terminator in the header* below). An earlier draft claimed this guard
+was the only one needed at a time when the header could hold a `redde`, and was wrong; the header
+crashed the compiler on `dum (redde nullus; …)`. **Whoever adds a statement walk over a list that can hold one owes it.**
 
 Scope exit (spec §7.3.2) runs at the end of the block *unless* it already ended in a `redde`, an
 `abrumpe` or a `continua`, each of which freed this scope itself on its way out. Running it again is

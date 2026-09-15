@@ -368,9 +368,9 @@ be an `Option` for. Dropping it is what lets that field be a `Type`.
   streams.
 - **`operand_ty` travels on the `Binary` node separately from the node's own type**, because a
   comparison yields `veritas` from operands that are not (§4.1, property 2).
-- **Nested functions are rejected** in `check_block_inner`, one guard rather than two identical ones
-  (D-24). A `munus` reaching `check_stmt` means a `munus` in a `dum` header, which the parser
-  accepts and nothing can call: it is checked, then dropped.
+- **Nested functions are rejected** by the `StmtKind::Func` arm of `check_stmt`, one guard for every
+  block (D-24). A `munus` in a `dum` header does not reach it, because that shape does not parse
+  (D-26).
 - **`nop`** exists only because `StmtKind::For` needs a `Stmt` for its step and an unreachable panic
   is still a panic; `assign_no_semi` makes the step an `Assign` and nothing else, so it is
   unreachable.
@@ -1385,15 +1385,15 @@ language semantics and therefore Non-Goals of the compiler-backend milestone:
 
 Three consequences held while it was open:
 
-- **There was no `conformance/` fixture and there must not be one yet.** It used to be that a fixture
-  would bless one backend's answer as the language's; now it would bless *the* answer as the
-  language's, which is worse — the corpus is what the compiler is held to, so a fixture would close
-  the question by implication, with no spec and no one having decided.
-  `codegen/tests/regimen.rs`'s `caput_dum_terminatum_componitur` pins the compiled behaviour
-  instead, and is now the **only** pin on it anywhere.
-- **`lingua-serpentis/tests/generative.rs`'s `caput_dum_terminatum` refuses the shape by a check
-  rather than by luck**, so a widened generator cannot draw a program whose meaning is undecided.
-- **Codegen's duty here is only not to crash.** The historical disagreement — `interp.rs:325`
+- **There was no `conformance/` fixture, and there could not be one yet.** It used to be that a
+  fixture would bless one backend's answer as the language's; after the interpreter went it would
+  have blessed *the* answer as the language's, which was worse — the corpus is what the compiler is
+  held to, so a fixture would have closed the question by implication, with no spec and no one
+  having decided. `codegen/tests/regimen.rs`'s `caput_dum_terminatum_componitur` pinned the compiled
+  behaviour instead, and was the **only** pin on it anywhere.
+- **`lingua-serpentis/tests/generative.rs`'s `caput_dum_terminatum` refused the shape by a check
+  rather than by luck**, so a widened generator could not draw a program whose meaning was undecided.
+- **Codegen's duty was only not to crash.** The historical disagreement — `interp.rs:325`
   discarded the `Flow` from `self.exec(init)`, so a `redde` there looped forever and an `abrumpe`
   there was ignored — is history, kept because it records what was true when the question was found.
 
