@@ -1091,7 +1091,7 @@ already name. It is needed because the alternative to reporting it is ignoring a
 and it is **permanently UNCOVERED by design**: no fixture can exhaust a 4 MiB-floor address space on
 purpose.
 
-`numerus nimis magnus est` is the one row of the table a fixture provokes, and the sentence the
+`numerus nimis magnus est` is the sentence the
 interpreter's `numerus nimis magnus (excessus arithmeticus)` was, returned without its parenthetical
 now that there is no `i64` to overflow (D-20). It carries no hole: the offending value is by
 definition one the program could not store.
