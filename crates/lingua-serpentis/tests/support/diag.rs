@@ -151,7 +151,7 @@ pub const ENGLISH_WORDS: [&str; 8] = [
 
 /// Violations the suite tolerates; never add one without a defect-register entry.
 pub const RECORDED_RULES: [&str; 1] = [
-    "terminates", // D-20
+    "terminates", // D-31
 ];
 
 const ABRUPTE_CESSAVIT: &str = "programma abrupte cessavit";
