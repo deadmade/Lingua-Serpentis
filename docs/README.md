@@ -254,7 +254,7 @@ the expected failure text stated. Where a plan and its spec disagree, the spec g
 
 Opened 2026-08-03 by the conformance and robustness suite, and authoritative for severity, repro,
 observed behaviour, expected behaviour and the `file:line` cause of each entry. It holds **D-01
-through D-30** — as of 2026-09-15, **26 fixed, 3 deferred, 1 open** — plus three appendices:
+through D-30** — as of 2026-09-15, **27 fixed, 2 deferred, 1 open** — plus three appendices:
 **Appendix A**, the five corrections to the conformance design's §8.1 table; **Appendix B**, the
 triage log for candidates that arrived without an ID; and **Appendix C**, ten corrections to the
 register's own entries found while fixing them, three of which would have produced a broken fix if
