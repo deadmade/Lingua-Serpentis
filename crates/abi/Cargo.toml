@@ -1,8 +1,8 @@
 [package]
 name = "abi"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.94"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 # `staticlib` is what the musl cross-build embeds (Task 10) — every
 # `#[unsafe(no_mangle)]` symbol here is garbage-collected out of an rlib.
