@@ -72,6 +72,12 @@ const _: () = {
     assert!(runtime::dispositio::VERBUM == size_of::<u64>());
 };
 
+/// The same two numbers, in the blob, where `codegen`'s tests can read them. D-29
+#[unsafe(export_name = "liss_onus")]
+pub static SIGNUM_ONUS: u64 = ONUS as u64;
+#[unsafe(export_name = "liss_verbum")]
+pub static SIGNUM_VERBUM: u64 = runtime::dispositio::VERBUM as u64;
+
 // Kind codes (spec §5.3), defined in `runtime::genus` and re-exported here.
 pub use runtime::genus::{
     GRADUS, KIND_BOOL, KIND_CHAR, KIND_FRAC_SCRIPULUM, KIND_FRAC_UNCIA, KIND_INT, KIND_TEXT, basis,

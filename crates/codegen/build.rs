@@ -49,7 +49,8 @@ fn opus(nomen: &str) -> OsString {
 }
 
 /// The escape hatch: `LISS_RUNTIME_DIR` names a prebuilt tree of
-/// `<triple>/{crt1,crti,crtn,runtime}.o`. The files are copied, not checked.
+/// `<triple>/{crt1,crti,crtn,runtime}.o`. The files are copied, not checked,
+/// except for the heap layout, which `target.rs`'s tests read out of the blob.
 ///
 /// D-29
 fn ex_horreo(horreum: &Path, meta: &str, sedes: &Path) {

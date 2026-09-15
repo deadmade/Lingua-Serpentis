@@ -154,6 +154,37 @@ mod tests {
             .collect()
     }
 
+    /// D-29
+    #[test]
+    fn the_blob_s_layout_is_the_compiler_s() {
+        for meta in Target::OMNES {
+            let fasciculus =
+                object::File::parse(meta.runtime().nucleus).expect("an object file");
+            for (nomen, expectatum) in [
+                ("liss_onus", runtime::dispositio::ONUS),
+                ("liss_verbum", runtime::dispositio::VERBUM),
+            ] {
+                let signum = fasciculus
+                    .symbols()
+                    .find(|s| s.is_definition() && s.name().is_ok_and(|n| n == nomen))
+                    .unwrap_or_else(|| panic!("{}: the runtime exports no {nomen}", meta.triple()));
+                let sectio = fasciculus
+                    .section_by_index(signum.section_index().expect("a symbol with a section"))
+                    .expect("the symbol's section exists");
+                let data = sectio.data().expect("the section is readable");
+                let ab = (signum.address() - sectio.address()) as usize;
+                let valor = u64::from_le_bytes(data[ab..ab + 8].try_into().expect("eight bytes"));
+                assert_eq!(
+                    valor as usize,
+                    expectatum,
+                    "{}: the blob says {nomen} is {valor} and the compiler emits {expectatum}. \
+                     A stale LISS_RUNTIME_DIR, or a runtime built from other source",
+                    meta.triple(),
+                );
+            }
+        }
+    }
+
     /// Every strong undefined symbol: what the program link must still supply.
     fn desiderata(fasciculus: &object::File<'_>) -> Vec<String> {
         fasciculus
