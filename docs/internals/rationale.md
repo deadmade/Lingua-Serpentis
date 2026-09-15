@@ -1069,15 +1069,15 @@ break" is repeated here.
   over the seven symbols — 137,256 of them**. The missing-`°` arm is kept, because `parse_roman` is
   `pub` and a direct caller has no such guarantee; it records UNCOVERED, which is the honest label,
   and it has a test, which is what makes keeping it honest rather than dead. **D-25**
-- **`Roman::from_digits`** — left unchecked, a digit beyond 9 panics inside `display`'s
-  `render_digit` `unreachable!`, or overflows the `u8` addition in `mag_add`, silently wrapping in
-  release.
-- **`scriptio` module doc** — it used to claim the module allocates nothing. `scribe_int` and
-  `scribe_frac` delegate to `Roman::display` / `fraction::display`, which **return a `String`**, so
-  every `scribe` of a `ni` or a fraction takes Rust's global allocator — outside §7.5's counted
-  pair, and with `panic = "abort"` an allocation failure there reaches `handle_alloc_error` and dies
-  in English rather than saying `memoria exhausta est`. The fix is a `display_ad(&mut impl Sink)` on
-  `Roman`, which is a change to `roman.rs`, not to `scriptio.rs`. **D-28**
+- **`Roman::from_digits`** — left unchecked, a digit beyond 9 prints as a 9 through
+  `render_digit`'s last arm, or overflows the `u8` addition in `mag_add`, silently wrapping in
+  release. That arm was an `unreachable!` until D-28; the check here is what makes folding it into
+  the 9 arm sound.
+- **`scribe_int` / `scribe_frac`** — they call `Roman::display_ad` / `fraction::display_ad`, not
+  `display`. `display` **returns a `String`**, so every `scribe` of a `ni` or a fraction took Rust's
+  global allocator, and an allocation failure there reached `handle_alloc_error` and died in English
+  rather than saying `memoria exhausta est` — while this module's doc claimed it allocated nothing.
+  The fix was a change to `roman.rs` and `fraction.rs`, not to `scriptio.rs`. **D-28**
 - **`dispositio::ONUS`** — the alternative was a second `24` in `emissio.rs` held to this one by a
   comment, which is precisely the arrangement Task 12 removed for `KIND_INT`. `abi` is never
   linked into the compiler (§11), so the constant lives in `runtime`, which both ends already
@@ -1336,13 +1336,13 @@ break" is repeated here.
 - **`ex_horreo`** (codegen/build.rs) — `rerun-if-changed` on the blob *directory* watches its
   listing; replacing a `runtime.o` in place changes no listing, and the stale bytes would survive
   every rebuild until somebody added or removed a file. Each blob is named individually.
-- **`ex_horreo`** — with `LISS_RUNTIME_DIR` set, the layout proof never reaches the blob. The
-  `const _` block in `abi/src/lib.rs` proves the crate's source against `runtime::dispositio`, not
-  the bytes that were copied in; and a crate-scoped build never evaluates it at all, since `conde`
-  is skipped and `abi` is a dependency of nothing there. **So a stale blob whose `dispositio`
-  disagrees with today's source links cleanly, passes every test in the crate, and produces silent
-  wrong answers.** The close is to export the layout constants as absolute symbols from the blob and
-  compare them in a `target.rs` test that can see both. **D-29**
+- **`ex_horreo`** — the files are copied, not checked, except for the layout. The `const _` block in
+  `abi/src/lib.rs` proves the crate's source against `runtime::dispositio`, not the bytes that were
+  copied in, and a crate-scoped build never evaluates it at all. **So a stale blob whose
+  `dispositio` disagreed with today's source linked cleanly and passed every test in the crate.**
+  The blob now exports `liss_onus` and `liss_verbum`, and `target.rs`'s
+  `the_blob_s_layout_is_the_compiler_s` reads them against `runtime::dispositio` on every build
+  path. **D-29**
 - **`Defectus::novus`** (codegen/src/lib.rs) — the one constructor, and the sentence must be
   written inline at the call site: spec §10.3 makes `Defectus::novus(` a catalogue marker, and a
   site that forwards a constant carries no literal of its own and the ratchet reports it `UNPARSED`.

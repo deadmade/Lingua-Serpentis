@@ -42,7 +42,7 @@ it**. `runtime` is a path dependency of `abi`; across a workspace boundary cargo
 absolutely, so every `#[track_caller]` location baked into the musl runtime — and therefore into
 every compiled program — read `/home/<user>/<checkout>/crates/runtime/src/roman.rs`. Inside one
 workspace the same names are relative. That is four strings out of the artefact, next to the four
-English ones **D-28** records; it fixes none of D-28, which is about the messages, not the paths.
+English ones **D-28** recorded; it fixed none of D-28, which was about the messages, not the paths.
 
 The cost is one trap, and it is silent. **A workspace member's `[profile.release]` is ignored** —
 cargo honours profiles at the workspace root only, and warns rather than failing. The root's
@@ -341,6 +341,15 @@ own tests can read it without reaching into the module.
 - **`liberare(p)`** — return a block to the allocator, counted. Callers holding a `LissHdr` use
   `abolere`, which checks the magic first.
 
+**Rust's own heap is a second allocator, and it is not counted.** `Roman` is a `Vec` of digits, so
+`roman_of`, every arithmetic entry point and `exitus`'s warning allocate through Rust's global
+allocator rather than `allocare`. Those are temporaries freed inside the call that made them, never an
+object compiled code holds, so the counted pair has nothing to say about them. What they must not do
+is fail in English: std's answer to a null is `handle_alloc_error`, which prints `memory allocation
+of` and aborts. The `#[global_allocator]` at the bottom of `memoria.rs` is `System` with one change —
+a null from `alloc`, `alloc_zeroed` or `realloc` calls `memoria_exhausta` instead of returning. It is
+not behind `ingressus`, so `abi`'s host tests run on it, and `tests/abi.rs` provokes it (D-28).
+
 **What leans on the zeroing, and what deliberately does not.** The zeroing is *a net for the failing
 path and not part of the construction protocol*. Codegen emits the constructor and then one store
 per element with no call in between, and both `liss_list_copy` and `liss_list_append` write every
@@ -560,19 +569,18 @@ a `String`, which is what the runtime's static output buffer (spec §6) needs. P
 bodies, unchanged, just monomorphised into separate functions. The list case is deliberately absent:
 it is `ekind`-driven, has no data here to drive it, and lands in `abi::liss_print_list`.
 
-**"Delivers", not "does not allocate", and the difference is a defect.** `scribe_text`,
-`scribe_char` and `scribe_bool` genuinely allocate nothing. `scribe_int` and `scribe_frac` do: both
-delegate to `Roman::display` / `fraction::display`, which **return a `String`**, so every `scribe`
-of a `ni` or a fraction takes Rust's global allocator — outside §7.5's counted pair, and with
-`panic = "abort"` an allocation failure there reaches `handle_alloc_error` and dies in English
-rather than saying `memoria exhausta est`. The module's doc used to claim the opposite. See **D-28**
-in `docs/defectus/2026-08-03-index.md`; the fix is a `display_ad(&mut impl Sink)` on `Roman`, which
-is a change to `roman.rs`, not to `scriptio.rs`.
+**No `String` on the way out.** `scribe_text`, `scribe_char` and `scribe_bool` push borrowed bytes.
+`scribe_int` and `scribe_frac` delegate to `Roman::display_ad` / `fraction::display_ad`, which push
+each glyph, bar and fraction name as it is decided; `scribe_int` allocates nothing, and `scribe_frac`
+only the `Roman` arithmetic that splits the whole from the remainder. Until **D-28** closed both
+delegated to `display`, which **returned a `String`**, so every `scribe` of a `ni` took Rust's
+global allocator and an allocation failure there died in English — while this module's doc said the
+opposite. `display` survives as a wrapper over a `String` sink, for the compiler and the tests.
 
-`Sink for String` uses a checked UTF-8 conversion, not an unchecked one, because `Sink` is a public
-trait and nothing stops a future implementor from feeding it something else — though every byte
-`scriptio` ever pushes comes from a Roman numeral, a Latin fraction word, or a `&str`/`char` that
-was already valid UTF-8.
+`Sink for String` converts with `from_utf8_lossy`, not `from_utf8(..).expect`. Every byte `scriptio`
+pushes is a Roman glyph, a Latin fraction word, or a `&str`/`char` that was already valid UTF-8, and
+an `expect` is an English sentence in every compiled program — `exitus`'s warning reaches this impl —
+for a case that cannot happen.
 
 **`speculum.rs`** is a second, independent implementation of the same formatter,
 `#[cfg(test)]`-only, kept purely as the randomised oracle for `scriptio`'s tests. It is
@@ -1108,9 +1116,11 @@ flag.
 byte slices and one stack buffer for the line number, rather than as one assembled `String`. That is
 not tidiness: `memoria_exhausta` is raised from `allocare` at the moment `malloc` returned null, and
 a `String` here would then reach `handle_alloc_error`, which **aborts** — `SIGABRT` and exit 134,
-D-04's shape, produced inside the one function whose whole job is to prevent it. Only the
-two-argument path allocates, in `Roman::display`, and it is reached only from `index extra fines`
-where the heap is healthy by construction.
+D-04's shape, produced inside the one function whose whole job is to prevent it. The
+two-argument path renders its numerals with `Roman::display_ad` straight into stderr. It allocates
+only `roman_of`'s copy of the digits, it is reached only from `index extra fines` where the heap is
+healthy by construction, and if it were not, that allocation would end in `memoria exhausta est`
+through §7's global allocator rather than in an abort.
 
 Several writes rather than one is harmless: stderr is unbuffered, writes append in order, and stream
 *interleaving* is not observable (spec §6).

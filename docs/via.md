@@ -30,8 +30,7 @@ diagnostics with carets. `liss build` emits a static musl ELF.
 
 Not yet: maps, first-class functions, stdin, files, `>=`/`<=`, `sit`, a REPL, `try`/`catch`,
 threads, the two named optimisations, a consolidated language reference. Three deferred language
-decisions (`D-13`, `D-20`, `D-26`) and two recorded implementation defects (`D-28`, `D-29`) sit in
-`defectus/2026-08-03-index.md`.
+decisions (`D-13`, `D-20`, `D-26`) sit in `defectus/2026-08-03-index.md`.
 
 ## What 1.0 is not (and therefore not later either)
 
@@ -54,15 +53,17 @@ Build in this order. A later milestone may start its spec while an earlier one i
 does not merge first. Breaking work is all in `0.x`. Milestones 2–9 each need a dated spec in
 `superpowers/specs/` before they are built; this file only names the bar.
 
-### 1. Close the implementation holes
+### 1. Close the implementation holes — done
 
-No language change. No new spec: the closes are already written in the register.
+No language change. No new spec: the closes were already written in the register, and each entry
+now records how it shipped.
 
-- **D-28** — `runtime`'s panics and English strings ship in every compiled binary. Give `Roman` a
-  `display_ad` into a `Sink`; hold the shared `runtime` modules to `abi`'s rule; test that the four
-  English strings are absent from the image.
-- **D-29** — the layout proof compares source against source and never sees the blob. The close in
-  the register stands: the proof has to see the bytes that ship.
+- **D-28** — `9a39957`. `Roman` and `fraction` write into a `Sink`, shared code has no English
+  `expect` or `unreachable!`, and an exhausted heap is `memoria exhausta est` wherever Rust
+  allocates. Closed on behaviour, not on the four strings: std's panic and allocation-failure
+  messages stay in the image, unreachable, for as long as `runtime` links std.
+- **D-29** — `9e0b318`. The blob exports `liss_onus` and `liss_verbum`, and a `target.rs` test
+  reads them against `runtime::dispositio` on every build path.
 
 ### 2. The last breaking language decisions
 
