@@ -98,9 +98,10 @@ and supersede one another. Start there.
   (the ABI, the runtime, the IR), `rationale.md` (the front end, and what was tried and broke),
   `testing.md` (the corpus and the ratchets).
 - `docs/via.md` — the road to 1.0, and what 1.0 freezes.
-- `docs/superpowers/specs/` — design specs, one per milestone. The most recent,
-  `2026-08-07-compiler-backend-design.md`, describes the compiler as it stands; an unqualified
-  "spec §N" means that file.
+- `docs/superpowers/specs/` — design specs, one per milestone.
+  `2026-08-07-compiler-backend-design.md` is the canonical current spec, amended by the later
+  dated specs that `docs/README.md` puts in reading order; an unqualified "spec §N" still means
+  that file.
 - `docs/superpowers/plans/` — the implementation plans those specs became.
 - `docs/defectus/2026-08-03-index.md` — the defect register: what was found, what was fixed, what is
-  deferred, and why.
+  still open, and why.

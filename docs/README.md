@@ -282,7 +282,7 @@ triage log for candidates that arrived without an ID; and **Appendix C**, ten co
 register's own entries found while fixing them, three of which would have produced a broken fix if
 followed literally. **D-30 and D-31 sit after Appendix C**, not with the numbered run. D-28 and D-29 came
 from the compiler-backend milestone's whole-branch review, were recorded rather than fixed, and are fixed by `via.md`'s milestone 1. Each fixed defect's `conformance/defectus/` fixture has moved to
-`errores/`.
+`errores/`, `currunt/` or `monita/`, and `conformance/defectus/` is now empty.
 
 ## Naming
 
