@@ -25,6 +25,14 @@
 > an expression statement there does not parse. Closes D-26. See
 > `2026-09-15-dum-header-clause-design.md`.
 
+> **Amended 2026-09-15:** §5.3's literals gain a form. Every chunk of a literal
+> split at `.`, `:` and `/` must be written exactly as the language prints its
+> value — classical, 1..=3999 — or it does not lex (`numerus Romanus non
+> canonicus`). §5.3's "whose exact semantics must be preserved" and its porting
+> note's "broaden subtractive support only if a test demands it" are
+> **superseded**; the dot form and the fraction shape are unchanged. Closes
+> D-13. See `2026-09-15-roman-numeral-form-design.md`.
+
 ## 1. Vision
 
 **Lingua Serpentis** ("Language of the Serpent") is a small, statically-typed

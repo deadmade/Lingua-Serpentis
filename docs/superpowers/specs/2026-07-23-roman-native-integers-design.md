@@ -9,6 +9,14 @@
   `2026-07-22-nr-double-distinct-type-design.md` (the fractional types `mnr`/`nr`
   stay IEEE floats — see §2 Non-Goals).
 
+> **Amended 2026-09-15:** §3.5's "Input notation is untouched" and §4.2's
+> "parsing keeps its shape" no longer hold: `convert_single` accepts a chunk
+> only when it equals `display` of its own value, so each `.`, `:` and `/`
+> chunk is classical and in 1..=3999. §7's round-trip bullet is corrected: it
+> holds for dot-free numerals up to `MMMCMXCIX`, and **never held for the
+> multiplicative `°VII.M`**, which prints `V̅MM`. Closes D-13. See
+> `2026-09-15-roman-numeral-form-design.md`.
+
 ## 1. Vision
 
 Today a Roman numeral is pure input syntax. `°XXV` is converted to `i64` in the
