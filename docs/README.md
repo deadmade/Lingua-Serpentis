@@ -23,6 +23,7 @@ amended or superseded by a later document and the front matter alone does not te
 | How is any of this tested | `internals/testing.md` |
 | Why may I not write a block comment there | `superpowers/specs/2026-08-09-test-harness-libraries-design.md` §6 |
 | What shape does a diagnostic have, and why | `superpowers/specs/2026-08-09-caret-diagnostics-design.md` §3 |
+| What may a `dum` header's first clause be | `superpowers/specs/2026-09-15-dum-header-clause-design.md` §3 |
 | Is this known to be wrong | `defectus/2026-08-03-index.md` |
 | What is left before 1.0, and what 1.0 freezes | `via.md` |
 
@@ -89,14 +90,14 @@ The consolidated language reference does not exist yet. It is milestone 10.
 
 ## `superpowers/specs/` — one design per milestone
 
-Thirteen documents, dated, each the design agreed before a milestone was implemented. Front matter
+Fourteen documents, dated, each the design agreed before a milestone was implemented. Front matter
 carries **Date**, **Status**, **Author**, and — where one exists — a **Relationship**, **Amends** or
 **Supersedes** line naming the document it changes.
 
 | Spec | Date | Status | |
 |---|---|---|---|
 | `2026-07-19-latin-identifier-checker-design.md` | 2026-07-19 | Approved (design) | The warning-only Latinity checker and the `latinitas` crate, backed by Whitaker's WORDS |
-| `2026-07-19-lingua-serpentis-rust-interpreter-design.md` | 2026-07-19 | Approved (design) | The base language: keywords, types, Roman literals, operators, control flow, functions. Amended four times |
+| `2026-07-19-lingua-serpentis-rust-interpreter-design.md` | 2026-07-19 | Approved (design) | The base language: keywords, types, Roman literals, operators, control flow, functions. Amended five times |
 | `2026-07-21-haskell-style-signatures-design.md` | 2026-07-21 | **Superseded** | The `munus summare :: ni -> ni -> ni` signature line. Replaced before it reached production |
 | `2026-07-22-capit-reddit-function-headers-design.md` | 2026-07-22 | Approved (design) | The function header as it is today — `munus summare capit (ni a, ni b) reddit ni` |
 | `2026-07-22-nr-double-distinct-type-design.md` | 2026-07-22 | Approved (design) | Makes `nr` a type distinct from `mnr`. Its `f32`/`f64` backing is superseded; the distinction stands |
@@ -108,9 +109,10 @@ carries **Date**, **Status**, **Author**, and — where one exists — a **Relat
 | `2026-08-07-compiler-backend-design.md` | 2026-08-07 | Proposed | **The canonical current spec.** The ahead-of-time compiler, the typed IR, the C ABI, ownership, stack exhaustion, linking — and the removal of the interpreter |
 | `2026-08-09-test-harness-libraries-design.md` | 2026-08-09 | Proposed | The diagnostic ratchet parses rather than scans, which lifts the block-comment rule from five crates; `tempfile` and one shared wait loop in the test support |
 | `2026-08-09-caret-diagnostics-design.md` | 2026-08-09 | Proposed | Spans through the front end, and a three-level diagnostic grammar with a caret under the offending expression. `Error` becomes `erratum`; the line number becomes a Roman numeral everywhere |
+| `2026-09-15-dum-header-clause-design.md` | 2026-09-15 | Proposed | A `dum` init clause is a declaration or an assignment and nothing else parses; closes D-26 and the `munus`-in-header hole |
 
 The **Status** lines record the state at the moment each document was written and have not been
-maintained since. Every one of the thirteen has an implementation plan in `superpowers/plans/`, so a
+maintained since. Every one of the fourteen has an implementation plan in `superpowers/plans/`, so a
 status of "pending implementation plan" or "plan not yet written" should be read as history, not as
 the current state of the tree.
 
@@ -135,10 +137,10 @@ This chain is the project's substitute for a consolidated spec. Resolved into re
   as a historical record and should not be read as a description of the language. Its plan,
   `plans/2026-07-21-haskell-style-signatures.md`, carries the same superseded notice.
 
-### The base language spec, and its four amendments
+### The base language spec, and its five amendments
 
 **`2026-07-19-lingua-serpentis-rust-interpreter-design.md`** is still the only document that
-describes keywords, types, operators, statements and control flow in one place. Four later documents
+describes keywords, types, operators, statements and control flow in one place. Five later documents
 change parts of it, and the amendment notices are stacked at the top of the file:
 
 1. **2026-07-21 — function headers.** The code samples in §5.6 and §5.9 were amended for the
@@ -156,6 +158,10 @@ change parts of it, and the amendment notices are stacked at the top of the file
    §5.5's script-style program model**: top-level statements are removed, so §5.5 and the §5.9
    example no longer run as written, and §9's "Imports / modules" v2 candidate is realised as
    Go-style packages (*fasciculi*).
+5. **2026-09-15 — the `dum` header.** `2026-09-15-dum-header-clause-design.md` amends **§5.5**:
+   the `init` of `dum (init; cond; step)` is a declaration or an assignment, and nothing else
+   parses. A terminator there used to return from the function or leave the enclosing loop
+   silently; it is now a parse error. Closes D-26.
 
 ### The numeric types, in order
 
@@ -210,7 +216,7 @@ Nobody has written one, and this index will not pretend otherwise. To answer "wh
 read, in this order:
 
 - **`2026-07-19-lingua-serpentis-rust-interpreter-design.md` §5** — keywords, types, Roman literals,
-  operators, statements, functions, printing, comments — with the four amendments above applied;
+  operators, statements, functions, printing, comments — with the five amendments above applied;
 - **`2026-08-01-programs-and-packages-design.md` §4** — what a program is, what a package is, where
   execution starts, what the top level may contain, `affer` and qualified calls;
 - **the three numeric-type specs**, in the sequence given above, for how `ni`, `mnr` and `nr`
@@ -236,7 +242,7 @@ language spec.** Read its §5 for the language; do not read the rest as a descri
 
 ## `superpowers/plans/` — the implementation plans
 
-Fourteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
+Fifteen plans, one per spec plus `2026-08-05-defect-register-remediation.md`, which has no spec of
 its own — it works from the conformance design (§5, §7, §8.1) and the defect register. Each plan
 opens with a Goal, an Architecture paragraph, a Tech Stack line and, usually, a pointer to its spec,
 and is written as numbered tasks with checkbox steps. The house convention is that every code task

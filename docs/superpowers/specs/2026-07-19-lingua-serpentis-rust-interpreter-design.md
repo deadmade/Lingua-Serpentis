@@ -19,6 +19,12 @@
 > modules" v2 candidate is realized as Go-style packages (*fasciculi*). See
 > `2026-08-01-programs-and-packages-design.md`.
 
+> **Amended 2026-09-15:** §5.5's `dum (init; cond; step)` never constrained
+> `init`. It is now a declaration (`ni i = °I;`) or an assignment (`i = °I;`)
+> and nothing else — a terminator, a `si`/`indem`/`dum`/`munus`, a `scribe` or
+> an expression statement there does not parse. Closes D-26. See
+> `2026-09-15-dum-header-clause-design.md`.
+
 ## 1. Vision
 
 **Lingua Serpentis** ("Language of the Serpent") is a small, statically-typed
