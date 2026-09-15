@@ -29,8 +29,8 @@ Linux AOT compiler, `x86_64` and `aarch64`. Explicit types, Roman numerals, list
 diagnostics with carets. `liss build` emits a static musl ELF.
 
 Not yet: maps, first-class functions, stdin, files, `>=`/`<=`, `sit`, a REPL, `try`/`catch`,
-threads, the two named optimisations, a consolidated language reference. Two deferred language
-decisions (`D-13`, `D-20`) sit in `defectus/2026-08-03-index.md`; `D-26` is decided.
+threads, the two named optimisations, a consolidated language reference. One deferred language
+decision (`D-20`) sits in `defectus/2026-08-03-index.md`; `D-13` and `D-26` are decided.
 
 ## What 1.0 is not (and therefore not later either)
 
@@ -71,7 +71,7 @@ Needs a spec per row. Do them before anything additive so 1.0 does not freeze a 
 
 | ID | Decision the spec must take |
 |----|-----------------------------|
-| **D-13** | Canonical Roman form, legal subtractive pairs, repetition limits. `°IIX` is accepted today. |
+| **D-13** | **Shipped** 2026-09-15 (`6a6badc`): every chunk of a literal is written the way its value prints, 1..=3999 (`2026-09-15-roman-numeral-form-design.md`). |
 | **D-20** | A magnitude cap and a diagnostic. `x = x * x` in a loop is why `terminates` is still allowlisted. |
 | **D-26** | **Shipped** 2026-09-15 (`a823697`): a `dum` init clause is a declaration or an assignment, and nothing else parses (`2026-09-15-dum-header-clause-design.md`). |
 
