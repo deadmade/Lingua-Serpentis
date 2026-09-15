@@ -2,7 +2,7 @@
 source: crates/lingua-serpentis/tests/catalogus.rs
 expression: report
 ---
-119 sites · 71 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
+120 sites · 72 fixtured · 0 ambiguous · 46 uncovered · 2 unparsed
 
 crates/abi/src/custos.rs:27  acervus vocationum exhaustus est  → fixtured
 crates/abi/src/custos.rs:33  defectus internus: memoria violata est: signum  → UNCOVERED
@@ -124,5 +124,6 @@ crates/lingua-serpentis/src/program.rs:87  directorium percurri non potest  → 
 crates/runtime/src/exitus.rs:21  reditus 'initium' extra fines status exitus est; ad {} redactus  → fixtured
 crates/runtime/src/roman.rs:180  numerus Romanus vacuus  → fixtured
 crates/runtime/src/roman.rs:192  numerus Romanus invalidus: '{}'  → fixtured
-crates/runtime/src/roman.rs:226  numerus sine '°': '{}'  → UNCOVERED
-crates/runtime/src/roman.rs:238  fractio sine denominatore  → fixtured
+crates/runtime/src/roman.rs:198  numerus Romanus non canonicus: '{}'  → fixtured
+crates/runtime/src/roman.rs:228  numerus sine '°': '{}'  → UNCOVERED
+crates/runtime/src/roman.rs:240  fractio sine denominatore  → fixtured

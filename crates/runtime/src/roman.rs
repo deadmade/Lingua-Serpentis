@@ -193,7 +193,9 @@ pub(crate) fn convert_single(s: &str) -> Result<Roman, String> {
         let next_bigger = chars.get(i + 1).and_then(|c| sym(*c)).is_some_and(|nx| cur < nx);
         total = if next_bigger { total.sub(&cur) } else { total.add(&cur) };
     }
-    Ok(total)
+    Some(total)
+        .filter(|t| t.display() == s)
+        .ok_or_else(|| format!("numerus Romanus non canonicus: '{}'", s))
 }
 
 pub(crate) fn convert_int_roman(s: &str) -> Result<Roman, String> {
@@ -512,30 +514,60 @@ mod tests {
     }
 
     #[test]
-    fn convert_single_is_never_zero_or_negative() {
-        // D-25
+    fn convert_single_accepts_exactly_the_canonical_numerals() {
+        // D-25, D-13
         const SYMS: [char; 7] = ['I', 'V', 'X', 'L', 'C', 'D', 'M'];
+        let canonical: std::collections::HashSet<String> =
+            (1..=3999).map(|v| Roman::from_u64(v).display()).collect();
         let zero = Roman::zero();
-        let mut words: Vec<String> = SYMS.iter().map(|c| c.to_string()).collect();
-        let mut checked = 0usize;
-        for _ in 1..6 {
+        let mut words: Vec<String> = vec![String::new()];
+        let (mut checked, mut accepted) = (0usize, 0usize);
+        for _ in 0..6 {
             let mut next = Vec::with_capacity(words.len() * SYMS.len());
             for w in &words {
-                let v = convert_single(w).expect("every string over the symbols parses");
-                assert!(v > zero, "convert_single({w:?}) = {} is not >= 1", v.display());
-                checked += 1;
                 for c in SYMS {
-                    next.push(format!("{w}{c}"));
+                    let w = format!("{w}{c}");
+                    checked += 1;
+                    match convert_single(&w) {
+                        Ok(v) => {
+                            accepted += 1;
+                            assert!(canonical.contains(&w), "{w:?} accepted but not canonical");
+                            assert!(v > zero, "convert_single({w:?}) = {} is not >= 1", v.display());
+                            assert_eq!(v.display(), w);
+                        }
+                        Err(_) => assert!(!canonical.contains(&w), "{w:?} canonical but rejected"),
+                    }
+                    next.push(w);
                 }
             }
             words = next;
         }
-        for w in &words {
-            let v = convert_single(w).expect("every string over the symbols parses");
-            assert!(v > zero, "convert_single({w:?}) = {} is not >= 1", v.display());
-            checked += 1;
-        }
         assert_eq!(checked, 137_256, "every string of length 1..=6 over the seven symbols");
+        assert_eq!(accepted, 1_308, "the numerals in 1..=3999 of at most six letters");
+    }
+
+    #[test]
+    fn a_non_canonical_chunk_is_named() {
+        // D-13
+        let non = |c: &str| Err::<RomanNumber, String>(format!("numerus Romanus non canonicus: '{c}'"));
+        for (lit, chunk) in [
+            ("°IIII", "IIII"), ("°XXXX", "XXXX"), ("°MMMM", "MMMM"), ("°VV", "VV"),
+            ("°LL", "LL"), ("°DD", "DD"), ("°IIX", "IIX"), ("°IM", "IM"), ("°IC", "IC"),
+            ("°IL", "IL"), ("°XM", "XM"), ("°VX", "VX"), ("°IIV", "IIV"), ("°IXI", "IXI"),
+            ("°VIV", "VIV"), ("°MCMXCIXIII", "MCMXCIXIII"), ("°V.IIX", "IIX"),
+            ("°IIX.M", "IIX"), ("°IIX.VV", "IIX"), ("°IIII:I/II", "IIII"),
+            ("°I:IIX/XII", "IIX"), ("°I:I/IIX", "IIX"),
+        ] {
+            assert_eq!(parse_roman(lit), non(chunk), "{lit}");
+        }
+        for (lit, v) in [
+            ("°MMMCMXCIX", 3999), ("°XXX.M.V.C.VII", 30507), ("°IV.M", 4000),
+            ("°M.IV", 4000), ("°II.MM", 4000), ("°C.C.C", 10100), ("°M.M.M.M.M", 2_001_000),
+        ] {
+            assert_eq!(parse_roman(lit), Ok(RomanNumber::Int(Roman::from_u64(v))), "{lit}");
+        }
+        assert_eq!(parse_roman("°I..I"), Err("numerus Romanus vacuus".into()));
+        assert_eq!(parse_roman("°I:I/II/III"), Err("numerus Romanus invalidus: 'II/III'".into()));
     }
 
     #[test]
